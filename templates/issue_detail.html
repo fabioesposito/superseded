@@ -85,5 +85,63 @@
         {% endif %}
     </div>
 </div>
+
+<div class="mt-6 bg-gray-800 rounded-lg p-4">
+    <h2 class="text-lg font-semibold mb-3">Agent Log</h2>
+    <div id="agent-log" class="font-mono text-xs bg-black rounded p-4 h-64 overflow-y-auto text-green-300">
+        <div class="text-gray-500" id="log-init">Loading history...</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var logEl = document.getElementById('agent-log');
+    var issueId = '{{ issue.id }}';
+
+    fetch('/pipeline/issues/' + issueId + '/events')
+        .then(function(r) { return r.json(); })
+        .then(function(events) {
+            var init = document.getElementById('log-init');
+            if (init) init.remove();
+            events.forEach(function(evt) {
+                appendEvent(logEl, evt);
+            });
+            if (events.length === 0) {
+                logEl.innerHTML = '<div class="text-gray-500">No agent output yet.</div>';
+            }
+        });
+
+    var es = new EventSource('/pipeline/issues/' + issueId + '/events/stream');
+    es.addEventListener('stdout', function(e) {
+        var data = JSON.parse(e.data);
+        appendLine(logEl, data.content, 'text-green-300');
+    });
+    es.addEventListener('stderr', function(e) {
+        var data = JSON.parse(e.data);
+        appendLine(logEl, data.content, 'text-red-400');
+    });
+    es.addEventListener('status', function(e) {
+        var data = JSON.parse(e.data);
+        var code = data.metadata.exit_code;
+        appendLine(logEl, 'Process exited with code ' + code, code === 0 ? 'text-green-500' : 'text-red-500');
+    });
+    es.addEventListener('done', function() {
+        es.close();
+    });
+
+    function appendEvent(el, evt) {
+        var cls = evt.event_type === 'stderr' ? 'text-red-400' : evt.event_type === 'status' ? 'text-yellow-400' : 'text-green-300';
+        appendLine(el, evt.content, cls);
+    }
+
+    function appendLine(el, text, cls) {
+        var div = document.createElement('div');
+        div.className = cls || '';
+        div.textContent = text;
+        el.appendChild(div);
+        el.scrollTop = el.scrollHeight;
+    }
+})();
+</script>
 {% endif %}
 {% endblock %}
