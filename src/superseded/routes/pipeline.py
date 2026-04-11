@@ -131,6 +131,7 @@ async def _run_stage(deps: Deps, issue_id: str, stage: Stage) -> StageResult:
             exit_code=0 if result.passed else 1,
             output=result.output,
             error=result.error,
+            repo=effective_repo,
         )
 
         if not result.passed:

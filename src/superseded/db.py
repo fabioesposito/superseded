@@ -218,13 +218,15 @@ class Database:
         exit_code: int,
         output: str,
         error: str,
+        repo: str = "primary",
     ) -> None:
         assert self._conn
         await self._conn.execute(
-            """INSERT INTO harness_iterations (issue_id, attempt, stage, exit_code, output, error, previous_errors)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO harness_iterations (issue_id, repo, attempt, stage, exit_code, output, error, previous_errors)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 issue_id,
+                repo,
                 iteration.attempt,
                 iteration.stage.value,
                 exit_code,
