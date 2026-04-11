@@ -84,8 +84,17 @@ class AgentResult(BaseModel):
     files_changed: list[str] = Field(default_factory=list)
 
 
+class HarnessIteration(BaseModel):
+    attempt: int
+    stage: Stage
+    previous_errors: list[str] = Field(default_factory=list)
+
+
 class AgentContext(BaseModel):
     repo_path: str
     issue: Issue
     skill_prompt: str
     artifacts_path: str = ""
+    worktree_path: str = ""
+    iteration: int = 0
+    previous_errors: list[str] = Field(default_factory=list)
