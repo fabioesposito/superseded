@@ -60,66 +60,106 @@ async def _run_stage(deps: Deps, issue_id: str, stage: Stage) -> StageResult:
 
     issue = issues[0]
     runner = _get_harness_runner(deps)
+
+    if deps.config.repos:
+        runner._configure_repos(deps.config.repos)
+        worktree_manager = WorktreeManager(deps.config.repo_path)
+        for name, entry in deps.config.repos.items():
+            worktree_manager.register_repo(name, entry.path)
+    else:
+        worktree_manager = WorktreeManager(deps.config.repo_path)
+
     artifacts_path = str(
         Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id
     )
     Path(artifacts_path).mkdir(parents=True, exist_ok=True)
 
-    worktree_manager = WorktreeManager(deps.config.repo_path)
     needs_worktree = stage in (Stage.BUILD, Stage.VERIFY, Stage.REVIEW)
 
-    stash_ref = None
-    worktree_created = False
-    if needs_worktree and not worktree_manager.exists(issue_id):
-        stash_ref = await worktree_manager.stash_if_dirty()
-        await worktree_manager.create(issue_id)
-        worktree_created = True
+    target_repos = issue.repos if issue.repos else [None]
 
-    previous_errors: list[str] = []
-    stage_results = await deps.db.get_stage_results(issue_id)
-    for sr in stage_results:
-        if not sr.get("passed") and sr.get("error"):
-            previous_errors.append(sr["error"])
+    all_passed = True
+    combined_output: list[str] = []
 
-    result = await runner.run_stage_with_retries(
-        issue=issue,
+    for repo_name in target_repos:
+        effective_repo = repo_name or "primary"
+        stash_ref = None
+        worktree_created = False
+
+        if needs_worktree and not worktree_manager.exists(issue_id, repo=repo_name):
+            stash_ref = await worktree_manager.stash_if_dirty(repo=repo_name)
+            await worktree_manager.create(issue_id, repo=repo_name)
+            worktree_created = True
+
+        repo_previous_errors: list[str] = []
+        stage_results = await deps.db.get_stage_results(issue_id, repo=effective_repo)
+        for sr in stage_results:
+            if not sr.get("passed") and sr.get("error"):
+                repo_previous_errors.append(sr["error"])
+
+        repo_artifacts = str(Path(artifacts_path) / effective_repo)
+        Path(repo_artifacts).mkdir(parents=True, exist_ok=True)
+
+        result = await runner.run_stage_with_retries(
+            issue=issue,
+            stage=stage,
+            artifacts_path=repo_artifacts,
+            previous_errors=repo_previous_errors if repo_previous_errors else None,
+            repo=repo_name,
+        )
+
+        await deps.db.save_stage_result(issue_id, result, repo=effective_repo)
+
+        existing_iterations = await deps.db.get_harness_iterations(issue_id)
+        attempt_num = len(
+            [
+                i
+                for i in existing_iterations
+                if i.get("stage") == stage.value
+                and i.get("repo", "primary") == effective_repo
+            ]
+        )
+
+        iteration = HarnessIteration(
+            attempt=attempt_num,
+            stage=stage,
+            previous_errors=repo_previous_errors,
+        )
+        await deps.db.save_harness_iteration(
+            issue_id,
+            iteration,
+            exit_code=0 if result.passed else 1,
+            output=result.output,
+            error=result.error,
+        )
+
+        if not result.passed:
+            all_passed = False
+            if stash_ref:
+                await worktree_manager.pop_stash(stash_ref, repo=repo_name)
+
+        combined_output.append(f"[{effective_repo}] {result.output or result.error}")
+
+        if result.passed and worktree_created:
+            next_stage = issue.next_stage()
+            if next_stage is None or stage == Stage.SHIP:
+                await worktree_manager.cleanup(issue_id, repo=repo_name)
+
+    aggregate = StageResult(
         stage=stage,
-        artifacts_path=artifacts_path,
-        previous_errors=previous_errors if previous_errors else None,
+        passed=all_passed,
+        output="\n".join(combined_output),
+        error="" if all_passed else "One or more repos failed",
     )
 
-    await deps.db.save_stage_result(issue_id, result)
-
-    existing_iterations = await deps.db.get_harness_iterations(issue_id)
-    attempt_num = len([i for i in existing_iterations if i.get("stage") == stage.value])
-
-    iteration = HarnessIteration(
-        attempt=attempt_num,
-        stage=stage,
-        previous_errors=previous_errors,
-    )
-    await deps.db.save_harness_iteration(
-        issue_id,
-        iteration,
-        exit_code=0 if result.passed else 1,
-        output=result.output,
-        error=result.error,
-    )
-
-    if result.passed:
-        next_stage = issue.next_stage()
-        if next_stage is None or stage == Stage.SHIP:
-            if worktree_created:
-                await worktree_manager.cleanup(issue_id)
+    if all_passed:
         await deps.db.update_issue_status(issue_id, IssueStatus.IN_PROGRESS, stage)
         update_issue_status(issue.filepath, IssueStatus.IN_PROGRESS, stage)
     else:
         await deps.db.update_issue_status(issue_id, IssueStatus.PAUSED, stage)
         update_issue_status(issue.filepath, IssueStatus.PAUSED, stage)
-        if stash_ref:
-            await worktree_manager.pop_stash(stash_ref)
 
-    return result
+    return aggregate
 
 
 @router.post("/issues/{issue_id}/advance")

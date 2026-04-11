@@ -94,6 +94,13 @@ class Database:
             await self._conn.commit()
         except Exception:
             pass  # Column already exists
+        try:
+            await self._conn.execute(
+                "ALTER TABLE harness_iterations ADD COLUMN repo TEXT DEFAULT 'primary'"
+            )
+            await self._conn.commit()
+        except Exception:
+            pass  # Column already exists
 
     async def close(self) -> None:
         if self._conn:
