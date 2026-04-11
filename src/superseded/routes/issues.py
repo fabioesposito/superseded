@@ -36,6 +36,9 @@ async def create_issue(request: Request, deps: Deps = Depends(get_deps)):
         [l.strip() for l in labels_str.split(",") if l.strip()] if labels_str else []
     )
 
+    repos_str = str(form.get("repos", "")).strip()
+    repos = [r.strip() for r in repos_str.split(",") if r.strip()] if repos_str else []
+
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     Path(issues_dir).mkdir(parents=True, exist_ok=True)
 
@@ -44,6 +47,7 @@ async def create_issue(request: Request, deps: Deps = Depends(get_deps)):
     filepath = str(Path(issues_dir) / f"{issue_id}-{slug}.md")
 
     labels_yaml = "\n".join(f"  - {l}" for l in labels) if labels else "  []"
+    repos_yaml = "\n".join(f"  - {r}" for r in repos) if repos else "  []"
     content = f"""---
 id: {issue_id}
 title: {title}
@@ -53,6 +57,8 @@ created: "{date.today().isoformat()}"
 assignee: {assignee}
 labels:
 {labels_yaml}
+repos:
+{repos_yaml}
 ---
 
 {body}
@@ -60,7 +66,12 @@ labels:
     write_issue(filepath, content)
 
     issue = Issue(
-        id=issue_id, title=title, filepath=filepath, assignee=assignee, labels=labels
+        id=issue_id,
+        title=title,
+        filepath=filepath,
+        assignee=assignee,
+        labels=labels,
+        repos=repos,
     )
     await deps.db.upsert_issue(issue)
 
@@ -88,12 +99,18 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
     stage_results = await deps.db.get_stage_results(issue_id)
     harness_iterations = await deps.db.get_harness_iterations(issue_id)
 
+    results_by_repo: dict[str, list] = {}
+    for r in stage_results:
+        repo = r.get("repo", "primary")
+        results_by_repo.setdefault(repo, []).append(r)
+
     return _templates.TemplateResponse(
         request,
         "issue_detail.html",
         {
             "issue": issue,
             "stage_results": stage_results,
+            "results_by_repo": results_by_repo,
             "harness_iterations": harness_iterations,
             "stage_order": [s.value for s in Stage],
             "passed_stages": [r["stage"] for r in stage_results if r.get("passed")],
