@@ -24,6 +24,13 @@
                 placeholder="bug, feature, enhancement">
         </div>
         <div>
+            <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Target Repositories</label>
+            <input type="text" name="repos"
+                class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
+                placeholder="frontend, backend (leave empty for primary only)">
+            <p class="mt-1.5 text-xs text-shell-600">Comma-separated repo names from config. Leave empty for single-repo work.</p>
+        </div>
+        <div>
             <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Assign to agent</label>
             <select name="assignee"
                 class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all appearance-none cursor-pointer">
