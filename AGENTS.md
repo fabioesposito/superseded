@@ -97,6 +97,7 @@ Superseded is now an agent harness, not just a linear pipeline:
 - **Worktree isolation**: BUILD/VERIFY/REVIEW stages run in isolated git worktrees. Changes merge on success, discard on failure.
 - **Quality enforcement**: Review findings that are critical/important loop back to BUILD. `.superseded/rules.md` is injected into every prompt.
 - **Iteration history**: Every harness attempt is tracked in the database and shown in the UI.
+- **Multi-repo support**: Tickets can target multiple repositories. Set `repos: [frontend, backend]` in ticket frontmatter. Available repos are defined in `.superseded/config.yaml` under the `repos` key. SPEC/PLAN run once (primary repo). BUILD/VERIFY/REVIEW fan out per target repo. SHIP creates a PR per repo. See `docs/multi-repo.md`.
 
 ## Key Files for Agents
 
