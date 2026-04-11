@@ -78,9 +78,18 @@ class ContextAssembler:
             return f"## Project Rules (non-negotiable)\n\n{content}"
         return None
 
-    def _build_skill_layer(self, stage: Stage) -> str:
+    def _build_skill_layer(self, stage: Stage, target_repo: str | None = None) -> str:
         prompt = get_prompt_for_stage(stage)
-        return f"## Stage Instructions: {stage.value.upper()}\n\n{prompt}"
+        repo_context = ""
+        if target_repo:
+            repo_path = self._get_repo_path(target_repo)
+            repo_context = (
+                f"\n\n## Target Repository: {target_repo}\n"
+                f"You are working in the `{target_repo}` repository at `{repo_path}`.\n"
+                f"All git operations (commit, push, PR creation) apply to THIS repository.\n"
+                f"Use `gh pr create` to create a PR in this repository."
+            )
+        return f"## Stage Instructions: {stage.value.upper()}\n\n{prompt}{repo_context}"
 
     def _run_async(self, coro: Any) -> Any:
         try:
@@ -178,7 +187,7 @@ class ContextAssembler:
         if rules:
             layers.append(rules)
 
-        layers.append(self._build_skill_layer(stage))
+        layers.append(self._build_skill_layer(stage, target_repo=target_repo))
 
         if previous_errors:
             layers.append(self._build_error_layer(previous_errors, iteration))

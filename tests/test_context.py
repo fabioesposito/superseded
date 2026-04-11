@@ -151,3 +151,25 @@ def test_context_assembler_no_target_repo(tmp_path):
     )
     assert "Primary guide" in context
     assert "Frontend guide" not in context
+
+
+def test_context_skill_layer_includes_repo_info(tmp_path):
+    """Skill layer includes repo-specific instructions when target_repo is set."""
+    primary = tmp_path / "primary"
+    primary.mkdir()
+
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+
+    assembler = ContextAssembler(str(primary))
+    assembler.register_repo("frontend", str(frontend))
+
+    # Without target_repo
+    prompt_no_repo = assembler._build_skill_layer(Stage.SHIP)
+    assert "Target Repository" not in prompt_no_repo
+
+    # With target_repo
+    prompt_with_repo = assembler._build_skill_layer(Stage.SHIP, target_repo="frontend")
+    assert "Target Repository: frontend" in prompt_with_repo
+    assert str(frontend) in prompt_with_repo
+    assert "gh pr create" in prompt_with_repo
