@@ -5,6 +5,7 @@ from pathlib import Path
 
 from superseded.agents.base import AgentAdapter
 from superseded.models import AgentContext, AgentResult, Issue, Stage, StageResult
+from superseded.pipeline.context import ContextAssembler
 
 
 class PipelineEngine:
@@ -12,19 +13,31 @@ class PipelineEngine:
         self.agent = agent
         self.repo_path = repo_path
         self.timeout = timeout
+        self.context_assembler = ContextAssembler(repo_path)
 
-    async def run_stage(self, issue: Issue, stage: Stage) -> StageResult:
-        from superseded.pipeline.prompts import get_prompt_for_stage
+    async def run_stage(
+        self,
+        issue: Issue,
+        stage: Stage,
+        artifacts_path: str | None = None,
+    ) -> StageResult:
+        if artifacts_path is None:
+            artifacts_path = str(
+                Path(self.repo_path) / ".superseded" / "artifacts" / issue.id
+            )
+        Path(artifacts_path).mkdir(parents=True, exist_ok=True)
 
-        prompt = get_prompt_for_stage(stage)
-        artifacts_path = Path(self.repo_path) / ".superseded" / "artifacts" / issue.id
-        artifacts_path.mkdir(parents=True, exist_ok=True)
+        prompt = self.context_assembler.build(
+            stage=stage,
+            issue=issue,
+            artifacts_path=artifacts_path,
+        )
 
         context = AgentContext(
             repo_path=self.repo_path,
             issue=issue,
             skill_prompt=prompt,
-            artifacts_path=str(artifacts_path),
+            artifacts_path=artifacts_path,
         )
 
         started = datetime.datetime.now()

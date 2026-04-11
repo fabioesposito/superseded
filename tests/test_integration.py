@@ -3,9 +3,15 @@
 import tempfile
 from pathlib import Path
 
+from unittest.mock import AsyncMock
+
 from superseded.config import load_config
 from superseded.db import Database
-from superseded.models import Issue, IssueStatus, Stage
+from superseded.models import AgentResult, Issue, IssueStatus, Stage
+from superseded.pipeline.context import ContextAssembler
+from superseded.pipeline.harness import HarnessRunner
+from superseded.pipeline.plan import PlanTask, write_plan, read_plan
+from superseded.pipeline.worktree import WorktreeManager
 from superseded.tickets.reader import list_issues, read_issue
 from superseded.tickets.writer import write_issue, update_issue_status
 
@@ -103,3 +109,93 @@ def test_stage_definitions_match_prompts():
     for stage_def in STAGE_DEFINITIONS:
         prompt = get_prompt_for_stage(stage_def.stage)
         assert len(prompt) > 0, f"No prompt for stage {stage_def.stage}"
+
+
+import subprocess
+
+
+def _init_git_repo(path: Path) -> None:
+    subprocess.run(["git", "init"], cwd=str(path), capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=str(path),
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"], cwd=str(path), capture_output=True
+    )
+    (path / "README.md").write_text("test repo")
+    subprocess.run(["git", "add", "."], cwd=str(path), capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=str(path), capture_output=True)
+
+
+async def test_harness_full_lifecycle():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        _init_git_repo(repo)
+        config_dir = repo / ".superseded"
+        config_dir.mkdir()
+        issues_dir = config_dir / "issues"
+        issues_dir.mkdir()
+        artifacts_dir = config_dir / "artifacts"
+        artifacts_dir.mkdir()
+
+        config = load_config(repo)
+        assert config.max_retries == 3
+
+        filepath = str(issues_dir / "SUP-001-test-issue.md")
+        write_issue(filepath, SAMPLE_TICKET)
+
+        issue = read_issue(filepath)
+        assert issue.stage == Stage.SPEC
+
+        mock_agent = AsyncMock()
+        mock_agent.run.return_value = AgentResult(
+            exit_code=0, stdout="spec written", stderr=""
+        )
+
+        runner = HarnessRunner(agent=mock_agent, repo_path=str(repo), max_retries=3)
+        result = await runner.run_stage_with_retries(
+            issue=issue,
+            stage=Stage.SPEC,
+            artifacts_path=str(artifacts_dir / "SUP-001"),
+        )
+
+        assert result.passed is True
+        assert mock_agent.run.call_count == 1
+
+
+async def test_context_assembler_includes_artifacts():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        _init_git_repo(repo)
+
+        artifacts_dir = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
+        artifacts_dir.mkdir(parents=True)
+        (artifacts_dir / "spec.md").write_text("# Spec\nDetailed spec for the feature.")
+
+        issue = Issue(
+            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
+        )
+        assembler = ContextAssembler(repo_path=str(repo))
+        prompt = assembler.build(
+            stage=Stage.PLAN,
+            issue=issue,
+            artifacts_path=str(artifacts_dir),
+        )
+
+        assert "Spec" in prompt
+        assert "spec.md" in prompt.lower()
+
+
+async def test_worktree_lifecycle():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        _init_git_repo(repo)
+
+        wm = WorktreeManager(str(repo))
+        worktree_path = wm.create("SUP-TEST")
+        assert worktree_path.exists()
+        assert wm.exists("SUP-TEST")
+        wm.cleanup("SUP-TEST")
+        assert not wm.exists("SUP-TEST")

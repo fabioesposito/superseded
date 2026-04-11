@@ -109,8 +109,10 @@ async def issue_detail(request: Request, issue_id: str):
 
     issue = matching[0]
     stage_results = []
+    harness_iterations = []
     if _db:
         stage_results = await _db.get_stage_results(issue_id)
+        harness_iterations = await _db.get_harness_iterations(issue_id)
 
     return _templates.TemplateResponse(
         request,
@@ -118,6 +120,7 @@ async def issue_detail(request: Request, issue_id: str):
         {
             "issue": issue,
             "stage_results": stage_results,
+            "harness_iterations": harness_iterations,
             "stage_order": [s.value for s in Stage],
             "passed_stages": [r["stage"] for r in stage_results if r.get("passed")],
         },

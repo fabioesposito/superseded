@@ -69,6 +69,20 @@
             {% endfor %}
         </div>
         {% endif %}
+        {% if harness_iterations %}
+        <div class="bg-gray-800 rounded-lg p-4 mt-4">
+            <h3 class="font-semibold mb-2">Iteration History</h3>
+            {% for iter in harness_iterations %}
+            <div class="mb-2 border-l-2 {% if iter.exit_code == 0 %}border-green-500{% else %}border-red-500{% endif %} pl-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium">{{ iter.stage }} attempt #{{ iter.attempt }}</span>
+                    {% if iter.exit_code == 0 %}<span class="text-green-400 text-xs">OK</span>{% else %}<span class="text-red-400 text-xs">FAIL</span>{% endif %}
+                </div>
+                {% if iter.error %}<p class="text-red-400 text-xs mt-1">{{ iter.error }}</p>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endif %}
