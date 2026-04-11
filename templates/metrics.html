@@ -1,55 +1,64 @@
 {% extends "base.html" %}
 {% block title %}Pipeline Metrics - Superseded{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Pipeline Metrics</h1>
+<div class="animate-fade-in">
+    <div class="flex items-center justify-between mb-8">
+        <h1 class="text-3xl font-bold text-shell-50 tracking-tight">Pipeline Metrics</h1>
+        <a href="/" class="text-shell-500 hover:text-shell-300 text-sm transition-colors">&larr; Dashboard</a>
+    </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    <div class="bg-gray-800 rounded-lg p-6">
-        <h3 class="text-sm font-medium text-gray-400 mb-1">Total Issues</h3>
-        <p class="text-3xl font-bold">{{ metrics.total_issues }}</p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div class="card card-accent rounded-xl p-6">
+            <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Total Issues</h3>
+            <p class="text-4xl font-bold text-shell-50">{{ metrics.total_issues }}</p>
+        </div>
+        <div class="card rounded-xl p-6" style="border-left: 3px solid #d66b29;">
+            <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Total Retries</h3>
+            <p class="text-4xl font-bold text-petal-400">{{ metrics.total_retries }}</p>
+        </div>
+        <div class="card rounded-xl p-6" style="border-left: 3px solid #5ca35d;">
+            <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-3">Issues by Status</h3>
+            {% for status, count in metrics.issues_by_status.items() %}
+            <div class="flex justify-between text-sm py-1.5 border-b border-shell-800/40 last:border-0">
+                <span class="text-shell-400">{{ status }}</span>
+                <span class="font-semibold font-mono text-shell-200">{{ count }}</span>
+            </div>
+            {% endfor %}
+        </div>
     </div>
-    <div class="bg-gray-800 rounded-lg p-6">
-        <h3 class="text-sm font-medium text-gray-400 mb-1">Total Retries</h3>
-        <p class="text-3xl font-bold">{{ metrics.total_retries }}</p>
-    </div>
-    <div class="bg-gray-800 rounded-lg p-6">
-        <h3 class="text-sm font-medium text-gray-400 mb-1">Issues by Status</h3>
-        {% for status, count in metrics.issues_by_status.items() %}
-        <div class="flex justify-between text-sm mt-1">
-            <span class="text-gray-300">{{ status }}</span>
-            <span class="font-medium">{{ count }}</span>
+
+    <div class="card rounded-xl p-6 mb-8">
+        <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500 mb-5">Stage Success Rates</h2>
+        {% for stage, rate in metrics.stage_success_rates.items() %}
+        <div class="mb-4 last:mb-0">
+            <div class="flex justify-between text-sm mb-2">
+                <span class="text-shell-300 font-medium uppercase tracking-wider text-xs">{{ stage }}</span>
+                <span class="font-mono font-semibold
+                    {% if rate >= 0.8 %}text-olive-400
+                    {% elif rate >= 0.5 %}text-petal-400
+                    {% else %}text-coral-400{% endif %}">{{ (rate * 100) | int }}%</span>
+            </div>
+            <div class="w-full bg-shell-900 rounded-full h-2.5 overflow-hidden">
+                <div class="h-2.5 rounded-full transition-all duration-700
+                    {% if rate >= 0.8 %}bg-gradient-to-r from-olive-600 to-olive-400
+                    {% elif rate >= 0.5 %}bg-gradient-to-r from-petal-600 to-petal-400
+                    {% else %}bg-gradient-to-r from-coral-600 to-coral-400{% endif %}"
+                     style="width: {{ (rate * 100) | int }}%"></div>
+            </div>
         </div>
         {% endfor %}
     </div>
-</div>
 
-<div class="bg-gray-800 rounded-lg p-6 mb-8">
-    <h2 class="text-lg font-semibold mb-4">Stage Success Rates</h2>
-    {% for stage, rate in metrics.stage_success_rates.items() %}
-    <div class="mb-3">
-        <div class="flex justify-between text-sm mb-1">
-            <span>{{ stage }}</span>
-            <span>{{ (rate * 100) | int }}%</span>
+    {% if metrics.retries_by_stage %}
+    <div class="card rounded-xl p-6 mb-8">
+        <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500 mb-4">Retries by Stage</h2>
+        {% for stage, count in metrics.retries_by_stage.items() %}
+        <div class="flex justify-between text-sm py-2.5 border-b border-shell-800/40 last:border-0">
+            <span class="text-shell-300 uppercase tracking-wider text-xs font-medium">{{ stage }}</span>
+            <span class="font-mono font-semibold text-shell-200">{{ count }}</span>
         </div>
-        <div class="w-full bg-gray-700 rounded-full h-3">
-            <div class="h-3 rounded-full {% if rate >= 0.8 %}bg-green-500{% elif rate >= 0.5 %}bg-yellow-500{% else %}bg-red-500{% endif %}"
-                 style="width: {{ (rate * 100) | int }}%"></div>
-        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
+    {% endif %}
 </div>
-
-{% if metrics.retries_by_stage %}
-<div class="bg-gray-800 rounded-lg p-6 mb-8">
-    <h2 class="text-lg font-semibold mb-4">Retries by Stage</h2>
-    {% for stage, count in metrics.retries_by_stage.items() %}
-    <div class="flex justify-between text-sm py-1 border-b border-gray-700">
-        <span>{{ stage }}</span>
-        <span class="font-medium">{{ count }}</span>
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
-
-<a href="/" class="text-blue-400 hover:text-blue-300 text-sm">Back to Dashboard</a>
 {% endblock %}

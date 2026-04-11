@@ -2,146 +2,173 @@
 {% block title %}{{ issue.title if issue else 'Not Found' }} - Superseded{% endblock %}
 {% block content %}
 {% if not issue %}
-<p class="text-red-400">{{ error }}</p>
-<a href="/" class="text-blue-400 hover:text-blue-300">Back to dashboard</a>
+<div class="animate-fade-in">
+    <div class="card rounded-xl p-8 text-center">
+        <p class="text-coral-400 text-lg mb-4">{{ error }}</p>
+        <a href="/" class="text-neon-400 hover:text-neon-300 transition-colors">&larr; Back to dashboard</a>
+    </div>
+</div>
 {% else %}
-<h1 class="text-2xl font-bold mb-2">{{ issue.id }}: {{ issue.title }}</h1>
-<div class="flex gap-3 mb-6">
-    <span class="px-3 py-1 rounded-lg text-sm font-medium bg-purple-900 text-purple-200">{{ issue.stage.value }}</span>
-    <span class="px-3 py-1 rounded-lg text-sm font-medium
-        {% if issue.status.value == 'done' %}bg-green-900 text-green-200
-        {% elif issue.status.value == 'failed' %}bg-red-900 text-red-200
-        {% elif issue.status.value == 'in-progress' %}bg-yellow-900 text-yellow-200
-        {% else %}bg-gray-700 text-gray-300{% endif %}">
-        {{ issue.status.value }}
-    </span>
-    {% for label in issue.labels %}
-    <span class="px-2 py-1 rounded text-xs bg-gray-700 text-gray-300">{{ label }}</span>
-    {% endfor %}
-</div>
-
-<div class="mb-6">
-    <h2 class="text-lg font-semibold mb-2">Pipeline Progress</h2>
-    <div class="flex gap-2">
-        {% for stage_name in stage_order %}
-        <div class="flex-1 rounded-lg p-3 text-center text-sm font-medium
-            {% if stage_name == issue.stage.value %}bg-blue-600 text-white
-            {% elif stage_name in passed_stages %}bg-green-800 text-green-200
-            {% else %}bg-gray-800 text-gray-500{% endif %}">
-            {{ stage_name }}
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <div class="lg:col-span-2 bg-gray-800 rounded-lg p-6">
-        <h2 class="text-lg font-semibold mb-3">Ticket</h2>
-        <div class="text-sm text-gray-300">
-            <p><strong>Agent:</strong> {{ issue.assignee or "auto" }}</p>
-            <p><strong>Created:</strong> {{ issue.created }}</p>
+<div class="animate-fade-in">
+    <div class="flex items-start justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-shell-50 tracking-tight mb-2">
+                <span class="font-mono text-neon-500">{{ issue.id }}</span>
+                <span class="text-shell-600 mx-2">:</span>
+                {{ issue.title }}
+            </h1>
+            <div class="flex gap-2.5 flex-wrap">
+                <span class="px-3 py-1 rounded-md text-xs font-semibold uppercase tracking-wide bg-sand-900/60 text-sand-400 border border-sand-800/40">{{ issue.stage.value }}</span>
+                <span class="px-3 py-1 rounded-md text-xs font-semibold uppercase tracking-wide inline-flex items-center gap-1.5
+                    {% if issue.status.value == 'done' %}bg-olive-950 text-olive-400 border border-olive-800/40
+                    {% elif issue.status.value == 'failed' %}bg-coral-950 text-coral-400 border border-coral-800/40
+                    {% elif issue.status.value == 'in-progress' %}bg-petal-950 text-petal-400 border border-petal-800/40
+                    {% else %}bg-shell-900 text-shell-400 border border-shell-800/40{% endif %}">
+                    {% if issue.status.value == 'in-progress' %}<span class="w-1.5 h-1.5 rounded-full bg-petal-400 animate-pulse"></span>{% endif %}
+                    {{ issue.status.value }}
+                </span>
+                {% for label in issue.labels %}
+                <span class="px-2.5 py-1 rounded-md text-xs font-medium bg-shell-900 text-shell-300 border border-shell-800/40">{{ label }}</span>
+                {% endfor %}
+            </div>
         </div>
     </div>
-    <div class="space-y-4">
-        <div class="bg-gray-800 rounded-lg p-4">
-            <h3 class="font-semibold mb-2">Actions</h3>
-            {% if issue.status.value != 'done' %}
-            <form action="/pipeline/issues/{{ issue.id }}/advance" method="post" class="mb-2">
-                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm">Advance Stage</button>
-            </form>
-            <form action="/pipeline/issues/{{ issue.id }}/retry" method="post" class="mb-2">
-                <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm">Retry Stage</button>
-            </form>
+
+    <div class="mb-8">
+        <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500 mb-3">Pipeline Progress</h2>
+        <div class="flex gap-1.5">
+            {% for stage_name in stage_order %}
+            <div class="flex-1 rounded-lg p-3 text-center text-xs font-semibold uppercase tracking-wider
+                {% if stage_name == issue.stage.value %}bg-neon-600/20 text-neon-400 border border-neon-600/40 glow-active
+                {% elif stage_name in passed_stages %}bg-olive-950 text-olive-400 border border-olive-800/30
+                {% else %}bg-shell-900/50 text-shell-600 border border-shell-800/30{% endif %}">
+                {% if stage_name in passed_stages %}
+                <svg class="w-3.5 h-3.5 mx-auto mb-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                {% endif %}
+                {{ stage_name }}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 card card-accent rounded-xl p-6">
+            <h2 class="text-lg font-semibold text-shell-100 mb-4">Ticket</h2>
+            <div class="space-y-2 text-sm">
+                <div class="flex items-center gap-3">
+                    <span class="text-shell-500 w-20">Agent</span>
+                    <span class="font-mono text-petal-400">{{ issue.assignee or "auto" }}</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-shell-500 w-20">Created</span>
+                    <span class="text-shell-300 font-mono text-xs">{{ issue.created }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="space-y-4">
+            <div class="card rounded-xl p-5">
+                <h3 class="font-semibold text-shell-100 mb-3 text-sm uppercase tracking-wider">Actions</h3>
+                {% if issue.status.value != 'done' %}
+                <form action="/pipeline/issues/{{ issue.id }}/advance" method="post" class="mb-2.5">
+                    <button type="submit" class="w-full btn-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold">Advance Stage</button>
+                </form>
+                <form action="/pipeline/issues/{{ issue.id }}/retry" method="post" class="mb-2.5">
+                    <button type="submit" class="w-full btn-secondary text-petal-400 hover:text-petal-300 px-4 py-2.5 rounded-lg text-sm font-semibold">Retry Stage</button>
+                </form>
+                {% endif %}
+                <a href="/" class="block text-center text-shell-500 hover:text-shell-300 text-xs mt-2 transition-colors">Back to Dashboard</a>
+            </div>
+            {% if stage_results %}
+            <div class="card rounded-xl p-5">
+                <h3 class="font-semibold text-shell-100 mb-3 text-sm uppercase tracking-wider">Stage Results</h3>
+                {% for result in stage_results %}
+                <div class="mb-3 border-l-2 {% if result.passed %}border-olive-500{% else %}border-coral-500{% endif %} pl-3">
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm text-shell-200">{{ result.stage }}</span>
+                        {% if result.passed %}<span class="text-olive-400 text-xs font-mono font-semibold">PASS</span>{% else %}<span class="text-coral-400 text-xs font-mono font-semibold">FAIL</span>{% endif %}
+                    </div>
+                    {% if result.error %}<p class="text-coral-400/80 text-xs mt-1 font-mono">{{ result.error }}</p>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
             {% endif %}
-            <a href="/" class="block text-center text-blue-400 hover:text-blue-300 text-sm mt-2">Back to Dashboard</a>
-        </div>
-        {% if stage_results %}
-        <div class="bg-gray-800 rounded-lg p-4">
-            <h3 class="font-semibold mb-2">Stage Results</h3>
-            {% for result in stage_results %}
-            <div class="mb-3 border-l-2 {% if result.passed %}border-green-500{% else %}border-red-500{% endif %} pl-3">
-                <div class="flex items-center gap-2">
-                    <span class="font-medium">{{ result.stage }}</span>
-                    {% if result.passed %}<span class="text-green-400 text-xs">PASS</span>{% else %}<span class="text-red-400 text-xs">FAIL</span>{% endif %}
+            {% if harness_iterations %}
+            <div class="card rounded-xl p-5">
+                <h3 class="font-semibold text-shell-100 mb-3 text-sm uppercase tracking-wider">Iteration History</h3>
+                {% for iter in harness_iterations %}
+                <div class="mb-2.5 border-l-2 {% if iter.exit_code == 0 %}border-olive-500{% else %}border-coral-500{% endif %} pl-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-medium text-shell-200">{{ iter.stage }} <span class="text-shell-500">attempt #{{ iter.attempt }}</span></span>
+                        {% if iter.exit_code == 0 %}<span class="text-olive-400 text-xs font-mono font-semibold">OK</span>{% else %}<span class="text-coral-400 text-xs font-mono font-semibold">FAIL</span>{% endif %}
+                    </div>
+                    {% if iter.error %}<p class="text-coral-400/80 text-xs mt-1 font-mono">{{ iter.error }}</p>{% endif %}
                 </div>
-                {% if result.error %}<p class="text-red-400 text-xs mt-1">{{ result.error }}</p>{% endif %}
+                {% endfor %}
             </div>
-            {% endfor %}
+            {% endif %}
         </div>
-        {% endif %}
-        {% if harness_iterations %}
-        <div class="bg-gray-800 rounded-lg p-4 mt-4">
-            <h3 class="font-semibold mb-2">Iteration History</h3>
-            {% for iter in harness_iterations %}
-            <div class="mb-2 border-l-2 {% if iter.exit_code == 0 %}border-green-500{% else %}border-red-500{% endif %} pl-3">
-                <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium">{{ iter.stage }} attempt #{{ iter.attempt }}</span>
-                    {% if iter.exit_code == 0 %}<span class="text-green-400 text-xs">OK</span>{% else %}<span class="text-red-400 text-xs">FAIL</span>{% endif %}
-                </div>
-                {% if iter.error %}<p class="text-red-400 text-xs mt-1">{{ iter.error }}</p>{% endif %}
-            </div>
-            {% endfor %}
+    </div>
+
+    <div class="mt-6 card rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-shell-800/60 flex items-center justify-between">
+            <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500">Agent Log</h2>
+            <span class="text-xs font-mono text-shell-600">live</span>
         </div>
-        {% endif %}
+        <div id="agent-log" class="font-mono text-xs bg-shell-950 p-5 h-72 overflow-y-auto text-olive-300 leading-relaxed">
+            <div class="text-shell-600" id="log-init">Loading history...</div>
+        </div>
     </div>
-</div>
 
-<div class="mt-6 bg-gray-800 rounded-lg p-4">
-    <h2 class="text-lg font-semibold mb-3">Agent Log</h2>
-    <div id="agent-log" class="font-mono text-xs bg-black rounded p-4 h-64 overflow-y-auto text-green-300">
-        <div class="text-gray-500" id="log-init">Loading history...</div>
-    </div>
-</div>
+    <script>
+    (function() {
+        var logEl = document.getElementById('agent-log');
+        var issueId = '{{ issue.id }}';
 
-<script>
-(function() {
-    var logEl = document.getElementById('agent-log');
-    var issueId = '{{ issue.id }}';
-
-    fetch('/pipeline/issues/' + issueId + '/events')
-        .then(function(r) { return r.json(); })
-        .then(function(events) {
-            var init = document.getElementById('log-init');
-            if (init) init.remove();
-            events.forEach(function(evt) {
-                appendEvent(logEl, evt);
+        fetch('/pipeline/issues/' + issueId + '/events')
+            .then(function(r) { return r.json(); })
+            .then(function(events) {
+                var init = document.getElementById('log-init');
+                if (init) init.remove();
+                events.forEach(function(evt) {
+                    appendEvent(logEl, evt);
+                });
+                if (events.length === 0) {
+                    logEl.innerHTML = '<div class="text-shell-600">No agent output yet.</div>';
+                }
             });
-            if (events.length === 0) {
-                logEl.innerHTML = '<div class="text-gray-500">No agent output yet.</div>';
-            }
+
+        var es = new EventSource('/pipeline/issues/' + issueId + '/events/stream');
+        es.addEventListener('stdout', function(e) {
+            var data = JSON.parse(e.data);
+            appendLine(logEl, data.content, 'text-olive-300');
+        });
+        es.addEventListener('stderr', function(e) {
+            var data = JSON.parse(e.data);
+            appendLine(logEl, data.content, 'text-coral-400');
+        });
+        es.addEventListener('status', function(e) {
+            var data = JSON.parse(e.data);
+            var code = data.metadata.exit_code;
+            appendLine(logEl, 'Process exited with code ' + code, code === 0 ? 'text-olive-400' : 'text-coral-400');
+        });
+        es.addEventListener('done', function() {
+            es.close();
         });
 
-    var es = new EventSource('/pipeline/issues/' + issueId + '/events/stream');
-    es.addEventListener('stdout', function(e) {
-        var data = JSON.parse(e.data);
-        appendLine(logEl, data.content, 'text-green-300');
-    });
-    es.addEventListener('stderr', function(e) {
-        var data = JSON.parse(e.data);
-        appendLine(logEl, data.content, 'text-red-400');
-    });
-    es.addEventListener('status', function(e) {
-        var data = JSON.parse(e.data);
-        var code = data.metadata.exit_code;
-        appendLine(logEl, 'Process exited with code ' + code, code === 0 ? 'text-green-500' : 'text-red-500');
-    });
-    es.addEventListener('done', function() {
-        es.close();
-    });
+        function appendEvent(el, evt) {
+            var cls = evt.event_type === 'stderr' ? 'text-coral-400' : evt.event_type === 'status' ? 'text-petal-400' : 'text-olive-300';
+            appendLine(el, evt.content, cls);
+        }
 
-    function appendEvent(el, evt) {
-        var cls = evt.event_type === 'stderr' ? 'text-red-400' : evt.event_type === 'status' ? 'text-yellow-400' : 'text-green-300';
-        appendLine(el, evt.content, cls);
-    }
-
-    function appendLine(el, text, cls) {
-        var div = document.createElement('div');
-        div.className = cls || '';
-        div.textContent = text;
-        el.appendChild(div);
-        el.scrollTop = el.scrollHeight;
-    }
-})();
-</script>
+        function appendLine(el, text, cls) {
+            var div = document.createElement('div');
+            div.className = cls || '';
+            div.textContent = text;
+            el.appendChild(div);
+            el.scrollTop = el.scrollHeight;
+        }
+    })();
+    </script>
+</div>
 {% endif %}
 {% endblock %}
