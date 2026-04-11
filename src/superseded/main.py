@@ -17,6 +17,10 @@ from superseded.routes.issues import (
     router as issues_router,
     set_deps as issues_set_deps,
 )
+from superseded.routes.pipeline import (
+    router as pipeline_router,
+    set_deps as pipeline_set_deps,
+)
 
 
 @asynccontextmanager
@@ -48,9 +52,11 @@ def create_app(
 
     dashboard_set_deps(config, db)
     issues_set_deps(config, db)
+    pipeline_set_deps(config, db)
 
     app.include_router(dashboard_router)
     app.include_router(issues_router)
+    app.include_router(pipeline_router)
 
     return app
 
