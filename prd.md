@@ -1,22 +1,73 @@
-Yes — several existing tools and platforms overlap with parts of this design. Short list (with what they cover):
+# Superseded — Product Requirements
 
-- GitHub Copilot / Copilot Workspace — IDE + repo-aware code generation, PR summaries, some automation (IDE-focused, not local-agent pipeline).
-- Claude Code / Anthropic tools (terminal apps) — local coding agents and multi-file edits (good for spec→code steps).
-- Sourcegraph Cody / Sourcegraph Amp — repo-wide code understanding, multi-step agents, PR/patch generation.
-- Replit AI (Agents) — end-to-end app generation, background agents, testing & deploy in a hosted environment.
-- Cursor / Cursor Composer — repo-native IDE with agentic multi-step workflows and code reasoning across files.
-- Aider / Open Interpreter / Continue — terminal/CLI agents that operate on local repos and can run tests and commit changes.
-- AutoGen / Microsoft Agent frameworks — multi-agent orchestration frameworks for building pipelines of agents.
-- Pixee / CodeRabbit / Graphite Agent / Code review bots (various) — automated PR review, summaries, and suggestions; some open PRs/comments.
-- CodiumAI, Diffblue, TestGen tools — automated test-generation from code and specs.
-- Potpie / Plandex / CrewAI / TraceRoot AI — autonomous or semi-autonomous agents that can triage issues, make edits, and run tests (varied maturity).
-- Open Interpreter / SWE-agent research projects — autonomous GitHub issue resolution demos (academic / OSS).
-- Local/self-hosted projects (Awesome lists) — many CLI/local-agent projects (FauxPilot, Continue, OpenCode, Tabby, etc.) that can be adapted into the pipeline.
+## Core Concept
+Local-first agentic pipeline tool. You write the ticket, the pipeline does the rest.
+- Tickets are markdown files in `.superseded/issues/` (single source of truth)
+- Pipeline: Spec → Plan → Build → Verify → Review → Ship
+- Agents: Claude Code and OpenCode, run as local CLI subprocesses
+- Web UI: FastAPI + HTMX dashboard for ticket management, pipeline visualization, and review
 
-Positioning vs those options
-- Unique angle here: canonical per-issue markdown as the single source of truth + repo-embedded local agents + Web UI for visual pipeline control; focused on solo-engineer local-first workflow (rather than hosted SaaS or purely IDE integrations).
-- Practical combo: use Claude Code or another local CLI agent for spec & code generation; use Sourcegraph/Cody for deep repo context; use Codium/Diffblue for tests; add a lightweight Web UI and agent orchestration layer as glue.
+## Tech Stack
+Python 3.12+ / uv / FastAPI / HTMX / Alpine.js / Tailwind CDN / SQLite / Jinja2 / aiosqlite / python-frontmatter / pyyaml / pydantic / sse-starlette
 
-If you want, I can:
-- map which components each tool can replace in your pipeline (spec agent, scaffold, PR creator, test-verifier, web UI), or
-- produce a migration diagram and recommended minimal integration plan (which tools to adopt first). Which do you prefer?
+## Architecture
+Monolithic FastAPI + HTMX application. Single process serves web UI and runs the pipeline engine. Agent adapters spawn CLI tools as subprocesses. In-repo `.superseded/` directories hold tickets (markdown with YAML frontmatter) and pipeline state (SQLite). Markdown is canonical — SQLite is a cache/index.
+
+```
+Browser (HTMX + Alpine.js + Jinja2)
+  │ HTTP / SSE
+FastAPI (single process)
+  ├── Routes (dashboard, issues, pipeline)
+  ├── Pipeline Engine (6 stages)
+  ├── Agent Runner
+  │   ├── Claude Code adapter
+  │   └── OpenCode adapter
+  ├── SQLite (state cache)
+  └── .superseded/
+      ├── config.yaml
+      ├── issues/ (markdown)
+      ├── artifacts/ (stage outputs)
+      └── state.db (pipeline state)
+```
+
+## Pipeline Stages (mapped to agent-skills)
+
+| Stage | Agent Skill | Description |
+|-------|------------|-------------|
+| Spec | spec-driven-development | Generate detailed spec from ticket |
+| Plan | planning-and-task-breakdown | Break spec into implementable tasks |
+| Build | incremental-implementation | Implement code changes |
+| Verify | test-driven-development | Run tests, fix failures |
+| Review | code-review-and-quality | Review code quality and security |
+| Ship | git-workflow-and-versioning | Commit, push, create PR |
+
+Each stage loads its corresponding skill from `vendor/agent-skills/skills/` when available, falling back to built-in prompts.
+
+## Vendored Skill Repos
+- **addyosmani/agent-skills** → `vendor/agent-skills/` — Pipeline stage prompts and engineering practices
+- **pbakaus/impeccable** → `vendor/impeccable/` — UI design skill with 18 commands (audit, polish, critique, etc.)
+
+When working on UI (templates, HTMX, styling):
+- Use `/impeccable craft` for the full build flow
+- Use `/audit` before making UI changes
+- Use `/polish` as a final pass before shipping
+- Anti-patterns: no Inter font, no purple gradients, no card-nesting, no gray text on colored backgrounds
+
+## Key Decisions
+- **Monolith** — single process, single `uv run superseded`
+- **Local agents only** — agents run on your machine as CLI subprocesses
+- **In-repo `.superseded/`** — tickets, artifacts, and state live in the repo
+- **SQLite as cache** — markdown is canonical, SQLite is a fast index
+- **SSE for real-time** — pipeline progress pushed to browser via Server-Sent Events
+- **Personal single-user** — no auth, no multi-tenant, no hosting
+
+## Competitive Positioning
+Unlike GitHub Copilot (IDE-focused), Replit (hosted), or Aider (CLI-only):
+- Canonical per-issue markdown as single source of truth
+- Agent pipelines that mirror the skill lifecycle (spec → ship)
+- Web UI for visual pipeline control without leaving terminal
+- Local-first: your code stays on your machine
+
+## See Also
+- `docs/plans/2026-04-11-superseded-design.md` — Full architecture design
+- `docs/plans/2026-04-11-superseded-implementation.md` — Implementation plan
