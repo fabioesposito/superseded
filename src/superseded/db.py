@@ -6,7 +6,15 @@ from typing import Any
 
 import aiosqlite
 
-from superseded.models import HarnessIteration, Issue, IssueStatus, Stage, StageResult
+from superseded.models import (
+    AgentEvent,
+    HarnessIteration,
+    Issue,
+    IssueStatus,
+    SessionTurn,
+    Stage,
+    StageResult,
+)
 
 
 class Database:
@@ -51,6 +59,27 @@ class Database:
                 output TEXT DEFAULT '',
                 error TEXT DEFAULT '',
                 previous_errors TEXT DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (issue_id) REFERENCES issues(id)
+            );
+            CREATE TABLE IF NOT EXISTS session_turns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                attempt INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                metadata TEXT DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (issue_id) REFERENCES issues(id)
+            );
+            CREATE TABLE IF NOT EXISTS agent_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                content TEXT DEFAULT '',
+                metadata TEXT DEFAULT '{}',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (issue_id) REFERENCES issues(id)
             );
@@ -201,3 +230,89 @@ class Database:
         row = await cursor.fetchone()
         max_num = row[0] if row and row[0] else 0
         return f"SUP-{max_num + 1:03d}"
+
+    async def save_session_turn(self, issue_id: str, turn: SessionTurn) -> None:
+        assert self._conn
+        await self._conn.execute(
+            """INSERT INTO session_turns (issue_id, stage, attempt, role, content, metadata)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                issue_id,
+                turn.stage.value,
+                turn.attempt,
+                turn.role,
+                turn.content,
+                json.dumps(turn.metadata),
+            ),
+        )
+        await self._conn.commit()
+
+    async def get_session_turns(
+        self, issue_id: str, stage: Stage | None = None
+    ) -> list[dict[str, Any]]:
+        assert self._conn
+        if stage:
+            cursor = await self._conn.execute(
+                "SELECT * FROM session_turns WHERE issue_id = ? AND stage = ? ORDER BY id",
+                (issue_id, stage.value),
+            )
+        else:
+            cursor = await self._conn.execute(
+                "SELECT * FROM session_turns WHERE issue_id = ? ORDER BY id",
+                (issue_id,),
+            )
+        rows = await cursor.fetchall()
+        cols = [desc[0] for desc in cursor.description]
+        results = []
+        for row in rows:
+            d = dict(zip(cols, row))
+            d["metadata"] = json.loads(d["metadata"])
+            results.append(d)
+        return results
+
+    async def save_agent_event(self, issue_id: str, event: AgentEvent) -> None:
+        assert self._conn
+        await self._conn.execute(
+            """INSERT INTO agent_events (issue_id, stage, event_type, content, metadata)
+               VALUES (?, ?, ?, ?, ?)""",
+            (
+                issue_id,
+                event.stage.value,
+                event.event_type,
+                event.content,
+                json.dumps(event.metadata),
+            ),
+        )
+        await self._conn.commit()
+
+    async def get_agent_events(
+        self, issue_id: str, limit: int = 200
+    ) -> list[dict[str, Any]]:
+        assert self._conn
+        cursor = await self._conn.execute(
+            "SELECT * FROM agent_events WHERE issue_id = ? ORDER BY id DESC LIMIT ?",
+            (issue_id, limit),
+        )
+        rows = await cursor.fetchall()
+        cols = [desc[0] for desc in cursor.description]
+        results = []
+        for row in rows:
+            d = dict(zip(cols, row))
+            d["metadata"] = json.loads(d["metadata"])
+            results.append(d)
+        return list(reversed(results))
+
+    async def get_recent_events(self, limit: int = 20) -> list[dict[str, Any]]:
+        assert self._conn
+        cursor = await self._conn.execute(
+            "SELECT * FROM agent_events ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        cols = [desc[0] for desc in cursor.description]
+        results = []
+        for row in rows:
+            d = dict(zip(cols, row))
+            d["metadata"] = json.loads(d["metadata"])
+            results.append(d)
+        return list(reversed(results))
