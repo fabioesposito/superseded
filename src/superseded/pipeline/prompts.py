@@ -1,6 +1,49 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from superseded.models import Stage
+
+VENDOR_DIR = Path(__file__).parent.parent.parent.parent / "vendor"
+
+AGENT_SKILLS_DIR = VENDOR_DIR / "agent-skills" / "skills"
+IMPECCABLE_DIR = VENDOR_DIR / "impeccable" / "source" / "skills"
+
+
+def _load_skill_prompt(skill_name: str) -> str | None:
+    """Try to load a skill's SKILL.md from the vendored agent-skills repo."""
+    skill_file = AGENT_SKILLS_DIR / skill_name / "SKILL.md"
+    if skill_file.exists():
+        return skill_file.read_text(encoding="utf-8")
+    return None
+
+
+def _build_stage_prompt(stage: Stage, fallback: str) -> str:
+    """Build a prompt for a pipeline stage.
+
+    If the vendored skill SKILL.md exists, use it as the primary prompt.
+    Otherwise, fall back to the built-in prompt.
+    """
+    skill_map: dict[Stage, str] = {
+        Stage.SPEC: "spec-driven-development",
+        Stage.PLAN: "planning-and-task-breakdown",
+        Stage.BUILD: "incremental-implementation",
+        Stage.VERIFY: "test-driven-development",
+        Stage.REVIEW: "code-review-and-quality",
+        Stage.SHIP: "git-workflow-and-versioning",
+    }
+    skill_name = skill_map.get(stage)
+    if skill_name:
+        skill_content = _load_skill_prompt(skill_name)
+        if skill_content:
+            return (
+                f"You are an AI agent executing the {skill_name} skill.\n\n"
+                f"Follow the skill instructions below precisely.\n\n"
+                f"---\n\n{skill_content}\n\n---\n\n"
+                f"If the skill references files or code, adapt to the current project context."
+            )
+    return fallback
+
 
 PROMPTS: dict[Stage, str] = {
     Stage.SPEC: """You are a spec writer following the spec-driven-development skill.
@@ -133,4 +176,4 @@ Commit, push, and create a PR.""",
 
 
 def get_prompt_for_stage(stage: Stage) -> str:
-    return PROMPTS[stage]
+    return _build_stage_prompt(stage, PROMPTS[stage])

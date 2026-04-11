@@ -1,0 +1,6 @@
+[submodule "vendor/agent-skills"]
+	path = vendor/agent-skills
+	url = https://github.com/addyosmani/agent-skills.git
+[submodule "vendor/impeccable"]
+	path = vendor/impeccable
+	url = https://github.com/pbakaus/impeccable.git
