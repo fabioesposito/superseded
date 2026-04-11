@@ -1,7 +1,7 @@
-from superseded.agents.base import AgentAdapter, AgentContext, AgentResult
+from superseded.agents.base import AgentAdapter, SubprocessAgentAdapter
 from superseded.agents.claude_code import ClaudeCodeAdapter
 from superseded.agents.opencode import OpenCodeAdapter
-from superseded.models import Issue
+from superseded.models import AgentContext, AgentResult, Issue
 
 
 def _make_context(tmp: str) -> AgentContext:
@@ -16,18 +16,18 @@ def _make_context(tmp: str) -> AgentContext:
 
 
 def test_claude_code_adapter_builds_command():
-    ctx = _make_context("/tmp/repo")
     adapter = ClaudeCodeAdapter()
-    cmd_parts = adapter._build_command(ctx)
+    cmd_parts = adapter._build_command("Write a plan for this feature.")
     assert "claude" in cmd_parts[0]
     assert "--print" in cmd_parts
+    assert "Write a plan for this feature." in cmd_parts
 
 
 def test_opencode_adapter_builds_command():
-    ctx = _make_context("/tmp/repo")
     adapter = OpenCodeAdapter()
-    cmd_parts = adapter._build_command(ctx)
+    cmd_parts = adapter._build_command("Write a plan for this feature.")
     assert "opencode" in cmd_parts[0]
+    assert "Write a plan for this feature." in cmd_parts
 
 
 def test_adapter_protocol_enforced():

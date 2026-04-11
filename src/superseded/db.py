@@ -192,3 +192,12 @@ class Database:
             d["previous_errors"] = json.loads(d["previous_errors"])
             results.append(d)
         return results
+
+    async def next_issue_id(self) -> str:
+        assert self._conn
+        cursor = await self._conn.execute(
+            "SELECT MAX(CAST(SUBSTR(id, 5) AS INTEGER)) FROM issues WHERE id LIKE 'SUP-%'"
+        )
+        row = await cursor.fetchone()
+        max_num = row[0] if row and row[0] else 0
+        return f"SUP-{max_num + 1:03d}"

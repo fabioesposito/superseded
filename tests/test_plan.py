@@ -73,9 +73,12 @@ def test_read_roundtrip():
             scope="Small",
         )
         write_plan(
-            str(plan_path), title="Setup DB", context="Need a database", tasks=[task]
+            str(plan_path),
+            title="Setup project",
+            context="Need a database",
+            tasks=[task],
         )
         plan = read_plan(str(plan_path))
-    assert plan.title == "Setup DB"
+    assert plan.title == "Setup project"
     assert len(plan.tasks) == 1
     assert plan.tasks[0].title == "Setup DB"

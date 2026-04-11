@@ -1,16 +1,14 @@
-import asyncio
 from unittest.mock import AsyncMock
+import tempfile
+from pathlib import Path
 
 from superseded.models import (
-    AgentContext,
     AgentResult,
     Issue,
-    IssueStatus,
     Stage,
-    StageResult,
 )
-from superseded.pipeline.engine import PipelineEngine
-from superseded.pipeline.stages import StageDefinition, STAGE_DEFINITIONS
+from superseded.pipeline.harness import HarnessRunner
+from superseded.pipeline.stages import STAGE_DEFINITIONS
 from superseded.pipeline.prompts import get_prompt_for_stage
 
 
@@ -49,43 +47,53 @@ def test_stage_order():
     ]
 
 
-async def test_engine_processes_stage():
+async def test_harness_processes_stage():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(
         exit_code=0, stdout="spec written", stderr=""
     )
 
-    engine = PipelineEngine(agent=mock_agent, repo_path="/tmp/testrepo")
+    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo")
 
     issue = Issue(
         id="SUP-001",
         title="Add rate limiting",
         filepath=".superseded/issues/SUP-001-add-rate-limiting.md",
     )
-    result = await engine.run_stage(issue, Stage.SPEC)
+    with tempfile.TemporaryDirectory() as tmp:
+        artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
+        artifacts_path.mkdir(parents=True)
+        result = await runner.run_stage_with_retries(
+            issue, Stage.SPEC, str(artifacts_path)
+        )
 
     assert result.passed is True
     assert result.stage == Stage.SPEC
     mock_agent.run.assert_called_once()
 
 
-async def test_engine_halts_on_failure():
+async def test_harness_halts_on_failure():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(
         exit_code=1, stdout="", stderr="agent crashed"
     )
 
-    engine = PipelineEngine(agent=mock_agent, repo_path="/tmp/testrepo")
+    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=1)
 
     issue = Issue(
         id="SUP-001",
         title="Add rate limiting",
         filepath=".superseded/issues/SUP-001-add-rate-limiting.md",
     )
-    result = await engine.run_stage(issue, Stage.BUILD)
+    with tempfile.TemporaryDirectory() as tmp:
+        artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
+        artifacts_path.mkdir(parents=True)
+        result = await runner.run_stage_with_retries(
+            issue, Stage.BUILD, str(artifacts_path)
+        )
 
     assert result.passed is False
-    assert result.error == "agent crashed"
+    assert "agent crashed" in result.error
 
 
 def test_prompts_contain_agent_skills_content():

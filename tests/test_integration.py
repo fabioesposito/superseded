@@ -194,8 +194,8 @@ async def test_worktree_lifecycle():
         _init_git_repo(repo)
 
         wm = WorktreeManager(str(repo))
-        worktree_path = wm.create("SUP-TEST")
+        worktree_path = await wm.create("SUP-TEST")
         assert worktree_path.exists()
         assert wm.exists("SUP-TEST")
-        wm.cleanup("SUP-TEST")
+        await wm.cleanup("SUP-TEST")
         assert not wm.exists("SUP-TEST")

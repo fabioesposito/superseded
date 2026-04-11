@@ -20,25 +20,25 @@ def _init_git_repo(path: Path) -> None:
     subprocess.run(["git", "commit", "-m", "init"], cwd=str(path), capture_output=True)
 
 
-def test_worktree_create():
+async def test_worktree_create():
     with tempfile.TemporaryDirectory() as tmp:
         repo = Path(tmp)
         _init_git_repo(repo)
         wm = WorktreeManager(str(repo))
-        worktree_path = wm.create("SUP-001")
+        worktree_path = await wm.create("SUP-001")
         assert worktree_path.exists()
         assert (worktree_path / "README.md").read_text() == "test"
-        wm.cleanup("SUP-001")
+        await wm.cleanup("SUP-001")
 
 
-def test_worktree_cleanup():
+async def test_worktree_cleanup():
     with tempfile.TemporaryDirectory() as tmp:
         repo = Path(tmp)
         _init_git_repo(repo)
         wm = WorktreeManager(str(repo))
-        worktree_path = wm.create("SUP-002")
+        worktree_path = await wm.create("SUP-002")
         assert worktree_path.exists()
-        wm.cleanup("SUP-002")
+        await wm.cleanup("SUP-002")
         assert not worktree_path.exists()
 
 
@@ -51,12 +51,12 @@ def test_worktree_get_path():
         assert "SUP-001" in str(path)
 
 
-def test_worktree_exists():
+async def test_worktree_exists():
     with tempfile.TemporaryDirectory() as tmp:
         repo = Path(tmp)
         _init_git_repo(repo)
         wm = WorktreeManager(str(repo))
         assert wm.exists("SUP-001") is False
-        wm.create("SUP-001")
+        await wm.create("SUP-001")
         assert wm.exists("SUP-001") is True
-        wm.cleanup("SUP-001")
+        await wm.cleanup("SUP-001")

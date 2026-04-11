@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import subprocess
+import asyncio
 from pathlib import Path
 
 
@@ -15,22 +15,35 @@ class WorktreeManager:
     def _branch_name(self, issue_id: str) -> str:
         return f"issue/{issue_id}"
 
-    def _run_git(
+    async def _run_git(
         self, *args: str, cwd: str | None = None
-    ) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["git", *args],
+    ) -> asyncio.subprocess.Process:
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            *args,
             cwd=cwd or str(self.repo_path),
-            capture_output=True,
-            text=True,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+        stdout, stderr = await proc.communicate()
+        return type(
+            "_Result",
+            (),
+            {
+                "returncode": proc.returncode,
+                "stdout": stdout.decode("utf-8", errors="replace"),
+                "stderr": stderr.decode("utf-8", errors="replace"),
+            },
+        )()
 
-    def create(self, issue_id: str) -> Path:
+    async def create(self, issue_id: str) -> Path:
         worktree_path = self._worktree_path(issue_id)
         branch_name = self._branch_name(issue_id)
-        result = self._run_git("worktree", "add", str(worktree_path), "-b", branch_name)
+        result = await self._run_git(
+            "worktree", "add", str(worktree_path), "-b", branch_name
+        )
         if result.returncode != 0:
-            branch_result = self._run_git(
+            branch_result = await self._run_git(
                 "worktree", "add", str(worktree_path), branch_name
             )
             if branch_result.returncode != 0:
@@ -39,12 +52,12 @@ class WorktreeManager:
                 )
         return worktree_path
 
-    def cleanup(self, issue_id: str) -> None:
+    async def cleanup(self, issue_id: str) -> None:
         worktree_path = self._worktree_path(issue_id)
         branch_name = self._branch_name(issue_id)
         if worktree_path.exists():
-            self._run_git("worktree", "remove", str(worktree_path), "--force")
-        self._run_git("branch", "-D", branch_name)
+            await self._run_git("worktree", "remove", str(worktree_path), "--force")
+        await self._run_git("branch", "-D", branch_name)
 
     def get_path(self, issue_id: str) -> Path:
         return self._worktree_path(issue_id)
@@ -52,14 +65,16 @@ class WorktreeManager:
     def exists(self, issue_id: str) -> bool:
         return self._worktree_path(issue_id).exists()
 
-    def stash_if_dirty(self) -> str | None:
-        result = self._run_git("status", "--porcelain")
+    async def stash_if_dirty(self) -> str | None:
+        result = await self._run_git("status", "--porcelain")
         if result.stdout.strip():
-            stash_result = self._run_git("stash", "push", "-m", "superseded-auto-stash")
+            stash_result = await self._run_git(
+                "stash", "push", "-m", "superseded-auto-stash"
+            )
             if stash_result.returncode == 0:
                 return "superseded-auto-stash"
         return None
 
-    def pop_stash(self, stash_ref: str | None) -> None:
+    async def pop_stash(self, stash_ref: str | None) -> None:
         if stash_ref:
-            self._run_git("stash", "pop")
+            await self._run_git("stash", "pop")
