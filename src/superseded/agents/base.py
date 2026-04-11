@@ -108,10 +108,23 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
 
         timed_out = False
         while tasks:
+            remaining = self.timeout - (time.monotonic() - start)
+            if remaining <= 0:
+                timed_out = True
+                proc.kill()
+                yield AgentEvent(
+                    event_type="error",
+                    content=f"Agent timed out after {self.timeout}s",
+                    stage=context.issue.stage,
+                )
+                for t in tasks:
+                    t.cancel()
+                break
+
             done, pending = await asyncio.wait(
                 tasks.keys(),
                 return_when=asyncio.FIRST_COMPLETED,
-                timeout=self.timeout if not timed_out else None,
+                timeout=remaining,
             )
 
             if not done and not timed_out:
