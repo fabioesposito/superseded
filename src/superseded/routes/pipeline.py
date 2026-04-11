@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from superseded.models import HarnessIteration, IssueStatus, Stage, StageResult
+from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.stages import STAGE_DEFINITIONS
 from superseded.pipeline.worktree import WorktreeManager
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pipeline")
 
 _cached_runner: HarnessRunner | None = None
+_event_manager = PipelineEventManager()
 
 
 def _get_harness_runner(deps: Deps) -> HarnessRunner:
@@ -34,6 +36,7 @@ def _get_harness_runner(deps: Deps) -> HarnessRunner:
             repo_path=deps.config.repo_path,
             max_retries=deps.config.max_retries,
             retryable_stages=deps.config.retryable_stages,
+            event_manager=_event_manager,
         )
     return _cached_runner
 
@@ -176,5 +179,32 @@ async def pipeline_events(request: Request, deps: Deps = Depends(get_deps)):
                 last_hash = current_hash
                 yield {"event": "update", "data": data}
             await asyncio.sleep(2)
+
+    return EventSourceResponse(event_generator())
+
+
+@router.get("/issues/{issue_id}/events")
+async def get_historical_events(
+    request: Request, issue_id: str, deps: Deps = Depends(get_deps)
+):
+    events = await deps.db.get_agent_events(issue_id)
+    return events
+
+
+@router.get("/issues/{issue_id}/events/stream")
+async def stream_events(
+    request: Request, issue_id: str, deps: Deps = Depends(get_deps)
+):
+    from sse_starlette.sse import EventSourceResponse
+
+    async def event_generator():
+        async for event in _event_manager.subscribe(issue_id):
+            yield {
+                "event": event.event_type,
+                "data": json.dumps(
+                    {"content": event.content, "metadata": event.metadata}
+                ),
+            }
+        yield {"event": "done", "data": "{}"}
 
     return EventSourceResponse(event_generator())
