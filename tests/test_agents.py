@@ -51,3 +51,44 @@ def test_agent_result_model():
     result = AgentResult(exit_code=0, stdout="done", stderr="", files_changed=["a.py"])
     assert result.exit_code == 0
     assert result.files_changed == ["a.py"]
+
+
+def test_claude_code_uses_worktree_when_set():
+    ctx = AgentContext(
+        repo_path="/tmp/repo",
+        issue=Issue(
+            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
+        ),
+        skill_prompt="Build this",
+        artifacts_path=".superseded/artifacts/SUP-001",
+        worktree_path="/tmp/repo/.superseded/worktrees/SUP-001",
+    )
+    adapter = ClaudeCodeAdapter()
+    assert adapter._get_cwd(ctx) == "/tmp/repo/.superseded/worktrees/SUP-001"
+
+
+def test_claude_code_uses_repo_when_no_worktree():
+    ctx = AgentContext(
+        repo_path="/tmp/repo",
+        issue=Issue(
+            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
+        ),
+        skill_prompt="Build this",
+        artifacts_path=".superseded/artifacts/SUP-001",
+    )
+    adapter = ClaudeCodeAdapter()
+    assert adapter._get_cwd(ctx) == "/tmp/repo"
+
+
+def test_opencode_uses_worktree_when_set():
+    ctx = AgentContext(
+        repo_path="/tmp/repo",
+        issue=Issue(
+            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
+        ),
+        skill_prompt="Build this",
+        artifacts_path=".superseded/artifacts/SUP-001",
+        worktree_path="/tmp/repo/.superseded/worktrees/SUP-001",
+    )
+    adapter = OpenCodeAdapter()
+    assert adapter._get_cwd(ctx) == "/tmp/repo/.superseded/worktrees/SUP-001"
