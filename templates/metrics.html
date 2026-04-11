@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Pipeline Metrics - Superseded{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Pipeline Metrics</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-gray-800 rounded-lg p-6">
+        <h3 class="text-sm font-medium text-gray-400 mb-1">Total Issues</h3>
+        <p class="text-3xl font-bold">{{ metrics.total_issues }}</p>
+    </div>
+    <div class="bg-gray-800 rounded-lg p-6">
+        <h3 class="text-sm font-medium text-gray-400 mb-1">Total Retries</h3>
+        <p class="text-3xl font-bold">{{ metrics.total_retries }}</p>
+    </div>
+    <div class="bg-gray-800 rounded-lg p-6">
+        <h3 class="text-sm font-medium text-gray-400 mb-1">Issues by Status</h3>
+        {% for status, count in metrics.issues_by_status.items() %}
+        <div class="flex justify-between text-sm mt-1">
+            <span class="text-gray-300">{{ status }}</span>
+            <span class="font-medium">{{ count }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="bg-gray-800 rounded-lg p-6 mb-8">
+    <h2 class="text-lg font-semibold mb-4">Stage Success Rates</h2>
+    {% for stage, rate in metrics.stage_success_rates.items() %}
+    <div class="mb-3">
+        <div class="flex justify-between text-sm mb-1">
+            <span>{{ stage }}</span>
+            <span>{{ (rate * 100) | int }}%</span>
+        </div>
+        <div class="w-full bg-gray-700 rounded-full h-3">
+            <div class="h-3 rounded-full {% if rate >= 0.8 %}bg-green-500{% elif rate >= 0.5 %}bg-yellow-500{% else %}bg-red-500{% endif %}"
+                 style="width: {{ (rate * 100) | int }}%"></div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if metrics.retries_by_stage %}
+<div class="bg-gray-800 rounded-lg p-6 mb-8">
+    <h2 class="text-lg font-semibold mb-4">Retries by Stage</h2>
+    {% for stage, count in metrics.retries_by_stage.items() %}
+    <div class="flex justify-between text-sm py-1 border-b border-gray-700">
+        <span>{{ stage }}</span>
+        <span class="font-medium">{{ count }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<a href="/" class="text-blue-400 hover:text-blue-300 text-sm">Back to Dashboard</a>
+{% endblock %}
