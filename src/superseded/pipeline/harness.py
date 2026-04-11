@@ -4,6 +4,7 @@ import datetime
 from pathlib import Path
 
 from superseded.agents.base import AgentAdapter
+from superseded.config import RepoEntry
 from superseded.db import Database
 from superseded.models import (
     AgentContext,
@@ -16,6 +17,7 @@ from superseded.models import (
 )
 from superseded.pipeline.context import ContextAssembler
 from superseded.pipeline.events import PipelineEventManager
+from superseded.pipeline.worktree import WorktreeManager
 
 
 class HarnessRunner:
@@ -37,6 +39,7 @@ class HarnessRunner:
         ]
         self.context_assembler = ContextAssembler(repo_path)
         self.event_manager = event_manager or PipelineEventManager()
+        self.worktree_manager = WorktreeManager(repo_path)
 
     async def run_stage_with_retries(
         self,
@@ -203,3 +206,35 @@ class HarnessRunner:
             started_at=datetime.datetime.now(),
             finished_at=datetime.datetime.now(),
         )
+
+    def _configure_repos(self, repos: dict[str, RepoEntry]) -> None:
+        """Register named repos with worktree manager and context assembler."""
+        for name, entry in repos.items():
+            self.worktree_manager.register_repo(name, entry.path)
+            self.context_assembler.register_repo(name, entry.path)
+
+    async def run_stage_multi_repo(
+        self,
+        issue: Issue,
+        stage: Stage,
+        artifacts_path: str,
+        previous_errors: list[str] | None = None,
+    ) -> dict[str, StageResult]:
+        """Run a stage once per target repo. Returns {repo_name: StageResult}."""
+        if not issue.repos:
+            result = await self.run_stage_with_retries(
+                issue, stage, artifacts_path, previous_errors
+            )
+            return {"primary": result}
+
+        results: dict[str, StageResult] = {}
+        for repo_name in issue.repos:
+            repo_artifacts = str(Path(artifacts_path) / repo_name)
+            Path(repo_artifacts).mkdir(parents=True, exist_ok=True)
+
+            result = await self.run_stage_with_retries(
+                issue, stage, repo_artifacts, previous_errors
+            )
+            results[repo_name] = result
+
+        return results

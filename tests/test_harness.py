@@ -100,3 +100,67 @@ async def test_harness_non_retryable_stage_no_retry():
 
     assert result.passed is False
     assert mock_agent.run.call_count == 1
+
+
+async def test_harness_multi_repo_fan_out():
+    """run_stage_multi_repo runs once per target repo."""
+    mock_agent = AsyncMock()
+    mock_agent.run.return_value = AgentResult(
+        exit_code=0, stdout="build succeeded", stderr=""
+    )
+
+    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=1)
+
+    issue = Issue(
+        id="SUP-001",
+        title="Multi-repo issue",
+        filepath=".superseded/issues/SUP-001-test.md",
+        repos=["frontend", "backend"],
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
+        artifacts_path.mkdir(parents=True)
+
+        results = await runner.run_stage_multi_repo(
+            issue=issue,
+            stage=Stage.BUILD,
+            artifacts_path=str(artifacts_path),
+        )
+
+    assert "frontend" in results
+    assert "backend" in results
+    assert results["frontend"].passed is True
+    assert results["backend"].passed is True
+    # Agent should be called twice (once per repo)
+    assert mock_agent.run.call_count == 2
+
+
+async def test_harness_multi_repo_single_repo_fallback():
+    """run_stage_multi_repo falls back to single-repo when issue.repos is empty."""
+    mock_agent = AsyncMock()
+    mock_agent.run.return_value = AgentResult(
+        exit_code=0, stdout="build succeeded", stderr=""
+    )
+
+    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=1)
+
+    issue = Issue(
+        id="SUP-001",
+        title="Single repo issue",
+        filepath=".superseded/issues/SUP-001-test.md",
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
+        artifacts_path.mkdir(parents=True)
+
+        results = await runner.run_stage_multi_repo(
+            issue=issue,
+            stage=Stage.BUILD,
+            artifacts_path=str(artifacts_path),
+        )
+
+    assert "primary" in results
+    assert len(results) == 1
+    assert mock_agent.run.call_count == 1
