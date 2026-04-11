@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Superseded{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+
+<div class="mb-6">
+    <a href="/issues/new" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">+ New Issue</a>
+</div>
+
+<div class="grid grid-cols-6 gap-4 mb-8">
+    {% for stage in stage_names %}
+    <div class="bg-gray-800 rounded-lg p-3 text-center">
+        <div class="text-sm font-semibold text-gray-400 uppercase">{{ stage }}</div>
+        <div class="text-2xl font-bold mt-1">
+            {{ issues | selectattr("stage.value", "equalto", stage) | list | length }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="bg-gray-800 rounded-lg overflow-hidden">
+    <table class="w-full">
+        <thead>
+            <tr class="bg-gray-700 text-left">
+                <th class="px-4 py-3 text-sm font-semibold">ID</th>
+                <th class="px-4 py-3 text-sm font-semibold">Title</th>
+                <th class="px-4 py-3 text-sm font-semibold">Stage</th>
+                <th class="px-4 py-3 text-sm font-semibold">Status</th>
+                <th class="px-4 py-3 text-sm font-semibold">Agent</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for issue in issues %}
+            <tr class="border-t border-gray-700 hover:bg-gray-750">
+                <td class="px-4 py-3">
+                    <a href="/issues/{{ issue.id }}" class="text-blue-400 hover:text-blue-300">{{ issue.id }}</a>
+                </td>
+                <td class="px-4 py-3">{{ issue.title }}</td>
+                <td class="px-4 py-3">
+                    <span class="px-2 py-1 rounded text-xs font-medium bg-purple-900 text-purple-200">{{ issue.stage.value }}</span>
+                </td>
+                <td class="px-4 py-3">
+                    <span class="px-2 py-1 rounded text-xs font-medium
+                        {% if issue.status.value == 'done' %}bg-green-900 text-green-200
+                        {% elif issue.status.value == 'failed' %}bg-red-900 text-red-200
+                        {% elif issue.status.value == 'in-progress' %}bg-yellow-900 text-yellow-200
+                        {% else %}bg-gray-700 text-gray-300{% endif %}">
+                        {{ issue.status.value }}
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-gray-400">{{ issue.assignee or "—" }}</td>
+            </tr>
+            {% endfor %}
+            {% if not issues %}
+            <tr>
+                <td colspan="5" class="px-4 py-8 text-center text-gray-500">No issues yet. Create one to get started.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

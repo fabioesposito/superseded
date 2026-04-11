@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ issue.id if issue else 'Not Found' }} / {{ stage.value }} - Superseded{% endblock %}
+{% block content %}
+{% if not issue %}
+<p class="text-red-400">{{ error }}</p>
+<a href="/" class="text-blue-400 hover:text-blue-300">Back to dashboard</a>
+{% else %}
+<div class="mb-4">
+    <a href="/issues/{{ issue.id }}" class="text-blue-400 hover:text-blue-300">&larr; Back to {{ issue.id }}</a>
+</div>
+<h1 class="text-2xl font-bold mb-2">{{ issue.id }}: {{ stage.value }}</h1>
+<h2 class="text-lg text-gray-400 mb-6">{{ issue.title }}</h2>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="bg-gray-800 rounded-lg p-6">
+        <h3 class="font-semibold mb-3">Stage: {{ stage.value }}</h3>
+        <p class="text-gray-400 text-sm mb-4">
+            {% if stage.value == "spec" %}Define what to build from the ticket
+            {% elif stage.value == "plan" %}Break the spec into implementable tasks
+            {% elif stage.value == "build" %}Implement the code changes
+            {% elif stage.value == "verify" %}Run tests and verify correctness
+            {% elif stage.value == "review" %}Review code quality and security
+            {% elif stage.value == "ship" %}Commit, push, and create PR
+            {% endif %}
+        </p>
+        <div class="space-y-2">
+            <form action="/pipeline/issues/{{ issue.id }}/advance" method="post">
+                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">Run Stage</button>
+            </form>
+            <form action="/pipeline/issues/{{ issue.id }}/retry" method="post">
+                <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg">Retry</button>
+            </form>
+        </div>
+    </div>
+    <div class="bg-gray-800 rounded-lg p-6">
+        <h3 class="font-semibold mb-3">Result</h3>
+        {% if result %}
+        <div class="mb-2">
+            <span class="px-2 py-1 rounded text-sm {% if result.passed %}bg-green-900 text-green-200{% else %}bg-red-900 text-red-200{% endif %}">
+                {% if result.passed %}PASSED{% else %}FAILED{% endif %}
+            </span>
+        </div>
+        {% if result.output %}
+        <pre class="bg-gray-900 rounded p-3 text-sm text-gray-300 overflow-auto max-h-96">{{ result.output }}</pre>
+        {% endif %}
+        {% if result.error %}
+        <div class="mt-2 p-3 bg-red-900/30 rounded text-red-300 text-sm">{{ result.error }}</div>
+        {% endif %}
+        {% else %}
+        <p class="text-gray-500">No result yet. Run the stage to generate output.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
