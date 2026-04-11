@@ -97,3 +97,57 @@ def test_context_assembler_docs_index():
             artifacts_path=str(Path(tmp) / ".superseded" / "artifacts" / "SUP-001"),
         )
     assert "ARCHITECTURE.md" in prompt or "Architecture" in prompt
+
+
+def test_context_assembler_multi_repo(tmp_path):
+    """ContextAssembler can assemble context from multiple repos."""
+    # Set up primary repo with AGENTS.md
+    primary = tmp_path / "primary"
+    primary.mkdir()
+    (primary / "AGENTS.md").write_text("# Primary guide")
+    (primary / ".superseded").mkdir()
+    (primary / ".superseded" / "rules.md").write_text("Primary rules")
+
+    # Set up frontend repo with its own AGENTS.md
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    (frontend / "AGENTS.md").write_text("# Frontend guide")
+
+    assembler = ContextAssembler(str(primary))
+    assembler.register_repo("frontend", str(frontend))
+
+    issue = Issue(id="SUP-001", title="Test", repos=["frontend"])
+
+    # When building context for a specific repo, include that repo's docs
+    context = assembler.build(
+        stage=Stage.BUILD,
+        issue=issue,
+        artifacts_path=str(tmp_path / "artifacts"),
+        target_repo="frontend",
+    )
+    assert "Primary guide" in context
+    assert "Frontend guide" in context
+    assert "Primary rules" in context
+
+
+def test_context_assembler_no_target_repo(tmp_path):
+    """Without target_repo, only primary context is included."""
+    primary = tmp_path / "primary"
+    primary.mkdir()
+    (primary / "AGENTS.md").write_text("# Primary guide")
+
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    (frontend / "AGENTS.md").write_text("# Frontend guide")
+
+    assembler = ContextAssembler(str(primary))
+    assembler.register_repo("frontend", str(frontend))
+
+    issue = Issue(id="SUP-001", title="Test")
+    context = assembler.build(
+        stage=Stage.BUILD,
+        issue=issue,
+        artifacts_path=str(tmp_path / "artifacts"),
+    )
+    assert "Primary guide" in context
+    assert "Frontend guide" not in context

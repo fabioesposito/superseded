@@ -11,32 +11,45 @@ from superseded.pipeline.prompts import get_prompt_for_stage
 class ContextAssembler:
     def __init__(self, repo_path: str) -> None:
         self.repo_path = Path(repo_path)
+        self._repo_registry: dict[str, Path] = {}
+
+    def register_repo(self, name: str, repo_path: str) -> None:
+        self._repo_registry[name] = Path(repo_path)
+
+    def _get_repo_path(self, repo: str | None = None) -> Path:
+        if repo and repo in self._repo_registry:
+            return self._repo_registry[repo]
+        return self.repo_path
 
     def _read_if_exists(self, path: Path) -> str | None:
         if path.exists() and path.is_file():
             return path.read_text(encoding="utf-8")
         return None
 
-    def _build_agents_md_layer(self) -> str | None:
-        content = self._read_if_exists(self.repo_path / "AGENTS.md")
+    def _build_agents_md_layer(self, repo: str | None = None) -> str | None:
+        repo_path = self._get_repo_path(repo)
+        content = self._read_if_exists(repo_path / "AGENTS.md")
         if content:
-            return f"## Repository Guide (AGENTS.md)\n\n{content}"
+            label = f"{repo} repo" if repo else "Repository"
+            return f"## {label} Guide (AGENTS.md)\n\n{content}"
         return None
 
-    def _build_docs_index_layer(self) -> str | None:
-        docs_dir = self.repo_path / "docs"
+    def _build_docs_index_layer(self, repo: str | None = None) -> str | None:
+        repo_path = self._get_repo_path(repo)
+        docs_dir = repo_path / "docs"
         if not docs_dir.exists():
             return None
         entries: list[str] = []
         for md_file in sorted(docs_dir.glob("**/*.md")):
-            rel = md_file.relative_to(self.repo_path)
+            rel = md_file.relative_to(repo_path)
             first_line = (
                 md_file.read_text(encoding="utf-8").split("\n")[0].strip("# ").strip()
             )
             entries.append(f"- {rel}: {first_line}")
         if not entries:
             return None
-        return "## Documentation Index\n\n" + "\n".join(entries)
+        label = f"{repo} repo" if repo else "Documentation"
+        return f"## {label} Documentation Index\n\n" + "\n".join(entries)
 
     def _build_issue_layer(self, issue: Issue) -> str:
         ticket_path = self.repo_path / issue.filepath
@@ -58,8 +71,9 @@ class ContextAssembler:
             return None
         return "## Previous Stage Artifacts\n\n" + "\n\n".join(parts)
 
-    def _build_rules_layer(self) -> str | None:
-        content = self._read_if_exists(self.repo_path / ".superseded" / "rules.md")
+    def _build_rules_layer(self, repo: str | None = None) -> str | None:
+        repo_path = self._get_repo_path(repo)
+        content = self._read_if_exists(repo_path / ".superseded" / "rules.md")
         if content:
             return f"## Project Rules (non-negotiable)\n\n{content}"
         return None
@@ -125,6 +139,7 @@ class ContextAssembler:
         previous_errors: list[str] | None = None,
         iteration: int = 0,
         db: Any = None,
+        target_repo: str | None = None,
     ) -> str:
         layers: list[str] = []
         previous_errors = previous_errors or []
@@ -138,6 +153,18 @@ class ContextAssembler:
             layers.append(docs_index)
 
         layers.append(self._build_issue_layer(issue))
+
+        # Target repo context (if different from primary)
+        if target_repo:
+            target_agents_md = self._build_agents_md_layer(target_repo)
+            if target_agents_md:
+                layers.append(target_agents_md)
+            target_docs = self._build_docs_index_layer(target_repo)
+            if target_docs:
+                layers.append(target_docs)
+            target_rules = self._build_rules_layer(target_repo)
+            if target_rules:
+                layers.append(target_rules)
 
         artifacts = self._build_artifacts_layer(artifacts_path)
         if artifacts:
