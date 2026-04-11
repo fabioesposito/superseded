@@ -6,7 +6,7 @@ from typing import Any
 
 import aiosqlite
 
-from superseded.models import Issue, IssueStatus, Stage, StageResult
+from superseded.models import HarnessIteration, Issue, IssueStatus, Stage, StageResult
 
 
 class Database:
@@ -40,6 +40,18 @@ class Database:
                 artifacts TEXT DEFAULT '[]',
                 started_at TEXT,
                 finished_at TEXT,
+                FOREIGN KEY (issue_id) REFERENCES issues(id)
+            );
+            CREATE TABLE IF NOT EXISTS harness_iterations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id TEXT NOT NULL,
+                attempt INTEGER NOT NULL,
+                stage TEXT NOT NULL,
+                exit_code INTEGER NOT NULL,
+                output TEXT DEFAULT '',
+                error TEXT DEFAULT '',
+                previous_errors TEXT DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (issue_id) REFERENCES issues(id)
             );
         """)
@@ -139,5 +151,44 @@ class Database:
             d = dict(zip(cols, row))
             d["passed"] = bool(d["passed"])
             d["artifacts"] = json.loads(d["artifacts"])
+            results.append(d)
+        return results
+
+    async def save_harness_iteration(
+        self,
+        issue_id: str,
+        iteration: HarnessIteration,
+        exit_code: int,
+        output: str,
+        error: str,
+    ) -> None:
+        assert self._conn
+        await self._conn.execute(
+            """INSERT INTO harness_iterations (issue_id, attempt, stage, exit_code, output, error, previous_errors)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                issue_id,
+                iteration.attempt,
+                iteration.stage.value,
+                exit_code,
+                output,
+                error,
+                json.dumps(iteration.previous_errors),
+            ),
+        )
+        await self._conn.commit()
+
+    async def get_harness_iterations(self, issue_id: str) -> list[dict[str, Any]]:
+        assert self._conn
+        cursor = await self._conn.execute(
+            "SELECT * FROM harness_iterations WHERE issue_id = ? ORDER BY id",
+            (issue_id,),
+        )
+        rows = await cursor.fetchall()
+        cols = [desc[0] for desc in cursor.description]
+        results = []
+        for row in rows:
+            d = dict(zip(cols, row))
+            d["previous_errors"] = json.loads(d["previous_errors"])
             results.append(d)
         return results

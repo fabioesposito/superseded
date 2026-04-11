@@ -2,7 +2,7 @@ import tempfile
 from pathlib import Path
 
 from superseded.db import Database
-from superseded.models import Issue, IssueStatus, Stage, StageResult
+from superseded.models import HarnessIteration, Issue, IssueStatus, Stage, StageResult
 
 
 async def test_db_initialize_and_operations():
@@ -61,5 +61,36 @@ async def test_db_update_issue_status():
         fetched = await db.get_issue("SUP-002")
         assert fetched["status"] == "in-progress"
         assert fetched["stage"] == "build"
+
+        await db.close()
+
+
+async def test_db_harness_iterations():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / ".superseded" / "state.db"
+        db = Database(str(db_path))
+        await db.initialize()
+
+        issue = Issue(
+            id="SUP-100",
+            title="Harness test",
+            filepath=".superseded/issues/SUP-100-test.md",
+        )
+        await db.upsert_issue(issue)
+
+        iteration = HarnessIteration(
+            attempt=0,
+            stage=Stage.BUILD,
+            previous_errors=[],
+        )
+        await db.save_harness_iteration(
+            "SUP-100", iteration, exit_code=0, output="ok", error=""
+        )
+
+        iterations = await db.get_harness_iterations("SUP-100")
+        assert len(iterations) == 1
+        assert iterations[0]["attempt"] == 0
+        assert iterations[0]["stage"] == "build"
+        assert iterations[0]["exit_code"] == 0
 
         await db.close()
