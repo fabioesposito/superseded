@@ -6,10 +6,16 @@ import yaml
 from pydantic import BaseModel, Field
 
 
+class RepoEntry(BaseModel):
+    path: str
+    branch: str = ""
+
+
 class SupersededConfig(BaseModel):
     default_agent: str = "claude-code"
     stage_timeout_seconds: int = 600
     repo_path: str = ""
+    repos: dict[str, RepoEntry] = Field(default_factory=dict)
     port: int = 8000
     host: str = "127.0.0.1"
     db_path: str = ".superseded/state.db"

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import yaml
 
-from superseded.config import SupersededConfig, load_config
+from superseded.config import RepoEntry, SupersededConfig, load_config
 
 
 def write_yaml_config(path: Path, data: dict):
@@ -48,3 +48,38 @@ def test_load_config_partial_override():
         config = load_config(Path(tmp))
         assert config.port == 9000
         assert config.default_agent == "claude-code"
+
+
+def test_config_repos_map():
+    config = SupersededConfig(
+        repo_path="/tmp/primary",
+        repos={
+            "frontend": RepoEntry(path="/tmp/frontend"),
+            "backend": RepoEntry(path="/tmp/backend"),
+        },
+    )
+    assert config.repos["frontend"].path == "/tmp/frontend"
+    assert config.repos["backend"].path == "/tmp/backend"
+
+
+def test_config_repos_empty_by_default():
+    config = SupersededConfig(repo_path="/tmp/primary")
+    assert config.repos == {}
+
+
+def test_load_config_with_repos():
+    with tempfile.TemporaryDirectory() as tmp:
+        config_path = Path(tmp) / ".superseded" / "config.yaml"
+        write_yaml_config(
+            config_path,
+            {
+                "repo_path": tmp,
+                "repos": {
+                    "frontend": {"path": "/tmp/frontend"},
+                    "backend": {"path": "/tmp/backend", "branch": "main"},
+                },
+            },
+        )
+        config = load_config(Path(tmp))
+        assert config.repos["frontend"].path == "/tmp/frontend"
+        assert config.repos["backend"].branch == "main"
