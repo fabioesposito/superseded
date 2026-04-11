@@ -19,6 +19,7 @@ def read_issue(filepath: str) -> Issue:
         assignee=post.get("assignee", ""),
         labels=post.get("labels", []),
         filepath=str(path),
+        repos=post.get("repos", []),
     )
 
 

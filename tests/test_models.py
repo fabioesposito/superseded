@@ -79,3 +79,40 @@ def test_issue_next_stage():
 
     issue = Issue(id="SUP-002", title="Test", stage=Stage.SHIP)
     assert issue.next_stage() is None
+
+
+def test_issue_with_repos():
+    issue = Issue(id="SUP-001", title="Test", repos=["frontend", "backend"])
+    assert issue.repos == ["frontend", "backend"]
+
+
+def test_issue_repos_default_empty():
+    issue = Issue(id="SUP-001", title="Test")
+    assert issue.repos == []
+
+
+def test_issue_from_frontmatter_with_repos():
+    content = """---
+id: SUP-001
+title: Cross-repo feature
+repos:
+  - frontend
+  - backend
+---
+
+Body text
+"""
+    issue = Issue.from_frontmatter(content, filepath="/tmp/test.md")
+    assert issue.repos == ["frontend", "backend"]
+
+
+def test_issue_from_frontmatter_no_repos():
+    content = """---
+id: SUP-001
+title: Single repo feature
+---
+
+Body text
+"""
+    issue = Issue.from_frontmatter(content, filepath="/tmp/test.md")
+    assert issue.repos == []

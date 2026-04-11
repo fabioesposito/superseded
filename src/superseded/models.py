@@ -45,6 +45,7 @@ class Issue(BaseModel):
     assignee: str = ""
     labels: list[str] = Field(default_factory=list)
     filepath: str = ""
+    repos: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_frontmatter(cls, content: str, filepath: str = "") -> "Issue":
@@ -58,6 +59,7 @@ class Issue(BaseModel):
             assignee=post.get("assignee", ""),
             labels=post.get("labels", []),
             filepath=filepath,
+            repos=post.get("repos", []),
         )
 
     def next_stage(self) -> Stage | None:
