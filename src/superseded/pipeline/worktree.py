@@ -8,11 +8,28 @@ class WorktreeManager:
     def __init__(self, repo_path: str) -> None:
         self.repo_path = Path(repo_path)
         self._worktrees_dir = self.repo_path / ".superseded" / "worktrees"
+        self._repo_registry: dict[str, Path] = {}
 
-    def _worktree_path(self, issue_id: str) -> Path:
+    def register_repo(self, name: str, repo_path: str) -> None:
+        self._repo_registry[name] = Path(repo_path)
+
+    def _get_repo_path(self, repo: str | None = None) -> Path:
+        if repo and repo != "primary":
+            if repo not in self._repo_registry:
+                raise ValueError(
+                    f"Unknown repo: {repo}. Registered: {list(self._repo_registry.keys())}"
+                )
+            return self._repo_registry[repo]
+        return self.repo_path
+
+    def _worktree_path(self, issue_id: str, repo: str | None = None) -> Path:
+        if repo and repo != "primary":
+            return self._worktrees_dir / f"{issue_id}__{repo}"
         return self._worktrees_dir / issue_id
 
-    def _branch_name(self, issue_id: str) -> str:
+    def _branch_name(self, issue_id: str, repo: str | None = None) -> str:
+        if repo and repo != "primary":
+            return f"issue/{issue_id}/{repo}"
         return f"issue/{issue_id}"
 
     async def _run_git(
@@ -36,15 +53,25 @@ class WorktreeManager:
             },
         )()
 
-    async def create(self, issue_id: str) -> Path:
-        worktree_path = self._worktree_path(issue_id)
-        branch_name = self._branch_name(issue_id)
+    async def create(self, issue_id: str, repo: str | None = None) -> Path:
+        repo_path = self._get_repo_path(repo)
+        worktree_path = self._worktree_path(issue_id, repo)
+        branch_name = self._branch_name(issue_id, repo)
         result = await self._run_git(
-            "worktree", "add", str(worktree_path), "-b", branch_name
+            "worktree",
+            "add",
+            str(worktree_path),
+            "-b",
+            branch_name,
+            cwd=str(repo_path),
         )
         if result.returncode != 0:
             branch_result = await self._run_git(
-                "worktree", "add", str(worktree_path), branch_name
+                "worktree",
+                "add",
+                str(worktree_path),
+                branch_name,
+                cwd=str(repo_path),
             )
             if branch_result.returncode != 0:
                 raise RuntimeError(
@@ -52,18 +79,21 @@ class WorktreeManager:
                 )
         return worktree_path
 
-    async def cleanup(self, issue_id: str) -> None:
-        worktree_path = self._worktree_path(issue_id)
-        branch_name = self._branch_name(issue_id)
+    async def cleanup(self, issue_id: str, repo: str | None = None) -> None:
+        repo_path = self._get_repo_path(repo)
+        worktree_path = self._worktree_path(issue_id, repo)
+        branch_name = self._branch_name(issue_id, repo)
         if worktree_path.exists():
-            await self._run_git("worktree", "remove", str(worktree_path), "--force")
-        await self._run_git("branch", "-D", branch_name)
+            await self._run_git(
+                "worktree", "remove", str(worktree_path), "--force", cwd=str(repo_path)
+            )
+        await self._run_git("branch", "-D", branch_name, cwd=str(repo_path))
 
-    def get_path(self, issue_id: str) -> Path:
-        return self._worktree_path(issue_id)
+    def get_path(self, issue_id: str, repo: str | None = None) -> Path:
+        return self._worktree_path(issue_id, repo)
 
-    def exists(self, issue_id: str) -> bool:
-        return self._worktree_path(issue_id).exists()
+    def exists(self, issue_id: str, repo: str | None = None) -> bool:
+        return self._worktree_path(issue_id, repo).exists()
 
     async def stash_if_dirty(self) -> str | None:
         result = await self._run_git("status", "--porcelain")

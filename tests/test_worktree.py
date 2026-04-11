@@ -2,6 +2,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from superseded.pipeline.worktree import WorktreeManager
 
 
@@ -60,3 +62,56 @@ async def test_worktree_exists():
         await wm.create("SUP-001")
         assert wm.exists("SUP-001") is True
         await wm.cleanup("SUP-001")
+
+
+async def test_worktree_manager_multi_repo():
+    """WorktreeManager can create worktrees keyed by (issue_id, repo_name)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        primary = Path(tmp) / "primary"
+        primary.mkdir()
+        _init_git_repo(primary)
+
+        frontend = Path(tmp) / "frontend"
+        frontend.mkdir()
+        _init_git_repo(frontend)
+
+        wm = WorktreeManager(str(primary))
+        wm.register_repo("frontend", str(frontend))
+
+        # Create frontend worktree
+        fe_path = await wm.create("SUP-001", repo="frontend")
+        assert fe_path.exists()
+        assert "SUP-001__frontend" in str(fe_path)
+        assert (fe_path / "README.md").read_text() == "test"
+
+        # Create primary worktree (separate)
+        primary_path = await wm.create("SUP-001")
+        assert primary_path.exists()
+        assert primary_path != fe_path
+
+        # Verify get_path
+        assert wm.get_path("SUP-001", repo="frontend") == fe_path
+        assert wm.get_path("SUP-001") == primary_path
+
+        # Verify exists
+        assert wm.exists("SUP-001", repo="frontend") is True
+        assert wm.exists("SUP-001") is True
+
+        await wm.cleanup("SUP-001", repo="frontend")
+        await wm.cleanup("SUP-001")
+
+
+def test_worktree_register_repo():
+    """register_repo adds a named repo to the manager."""
+    wm = WorktreeManager("/tmp/primary")
+    wm.register_repo("frontend", "/tmp/frontend")
+    wm.register_repo("backend", "/tmp/backend")
+    assert wm._repo_registry["frontend"] == Path("/tmp/frontend")
+    assert wm._repo_registry["backend"] == Path("/tmp/backend")
+
+
+def test_worktree_unknown_repo_raises():
+    """Accessing an unregistered repo raises ValueError."""
+    wm = WorktreeManager("/tmp/primary")
+    with pytest.raises(ValueError, match="Unknown repo"):
+        wm._get_repo_path("nonexistent")
