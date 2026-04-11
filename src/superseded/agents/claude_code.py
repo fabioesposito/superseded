@@ -18,12 +18,16 @@ class ClaudeCodeAdapter:
             context.skill_prompt,
         ]
 
+    def _get_cwd(self, context: AgentContext) -> str:
+        return context.worktree_path or context.repo_path
+
     async def run(self, prompt: str, context: AgentContext) -> AgentResult:
         cmd = self._build_command(context)
+        cwd = self._get_cwd(context)
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
-                cwd=context.repo_path,
+                cwd=cwd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
