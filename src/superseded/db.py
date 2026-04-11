@@ -41,6 +41,7 @@ class Database:
             CREATE TABLE IF NOT EXISTS stage_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 issue_id TEXT NOT NULL,
+                repo TEXT DEFAULT 'primary',
                 stage TEXT NOT NULL,
                 passed INTEGER NOT NULL,
                 output TEXT DEFAULT '',
@@ -85,6 +86,14 @@ class Database:
             );
         """)
         await self._conn.commit()
+        # Migration: add repo column if missing
+        try:
+            await self._conn.execute(
+                "ALTER TABLE stage_results ADD COLUMN repo TEXT DEFAULT 'primary'"
+            )
+            await self._conn.commit()
+        except Exception:
+            pass  # Column already exists
 
     async def close(self) -> None:
         if self._conn:
@@ -150,13 +159,16 @@ class Database:
         )
         await self._conn.commit()
 
-    async def save_stage_result(self, issue_id: str, result: StageResult) -> None:
+    async def save_stage_result(
+        self, issue_id: str, result: StageResult, repo: str = "primary"
+    ) -> None:
         assert self._conn
         await self._conn.execute(
-            """INSERT INTO stage_results (issue_id, stage, passed, output, error, artifacts, started_at, finished_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO stage_results (issue_id, repo, stage, passed, output, error, artifacts, started_at, finished_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 issue_id,
+                repo,
                 result.stage.value,
                 int(result.passed),
                 result.output,
@@ -168,11 +180,20 @@ class Database:
         )
         await self._conn.commit()
 
-    async def get_stage_results(self, issue_id: str) -> list[dict[str, Any]]:
+    async def get_stage_results(
+        self, issue_id: str, repo: str | None = None
+    ) -> list[dict[str, Any]]:
         assert self._conn
-        cursor = await self._conn.execute(
-            "SELECT * FROM stage_results WHERE issue_id = ? ORDER BY id", (issue_id,)
-        )
+        if repo:
+            cursor = await self._conn.execute(
+                "SELECT * FROM stage_results WHERE issue_id = ? AND repo = ? ORDER BY id",
+                (issue_id, repo),
+            )
+        else:
+            cursor = await self._conn.execute(
+                "SELECT * FROM stage_results WHERE issue_id = ? ORDER BY id",
+                (issue_id,),
+            )
         rows = await cursor.fetchall()
         cols = [desc[0] for desc in cursor.description]
         results = []
