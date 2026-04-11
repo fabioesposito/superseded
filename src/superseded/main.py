@@ -27,7 +27,9 @@ async def lifespan(app: FastAPI):
 
 
 def create_app(
-    repo_path: str | None = None, config: SupersededConfig | None = None
+    repo_path: str | None = None,
+    config: SupersededConfig | None = None,
+    db: Database | None = None,
 ) -> FastAPI:
     if config is None:
         if repo_path is None:
@@ -37,7 +39,10 @@ def create_app(
     app = FastAPI(title="Superseded", version="0.1.0", lifespan=lifespan)
 
     app.state.config = config
-    app.state.db = Database(str(Path(config.repo_path) / config.db_path))
+    if db is not None:
+        app.state.db = db
+    else:
+        app.state.db = Database(str(Path(config.repo_path) / config.db_path))
 
     static_dir = Path(__file__).parent.parent.parent / "static"
     if static_dir.exists():

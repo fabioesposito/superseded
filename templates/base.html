@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-900">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,12 +7,125 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
+    <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: {
+                    sans: ['Outfit', 'sans-serif'],
+                    mono: ['JetBrains Mono', 'monospace'],
+                },
+                colors: {
+                    neon: {
+                        50: '#fee6f1', 100: '#fecde2', 200: '#fc9cc6', 300: '#fb6aa9',
+                        400: '#fa388c', 500: '#f9066f', 600: '#c70559', 700: '#950443',
+                        800: '#63032d', 900: '#320116', 950: '#230110',
+                    },
+                    coral: {
+                        50: '#fce9ea', 100: '#f9d2d5', 200: '#f3a5ac', 300: '#ed7882',
+                        400: '#e74b58', 500: '#e01f2f', 600: '#b41825', 700: '#87121c',
+                        800: '#5a0c13', 900: '#2d0609', 950: '#1f0407',
+                    },
+                    petal: {
+                        50: '#fbf0ea', 100: '#f7e1d4', 200: '#efc4a9', 300: '#e7a67e',
+                        400: '#de8954', 500: '#d66b29', 600: '#ab5621', 700: '#814018',
+                        800: '#562b10', 900: '#2b1508', 950: '#1e0f06',
+                    },
+                    sand: {
+                        50: '#f6f6ee', 100: '#ededde', 200: '#dbdabd', 300: '#c9c89c',
+                        400: '#b8b67a', 500: '#a6a359', 600: '#858347', 700: '#636236',
+                        800: '#424124', 900: '#212112', 950: '#17170c',
+                    },
+                    olive: {
+                        50: '#eff6ef', 100: '#deeddf', 200: '#bedabe', 300: '#9dc89e',
+                        400: '#7cb67d', 500: '#5ca35d', 600: '#49834a', 700: '#376238',
+                        800: '#254125', 900: '#122113', 950: '#0d170d',
+                    },
+                    shell: {
+                        50: '#fafaf8', 100: '#f0efeb', 200: '#d9d7d0', 300: '#b8b5ab',
+                        400: '#969389', 500: '#76726c', 600: '#5a5753', 700: '#43413e',
+                        800: '#2d2c2a', 850: '#242321', 900: '#1c1b19', 950: '#131211',
+                    },
+                },
+            },
+        },
+    }
+    </script>
+    <style>
+        body {
+            background: #131211;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% 0%, rgba(249, 6, 111, 0.06) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 100%, rgba(92, 163, 93, 0.04) 0%, transparent 50%);
+        }
+        ::selection {
+            background: rgba(249, 6, 111, 0.3);
+            color: #fff;
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #43413e; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #5a5753; }
+
+        @keyframes glow-pulse {
+            0%, 100% { box-shadow: 0 0 8px rgba(249, 6, 111, 0.3); }
+            50% { box-shadow: 0 0 16px rgba(249, 6, 111, 0.5); }
+        }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in 0.4s ease-out both; }
+        .animate-fade-in-delay { animation: fade-in 0.4s ease-out 0.1s both; }
+        .glow-active { animation: glow-pulse 2s ease-in-out infinite; }
+
+        .card {
+            background: linear-gradient(135deg, #1c1b19 0%, #242321 100%);
+            border: 1px solid #2d2c2a;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            border-color: #43413e;
+        }
+        .card-accent {
+            border-left: 3px solid #f9066f;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #f9066f 0%, #c70559 100%);
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(249, 6, 111, 0.25);
+        }
+        .btn-primary:hover {
+            box-shadow: 0 4px 16px rgba(249, 6, 111, 0.4);
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            background: #2d2c2a;
+            border: 1px solid #43413e;
+            transition: all 0.2s;
+        }
+        .btn-secondary:hover {
+            background: #43413e;
+            border-color: #5a5753;
+        }
+    </style>
 </head>
-<body class="h-full bg-gray-900 text-gray-100">
-    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-3">
-        <div class="flex items-center justify-between">
-            <a href="/" class="text-xl font-bold text-white">Superseded</a>
-            <span class="text-gray-400 text-sm">Local-first agentic pipeline</span>
+<body class="h-full text-shell-200 font-sans">
+    <nav class="border-b border-shell-800/60 px-6 py-3 backdrop-blur-sm bg-shell-950/80 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <a href="/" class="flex items-center gap-3 group">
+                <div class="w-2 h-2 rounded-full bg-neon-500 glow-active"></div>
+                <span class="text-xl font-bold tracking-tight text-shell-50 group-hover:text-neon-400 transition-colors">Superseded</span>
+            </a>
+            <div class="flex items-center gap-6">
+                <a href="/metrics" class="text-sm text-shell-400 hover:text-shell-200 transition-colors">Metrics</a>
+                <span class="text-xs font-mono text-shell-500 bg-shell-900 px-2 py-1 rounded">Local-first pipeline</span>
+            </div>
         </div>
     </nav>
     <main class="max-w-7xl mx-auto px-6 py-8">

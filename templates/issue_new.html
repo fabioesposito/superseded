@@ -1,36 +1,41 @@
 {% extends "base.html" %}
 {% block title %}New Issue - Superseded{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">New Issue</h1>
+<div class="animate-fade-in max-w-2xl">
+    <h1 class="text-3xl font-bold text-shell-50 tracking-tight mb-8">New Issue</h1>
 
-<form action="/issues/new" method="post" class="max-w-2xl space-y-4">
-    <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1">Title</label>
-        <input type="text" name="title" required
-            class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500">
-    </div>
-    <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1">Description</label>
-        <textarea name="body" rows="10"
-            class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"></textarea>
-    </div>
-    <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1">Labels (comma-separated)</label>
-        <input type="text" name="labels"
-            class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500">
-    </div>
-    <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1">Assign to agent</label>
-        <select name="assignee"
-            class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500">
-            <option value="">auto</option>
-            <option value="claude-code">claude-code</option>
-            <option value="opencode">opencode</option>
-        </select>
-    </div>
-    <div class="flex gap-3">
-        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">Create Issue</button>
-        <a href="/" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-6 py-2 rounded-lg">Cancel</a>
-    </div>
-</form>
+    <form action="/issues/new" method="post" class="space-y-5">
+        <div>
+            <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Title</label>
+            <input type="text" name="title" required
+                class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
+                placeholder="Brief description of the task">
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Description</label>
+            <textarea name="body" rows="10"
+                class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all font-mono text-sm"
+                placeholder="Detailed specification, requirements, acceptance criteria..."></textarea>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Labels</label>
+            <input type="text" name="labels"
+                class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
+                placeholder="bug, feature, enhancement">
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Assign to agent</label>
+            <select name="assignee"
+                class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all appearance-none cursor-pointer">
+                <option value="">auto</option>
+                <option value="claude-code">claude-code</option>
+                <option value="opencode">opencode</option>
+            </select>
+        </div>
+        <div class="flex gap-3 pt-2">
+            <button type="submit" class="btn-primary text-white px-6 py-2.5 rounded-lg text-sm font-semibold">Create Issue</button>
+            <a href="/" class="btn-secondary text-shell-400 hover:text-shell-200 px-6 py-2.5 rounded-lg text-sm font-medium transition-colors">Cancel</a>
+        </div>
+    </form>
+</div>
 {% endblock %}

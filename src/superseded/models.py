@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import frontmatter
 from pydantic import BaseModel, Field
@@ -98,3 +98,28 @@ class AgentContext(BaseModel):
     worktree_path: str = ""
     iteration: int = 0
     previous_errors: list[str] = Field(default_factory=list)
+
+
+class SessionTurn(BaseModel):
+    role: Literal["user", "assistant", "system"]
+    content: str
+    stage: Stage
+    attempt: int = 0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentEvent(BaseModel):
+    event_type: Literal["stdout", "stderr", "status", "error"]
+    content: str = ""
+    stage: Stage
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PipelineMetrics(BaseModel):
+    total_issues: int
+    issues_by_status: dict[str, int]
+    stage_success_rates: dict[str, float]
+    avg_stage_duration_ms: dict[str, float]
+    total_retries: int
+    retries_by_stage: dict[str, int]
+    recent_events: list[AgentEvent] = Field(default_factory=list)

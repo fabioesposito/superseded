@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+from typing import Any
 
 from superseded.models import Issue, Stage
 from superseded.pipeline.prompts import get_prompt_for_stage
@@ -66,6 +68,47 @@ class ContextAssembler:
         prompt = get_prompt_for_stage(stage)
         return f"## Stage Instructions: {stage.value.upper()}\n\n{prompt}"
 
+    def _run_async(self, coro: Any) -> Any:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            return pool.submit(asyncio.run, coro).result()
+
+    def _build_session_history_layer(
+        self, issue_id: str, current_stage: Stage, db: Any
+    ) -> str | None:
+        if db is None:
+            return None
+
+        turns = self._run_async(db.get_session_turns(issue_id))
+
+        prior_turns = [t for t in turns if t["stage"] != current_stage.value]
+        if not prior_turns:
+            return None
+
+        parts: list[str] = []
+        current_section = None
+        for turn in prior_turns:
+            section = f"{turn['stage']} (attempt {turn['attempt'] + 1})"
+            if section != current_section:
+                current_section = section
+                parts.append(f"### {section}")
+
+            role_label = "You asked" if turn["role"] == "user" else "Agent responded"
+            content = turn["content"]
+            if len(content) > 2000:
+                content = content[:2000] + "... [truncated]"
+            parts.append(f"**{role_label}:**\n{content}")
+
+        if not parts:
+            return None
+        return "## Previous Session History\n\n" + "\n\n".join(parts)
+
     def _build_error_layer(self, previous_errors: list[str], iteration: int) -> str:
         error_lines = "\n".join(f"- {err}" for err in previous_errors)
         return (
@@ -81,6 +124,7 @@ class ContextAssembler:
         artifacts_path: str,
         previous_errors: list[str] | None = None,
         iteration: int = 0,
+        db: Any = None,
     ) -> str:
         layers: list[str] = []
         previous_errors = previous_errors or []
@@ -98,6 +142,10 @@ class ContextAssembler:
         artifacts = self._build_artifacts_layer(artifacts_path)
         if artifacts:
             layers.append(artifacts)
+
+        session_history = self._build_session_history_layer(issue.id, stage, db)
+        if session_history:
+            layers.append(session_history)
 
         rules = self._build_rules_layer()
         if rules:

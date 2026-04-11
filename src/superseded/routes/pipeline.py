@@ -8,7 +8,16 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from superseded.models import HarnessIteration, IssueStatus, Stage, StageResult
+from fastapi.templating import Jinja2Templates
+
+from superseded.models import (
+    HarnessIteration,
+    IssueStatus,
+    PipelineMetrics,
+    Stage,
+    StageResult,
+)
+from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.stages import STAGE_DEFINITIONS
 from superseded.pipeline.worktree import WorktreeManager
@@ -20,7 +29,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pipeline")
 
+_templates_dir = Path(__file__).parent.parent.parent.parent / "templates"
+_templates = Jinja2Templates(directory=str(_templates_dir))
+
 _cached_runner: HarnessRunner | None = None
+_event_manager = PipelineEventManager()
 
 
 def _get_harness_runner(deps: Deps) -> HarnessRunner:
@@ -34,6 +47,7 @@ def _get_harness_runner(deps: Deps) -> HarnessRunner:
             repo_path=deps.config.repo_path,
             max_retries=deps.config.max_retries,
             retryable_stages=deps.config.retryable_stages,
+            event_manager=_event_manager,
         )
     return _cached_runner
 
@@ -178,3 +192,85 @@ async def pipeline_events(request: Request, deps: Deps = Depends(get_deps)):
             await asyncio.sleep(2)
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/issues/{issue_id}/events")
+async def get_historical_events(
+    request: Request, issue_id: str, deps: Deps = Depends(get_deps)
+):
+    events = await deps.db.get_agent_events(issue_id)
+    return events
+
+
+@router.get("/issues/{issue_id}/events/stream")
+async def stream_events(
+    request: Request, issue_id: str, deps: Deps = Depends(get_deps)
+):
+    from sse_starlette.sse import EventSourceResponse
+
+    async def event_generator():
+        async for event in _event_manager.subscribe(issue_id):
+            yield {
+                "event": event.event_type,
+                "data": json.dumps(
+                    {"content": event.content, "metadata": event.metadata}
+                ),
+            }
+        yield {"event": "done", "data": "{}"}
+
+    return EventSourceResponse(event_generator())
+
+
+@router.get("/metrics")
+async def get_metrics(request: Request, deps: Deps = Depends(get_deps)):
+    issues = await deps.db.list_issues()
+    total = len(issues)
+    by_status: dict[str, int] = {}
+    for issue in issues:
+        s = issue["status"]
+        by_status[s] = by_status.get(s, 0) + 1
+
+    all_results = []
+    for issue in issues:
+        results = await deps.db.get_stage_results(issue["id"])
+        all_results.extend(results)
+
+    stage_attempts: dict[str, list[bool]] = {}
+    for r in all_results:
+        stage_attempts.setdefault(r["stage"], []).append(r["passed"])
+
+    success_rates = {
+        stage: sum(1 for p in passes if p) / len(passes)
+        for stage, passes in stage_attempts.items()
+    }
+
+    all_iterations = []
+    for issue in issues:
+        iters = await deps.db.get_harness_iterations(issue["id"])
+        all_iterations.extend(iters)
+
+    total_retries = len(all_iterations)
+    retries_by_stage: dict[str, int] = {}
+    for it in all_iterations:
+        retries_by_stage[it["stage"]] = retries_by_stage.get(it["stage"], 0) + 1
+
+    metrics = PipelineMetrics(
+        total_issues=total,
+        issues_by_status=by_status,
+        stage_success_rates=success_rates,
+        avg_stage_duration_ms={},
+        total_retries=total_retries,
+        retries_by_stage=retries_by_stage,
+        recent_events=[],
+    )
+    return metrics.model_dump()
+
+
+@router.get("/metrics/dashboard", response_class=HTMLResponse)
+async def metrics_dashboard(request: Request, deps: Deps = Depends(get_deps)):
+    metrics_resp = await get_metrics(request, deps)
+    return _templates.TemplateResponse(
+        request,
+        "metrics.html",
+        {"metrics": metrics_resp},
+    )

@@ -2,53 +2,72 @@
 {% block title %}{{ issue.id if issue else 'Not Found' }} / {{ stage.value }} - Superseded{% endblock %}
 {% block content %}
 {% if not issue %}
-<p class="text-red-400">{{ error }}</p>
-<a href="/" class="text-blue-400 hover:text-blue-300">Back to dashboard</a>
-{% else %}
-<div class="mb-4">
-    <a href="/issues/{{ issue.id }}" class="text-blue-400 hover:text-blue-300">&larr; Back to {{ issue.id }}</a>
-</div>
-<h1 class="text-2xl font-bold mb-2">{{ issue.id }}: {{ stage.value }}</h1>
-<h2 class="text-lg text-gray-400 mb-6">{{ issue.title }}</h2>
-
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <div class="bg-gray-800 rounded-lg p-6">
-        <h3 class="font-semibold mb-3">Stage: {{ stage.value }}</h3>
-        <p class="text-gray-400 text-sm mb-4">
-            {% if stage.value == "spec" %}Define what to build from the ticket
-            {% elif stage.value == "plan" %}Break the spec into implementable tasks
-            {% elif stage.value == "build" %}Implement the code changes
-            {% elif stage.value == "verify" %}Run tests and verify correctness
-            {% elif stage.value == "review" %}Review code quality and security
-            {% elif stage.value == "ship" %}Commit, push, and create PR
-            {% endif %}
-        </p>
-        <div class="space-y-2">
-            <form action="/pipeline/issues/{{ issue.id }}/advance" method="post">
-                <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">Run Stage</button>
-            </form>
-            <form action="/pipeline/issues/{{ issue.id }}/retry" method="post">
-                <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg">Retry</button>
-            </form>
-        </div>
+<div class="animate-fade-in">
+    <div class="card rounded-xl p-8 text-center">
+        <p class="text-coral-400 text-lg mb-4">{{ error }}</p>
+        <a href="/" class="text-neon-400 hover:text-neon-300 transition-colors">&larr; Back to dashboard</a>
     </div>
-    <div class="bg-gray-800 rounded-lg p-6">
-        <h3 class="font-semibold mb-3">Result</h3>
-        {% if result %}
-        <div class="mb-2">
-            <span class="px-2 py-1 rounded text-sm {% if result.passed %}bg-green-900 text-green-200{% else %}bg-red-900 text-red-200{% endif %}">
-                {% if result.passed %}PASSED{% else %}FAILED{% endif %}
-            </span>
+</div>
+{% else %}
+<div class="animate-fade-in">
+    <div class="mb-6">
+        <a href="/issues/{{ issue.id }}" class="text-neon-400 hover:text-neon-300 text-sm transition-colors inline-flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to {{ issue.id }}
+        </a>
+    </div>
+    <h1 class="text-3xl font-bold text-shell-50 tracking-tight mb-1">
+        <span class="font-mono text-neon-500">{{ issue.id }}</span>
+        <span class="text-shell-600 mx-2">/</span>
+        <span class="uppercase tracking-wider text-2xl">{{ stage.value }}</span>
+    </h1>
+    <h2 class="text-lg text-shell-400 mb-8">{{ issue.title }}</h2>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="card card-accent rounded-xl p-6">
+            <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-4">Stage: {{ stage.value }}</h3>
+            <p class="text-shell-400 text-sm mb-5 leading-relaxed">
+                {% if stage.value == "spec" %}Define what to build from the ticket
+                {% elif stage.value == "plan" %}Break the spec into implementable tasks
+                {% elif stage.value == "build" %}Implement the code changes
+                {% elif stage.value == "verify" %}Run tests and verify correctness
+                {% elif stage.value == "review" %}Review code quality and security
+                {% elif stage.value == "ship" %}Commit, push, and create PR
+                {% endif %}
+            </p>
+            <div class="space-y-2.5">
+                <form action="/pipeline/issues/{{ issue.id }}/advance" method="post">
+                    <button type="submit" class="w-full btn-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold">Run Stage</button>
+                </form>
+                <form action="/pipeline/issues/{{ issue.id }}/retry" method="post">
+                    <button type="submit" class="w-full btn-secondary text-petal-400 hover:text-petal-300 px-4 py-2.5 rounded-lg text-sm font-semibold">Retry</button>
+                </form>
+            </div>
         </div>
-        {% if result.output %}
-        <pre class="bg-gray-900 rounded p-3 text-sm text-gray-300 overflow-auto max-h-96">{{ result.output }}</pre>
-        {% endif %}
-        {% if result.error %}
-        <div class="mt-2 p-3 bg-red-900/30 rounded text-red-300 text-sm">{{ result.error }}</div>
-        {% endif %}
-        {% else %}
-        <p class="text-gray-500">No result yet. Run the stage to generate output.</p>
-        {% endif %}
+        <div class="card rounded-xl p-6">
+            <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-4">Result</h3>
+            {% if result %}
+            <div class="mb-3">
+                <span class="px-3 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wide inline-flex items-center gap-1.5
+                    {% if result.passed %}bg-olive-950 text-olive-400 border border-olive-800/40
+                    {% else %}bg-coral-950 text-coral-400 border border-coral-800/40{% endif %}">
+                    {% if result.passed %}<span class="w-1.5 h-1.5 rounded-full bg-olive-400"></span>{% else %}<span class="w-1.5 h-1.5 rounded-full bg-coral-400"></span>{% endif %}
+                    {% if result.passed %}PASSED{% else %}FAILED{% endif %}
+                </span>
+            </div>
+            {% if result.output %}
+            <pre class="bg-shell-950 rounded-lg p-4 text-sm text-shell-300 overflow-auto max-h-96 font-mono border border-shell-800/40 leading-relaxed">{{ result.output }}</pre>
+            {% endif %}
+            {% if result.error %}
+            <div class="mt-3 p-3 bg-coral-950/40 rounded-lg border border-coral-800/30 text-coral-300 text-sm font-mono">{{ result.error }}</div>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-8">
+                <div class="text-shell-600 text-sm">No result yet</div>
+                <div class="text-shell-700 text-xs mt-1">Run the stage to generate output</div>
+            </div>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endif %}
