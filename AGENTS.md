@@ -101,7 +101,7 @@ Superseded is now an agent harness, not just a linear pipeline:
 
 ## Key Files for Agents
 
-- `.superseded/issues/` — Tickets (markdown + YAML frontmatter), single source of truth
+- `.superseded/issues/` — Tickets (markdown + YAML frontmatter), single source of truth. See `docs/tickets.md` for format.
 - `.superseded/artifacts/{id}/` — Stage outputs (spec.md, plan.md, etc.)
 - `.superseded/rules.md` — Non-negotiable project rules injected into every prompt
 - `.superseded/config.yaml` — Harness configuration
