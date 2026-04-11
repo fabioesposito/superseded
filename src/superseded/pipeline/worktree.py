@@ -95,16 +95,18 @@ class WorktreeManager:
     def exists(self, issue_id: str, repo: str | None = None) -> bool:
         return self._worktree_path(issue_id, repo).exists()
 
-    async def stash_if_dirty(self) -> str | None:
-        result = await self._run_git("status", "--porcelain")
+    async def stash_if_dirty(self, repo: str | None = None) -> str | None:
+        repo_path = self._get_repo_path(repo)
+        result = await self._run_git("status", "--porcelain", cwd=str(repo_path))
         if result.stdout.strip():
             stash_result = await self._run_git(
-                "stash", "push", "-m", "superseded-auto-stash"
+                "stash", "push", "-m", "superseded-auto-stash", cwd=str(repo_path)
             )
             if stash_result.returncode == 0:
                 return "superseded-auto-stash"
         return None
 
-    async def pop_stash(self, stash_ref: str | None) -> None:
+    async def pop_stash(self, stash_ref: str | None, repo: str | None = None) -> None:
         if stash_ref:
-            await self._run_git("stash", "pop")
+            repo_path = self._get_repo_path(repo)
+            await self._run_git("stash", "pop", cwd=str(repo_path))
