@@ -47,9 +47,14 @@ class HarnessRunner:
         stage: Stage,
         artifacts_path: str,
         previous_errors: list[str] | None = None,
+        repo: str | None = None,
     ) -> StageResult:
         errors: list[str] = previous_errors or []
         effective_max = self.max_retries if stage.value in self.retryable_stages else 1
+
+        worktree_path = ""
+        if repo and self.worktree_manager.exists(issue.id, repo=repo):
+            worktree_path = str(self.worktree_manager.get_path(issue.id, repo=repo))
 
         for attempt in range(effective_max):
             prompt = self.context_assembler.build(
@@ -58,6 +63,7 @@ class HarnessRunner:
                 artifacts_path=artifacts_path,
                 previous_errors=errors if errors else None,
                 iteration=attempt,
+                target_repo=repo,
             )
 
             context = AgentContext(
@@ -65,6 +71,7 @@ class HarnessRunner:
                 issue=issue,
                 skill_prompt=prompt,
                 artifacts_path=artifacts_path,
+                worktree_path=worktree_path,
                 iteration=attempt,
                 previous_errors=errors,
             )
@@ -232,8 +239,10 @@ class HarnessRunner:
             repo_artifacts = str(Path(artifacts_path) / repo_name)
             Path(repo_artifacts).mkdir(parents=True, exist_ok=True)
 
+            repo_errors = list(previous_errors) if previous_errors else None
+
             result = await self.run_stage_with_retries(
-                issue, stage, repo_artifacts, previous_errors
+                issue, stage, repo_artifacts, repo_errors, repo=repo_name
             )
             results[repo_name] = result
 
