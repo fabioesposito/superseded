@@ -164,14 +164,21 @@ Principles:
 - **Keep concerns separate.** A refactoring change and a feature change are two separate commits.
 - **Size your changes.** Target ~100 lines per commit. Changes over ~1000 lines should be split.
 
+GitHub interactions MUST use `gh` CLI:
+- Create PRs: `gh pr create --title "..." --body "..."`
+- Link issues: `gh pr create` with issue references in the body
+- List/open/close PRs: `gh pr list`, `gh pr view`, `gh pr merge`
+- View CI checks: `gh pr checks`
+- Do NOT use raw git push + manual GitHub URL. Always use `gh` for GitHub operations.
+
 Steps:
 1. Create an atomic commit with a clear message following the type convention
 2. Push to the remote branch
-3. Create a pull request with a description of changes, including test results and review notes
+3. Create a pull request using `gh pr create` with a description of changes, test results, and review notes
 4. Include before/after comparison if relevant
 5. Link back to the spec or issue that each change implements
 
-Commit, push, and create a PR.""",
+Commit, push, and create a PR using `gh`.""",
 }
 
 
