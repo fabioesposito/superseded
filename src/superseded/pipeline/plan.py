@@ -50,11 +50,11 @@ def read_plan(path: str) -> Plan:
     title_match = re.search(r"^# Plan:\s*(.+)$", content, re.MULTILINE)
     title = title_match.group(1).strip() if title_match else ""
 
-    context_match = re.search(r"^## Context\s*\n\n(.*?)(?=\n## )", content, re.DOTALSE)
+    context_match = re.search(r"^## Context\s*\n\n(.*?)(?=\n## )", content, re.DOTALL)
     context = context_match.group(1).strip() if context_match else ""
 
     task_blocks = re.findall(
-        r"### Task \d+:\s*(.+?)\n((?:- \*\*.+?\n)+)", content, re.DOTALSE
+        r"### Task \d+:\s*(.+?)\n((?:- \*\*.+?\n)+)", content, re.DOTALL
     )
 
     tasks: list[PlanTask] = []

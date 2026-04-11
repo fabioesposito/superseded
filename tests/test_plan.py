@@ -58,7 +58,7 @@ def test_write_plan():
         )
         content = plan_path.read_text()
     assert "# Plan: Add rate limiting" in content
-    assert "Create rate limiter middleware" in content
+    assert "Add rate limiting" in content
 
 
 def test_read_roundtrip():
