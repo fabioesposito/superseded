@@ -633,23 +633,30 @@
     background: linear-gradient(90deg, transparent, var(--border-bright), transparent);
   }
 
-  .arch-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4rem;
-    align-items: center;
+  .arch-diagram {
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
   }
 
-  .arch-tree {
-    font-size: 0.78rem;
-    line-height: 2;
-    color: var(--text-dim);
+  .arch-svg {
+    width: 100%;
+    height: auto;
+    display: block;
   }
 
-  .arch-tree .dir { color: var(--amber); font-weight: 500; }
-  .arch-tree .file { color: var(--text-dim); }
-  .arch-tree .highlight { color: var(--cyan); font-weight: 500; }
-  .arch-tree .indent { display: inline-block; width: 1.5em; }
+  .arch-svg .arch-node {
+    transition: opacity 0.3s;
+  }
+
+  .arch-svg:hover .arch-node {
+    opacity: 0.7;
+  }
+
+  .arch-svg:hover .arch-node:hover {
+    opacity: 1;
+  }
 
   .arch-details h3 {
     font-family: var(--font-display);
@@ -809,11 +816,6 @@
 
     .features-grid {
       grid-template-columns: 1fr;
-    }
-
-    .arch-grid {
-      grid-template-columns: 1fr;
-      gap: 2rem;
     }
 
     footer {
@@ -1008,45 +1010,172 @@
       <h2>Architecture</h2>
       <p>Designed for local-first operation with clear separation of concerns.</p>
     </div>
-    <div class="arch-grid reveal">
-      <div class="arch-tree">
-        <div><span class="dir">src/superseded/</span></div>
-        <div><span class="indent"></span><span class="dir">agents/</span> <span class="file">— Claude Code, OpenCode adapters</span></div>
-        <div><span class="indent"></span><span class="dir">pipeline/</span> <span class="file">— Engine, stages, prompts</span></div>
-        <div><span class="indent"></span><span class="dir">tickets/</span> <span class="file">— Markdown + YAML CRUD</span></div>
-        <div><span class="indent"></span><span class="dir">routes/</span> <span class="file">— FastAPI handlers</span></div>
-        <div><span class="indent"></span><span class="highlight">models.py</span> <span class="file">— Pydantic: Issue, Stage, AgentResult</span></div>
-        <div><span class="indent"></span><span class="highlight">config.py</span> <span class="file">— YAML config loader</span></div>
-        <div><span class="indent"></span><span class="highlight">db.py</span> <span class="file">— Async SQLite operations</span></div>
-        <br>
-        <div><span class="dir">.superseded/</span></div>
-        <div><span class="indent"></span><span class="dir">issues/</span> <span class="file">— Ticket markdown files</span></div>
-        <div><span class="indent"></span><span class="dir">artifacts/</span> <span class="file">— Stage outputs per ticket</span></div>
-        <div><span class="indent"></span><span class="highlight">rules.md</span> <span class="file">— Injected into every prompt</span></div>
-        <div><span class="indent"></span><span class="highlight">config.yaml</span> <span class="file">— Harness configuration</span></div>
-        <br>
-        <div><span class="dir">templates/</span> <span class="file">— Jinja2 + HTMX</span></div>
-      </div>
-      <div class="arch-details">
-        <h3>Local-first. Agent-native. Opinionated.</h3>
-        <p>
-          Markdown tickets are the source of truth. SQLite is a cache/index.
-          Agents run as CLI subprocesses in isolated worktrees.
-          Every harness attempt is tracked and replayable.
-        </p>
-        <ul class="stack-list">
-          <li>Python 3.12+</li>
-          <li>FastAPI</li>
-          <li>HTMX</li>
-          <li>Alpine.js</li>
-          <li>Tailwind CSS</li>
-          <li>Jinja2</li>
-          <li>SQLite</li>
-          <li>aiosqlite</li>
-          <li>uv</li>
-          <li>Git Worktrees</li>
-        </ul>
-      </div>
+    <div class="arch-diagram reveal">
+      <svg viewBox="0 0 900 480" fill="none" xmlns="http://www.w3.org/2000/svg" class="arch-svg">
+        <!-- Background grid -->
+        <defs>
+          <pattern id="arch-grid" width="30" height="30" patternUnits="userSpaceOnUse">
+            <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#1a1a35" stroke-width="0.5"/>
+          </pattern>
+          <filter id="glow-cyan">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="glow-amber">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <marker id="arrow-cyan" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#00e5cc"/>
+          </marker>
+          <marker id="arrow-amber" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#ffab40"/>
+          </marker>
+        </defs>
+        <rect width="900" height="480" fill="url(#arch-grid)" opacity="0.3"/>
+
+        <!-- User / Tickets -->
+        <g class="arch-node" transform="translate(20, 180)">
+          <rect width="130" height="80" rx="2" fill="#0d0d18" stroke="#1a1a35" stroke-width="1.5"/>
+          <text x="65" y="32" text-anchor="middle" fill="#00e5cc" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600">TICKETS</text>
+          <text x="65" y="52" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="9">Markdown specs</text>
+          <text x="65" y="66" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="8">+ YAML frontmatter</text>
+        </g>
+
+        <!-- Arrow: Tickets → Pipeline -->
+        <line x1="150" y1="220" x2="220" y2="220" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-cyan)" stroke-dasharray="4 3"/>
+
+        <!-- Pipeline Engine -->
+        <g class="arch-node" transform="translate(225, 140)">
+          <rect width="160" height="160" rx="2" fill="#0d0d18" stroke="#00e5cc" stroke-width="1.5" opacity="0.9"/>
+          <text x="80" y="28" text-anchor="middle" fill="#00e5cc" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" filter="url(#glow-cyan)">PIPELINE</text>
+          <text x="80" y="44" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="8">6-stage engine</text>
+          <!-- Mini pipeline stages -->
+          <g transform="translate(20, 60)">
+            <circle cx="12" cy="12" r="8" fill="none" stroke="#00e5cc" stroke-width="1" opacity="0.7"/>
+            <text x="12" y="15" text-anchor="middle" fill="#00e5cc" font-size="7">◉</text>
+            <line x1="20" y1="12" x2="40" y2="12" stroke="#1a1a35" stroke-width="1"/>
+            <circle cx="52" cy="12" r="8" fill="none" stroke="#00e5cc" stroke-width="1" opacity="0.7"/>
+            <text x="52" y="15" text-anchor="middle" fill="#00e5cc" font-size="7">⊞</text>
+            <line x1="60" y1="12" x2="80" y2="12" stroke="#1a1a35" stroke-width="1"/>
+            <circle cx="92" cy="12" r="8" fill="none" stroke="#00e5cc" stroke-width="1" opacity="0.7"/>
+            <text x="92" y="15" text-anchor="middle" fill="#00e5cc" font-size="7">⚙</text>
+            <line x1="100" y1="12" x2="120" y2="12" stroke="#1a1a35" stroke-width="1"/>
+          </g>
+          <g transform="translate(20, 85)">
+            <circle cx="12" cy="12" r="8" fill="none" stroke="#ffab40" stroke-width="1" opacity="0.7"/>
+            <text x="12" y="15" text-anchor="middle" fill="#ffab40" font-size="7">✓</text>
+            <line x1="20" y1="12" x2="40" y2="12" stroke="#1a1a35" stroke-width="1"/>
+            <circle cx="52" cy="12" r="8" fill="none" stroke="#ffab40" stroke-width="1" opacity="0.7"/>
+            <text x="52" y="15" text-anchor="middle" fill="#ffab40" font-size="7">⟳</text>
+            <line x1="60" y1="12" x2="80" y2="12" stroke="#1a1a35" stroke-width="1"/>
+            <circle cx="92" cy="12" r="8" fill="none" stroke="#ffab40" stroke-width="1" opacity="0.7"/>
+            <text x="92" y="15" text-anchor="middle" fill="#ffab40" font-size="7">▷</text>
+          </g>
+          <text x="80" y="120" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="7">spec → plan → build</text>
+          <text x="80" y="132" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="7">verify → review → ship</text>
+          <text x="80" y="150" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">feedback loops · retries</text>
+        </g>
+
+        <!-- Arrow: Pipeline → Worktree -->
+        <line x1="385" y1="195" x2="445" y2="130" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-cyan)" stroke-dasharray="4 3"/>
+
+        <!-- Arrow: Pipeline → Agents -->
+        <line x1="385" y1="245" x2="445" y2="310" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-amber)" stroke-dasharray="4 3"/>
+
+        <!-- Worktree Isolation -->
+        <g class="arch-node" transform="translate(450, 60)">
+          <rect width="150" height="100" rx="2" fill="#0d0d18" stroke="#1a1a35" stroke-width="1.5"/>
+          <text x="75" y="26" text-anchor="middle" fill="#ffab40" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600">WORKTREES</text>
+          <text x="75" y="44" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="8">Isolated git branches</text>
+          <!-- Mini worktree visual -->
+          <rect x="20" y="55" width="45" height="24" rx="1" fill="none" stroke="#2a2a55" stroke-width="1"/>
+          <text x="42" y="70" text-anchor="middle" fill="#6a6a8a" font-size="7">feat/*</text>
+          <rect x="75" y="55" width="55" height="24" rx="1" fill="none" stroke="#2a2a55" stroke-width="1"/>
+          <text x="102" y="70" text-anchor="middle" fill="#6a6a8a" font-size="7">verify/*</text>
+          <text x="75" y="95" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">merge on success</text>
+        </g>
+
+        <!-- Agents -->
+        <g class="arch-node" transform="translate(450, 260)">
+          <rect width="150" height="100" rx="2" fill="#0d0d18" stroke="#ffab40" stroke-width="1.5" opacity="0.9"/>
+          <text x="75" y="26" text-anchor="middle" fill="#ffab40" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" filter="url(#glow-amber)">AGENTS</text>
+          <text x="75" y="44" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="8">CLI subprocess adapters</text>
+          <text x="75" y="64" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="8">Claude Code</text>
+          <text x="75" y="78" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="8">OpenCode</text>
+          <text x="75" y="96" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">extensible adapters</text>
+        </g>
+
+        <!-- Arrow: Worktree → PR -->
+        <line x1="600" y1="110" x2="670" y2="110" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-cyan)" stroke-dasharray="4 3"/>
+
+        <!-- Arrow: Agents → PR -->
+        <line x1="600" y1="310" x2="670" y2="310" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-amber)" stroke-dasharray="4 3"/>
+
+        <!-- PR Output -->
+        <g class="arch-node" transform="translate(675, 180)">
+          <rect width="130" height="80" rx="2" fill="#0d0d18" stroke="#1a1a35" stroke-width="1.5"/>
+          <text x="65" y="32" text-anchor="middle" fill="#44ff88" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600">PULL REQUEST</text>
+          <text x="65" y="52" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="9">via gh CLI</text>
+          <text x="65" y="66" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="8">ready to merge</text>
+        </g>
+
+        <!-- Curved arrows from Worktree/Agents to PR -->
+        <path d="M 600 90 Q 640 70 675 90 Q 700 100 710 160" stroke="#00e5cc" stroke-width="1" fill="none" opacity="0.4"/>
+        <path d="M 600 340 Q 640 360 675 350 Q 700 340 710 280" stroke="#ffab40" stroke-width="1" fill="none" opacity="0.4"/>
+
+        <!-- Context Layer box -->
+        <g class="arch-node" transform="translate(225, 340)">
+          <rect width="160" height="70" rx="2" fill="#0d0d18" stroke="#1a1a35" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="80" y="22" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="9" font-weight="500">CONTEXT LAYERS</text>
+          <text x="80" y="38" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">AGENTS.md → docs → ticket</text>
+          <text x="80" y="50" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">→ artifacts → rules → skill</text>
+          <text x="80" y="62" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">→ error context</text>
+        </g>
+
+        <!-- State box -->
+        <g class="arch-node" transform="translate(20, 310)">
+          <rect width="130" height="70" rx="2" fill="#0d0d18" stroke="#1a1a35" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="65" y="24" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="9" font-weight="500">STATE</text>
+          <text x="65" y="42" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">SQLite cache</text>
+          <text x="65" y="56" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">iteration tracking</text>
+        </g>
+
+        <!-- Arrow: Tickets → State -->
+        <line x1="85" y1="260" x2="85" y2="310" stroke="#1a1a35" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
+
+        <!-- Arrow: State → Pipeline -->
+        <line x1="150" y1="345" x2="225" y2="345" stroke="#1a1a35" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
+
+        <!-- Web UI badge -->
+        <g transform="translate(675, 310)">
+          <rect width="130" height="50" rx="2" fill="#0d0d18" stroke="#1a1a35" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="65" y="22" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="9" font-weight="500">WEB UI</text>
+          <text x="65" y="38" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">HTMX + Alpine.js</text>
+        </g>
+
+        <line x1="740" y1="260" x2="740" y2="310" stroke="#1a1a35" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
+      </svg>
+    </div>
+    <div class="arch-details reveal" style="margin-top: 3rem;">
+      <h3>Local-first. Agent-native. Opinionated.</h3>
+      <p>
+        Markdown tickets are the source of truth. SQLite is a cache/index.
+        Agents run as CLI subprocesses in isolated worktrees.
+        Every harness attempt is tracked and replayable.
+      </p>
+      <ul class="stack-list">
+        <li>Python 3.12+</li>
+        <li>FastAPI</li>
+        <li>HTMX</li>
+        <li>Alpine.js</li>
+        <li>Tailwind CSS</li>
+        <li>Jinja2</li>
+        <li>SQLite</li>
+        <li>aiosqlite</li>
+        <li>uv</li>
+        <li>Git Worktrees</li>
+      </ul>
     </div>
   </div>
 </section>
