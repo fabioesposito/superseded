@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from superseded.agents.claude_code import ClaudeCodeAdapter
+from superseded.agents.factory import AgentFactory
 from superseded.config import SupersededConfig, load_config
 from superseded.db import Database
 from superseded.pipeline.events import PipelineEventManager
@@ -37,13 +37,18 @@ async def lifespan(app: FastAPI):
 
 def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
     event_manager = PipelineEventManager()
-    agent = ClaudeCodeAdapter(timeout=config.stage_timeout_seconds)
+    factory = AgentFactory(
+        default_agent=config.default_agent,
+        default_model=config.default_model,
+        timeout=config.stage_timeout_seconds,
+    )
     runner = HarnessRunner(
-        agent=agent,
+        agent_factory=factory,
         repo_path=config.repo_path,
         max_retries=config.max_retries,
         retryable_stages=config.retryable_stages,
         event_manager=event_manager,
+        stage_configs=config.stages,
     )
     worktree_manager = WorktreeManager(config.repo_path)
     if config.repos:
