@@ -2,6 +2,10 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
+from superseded.agents.claude_code import ClaudeCodeAdapter
+from superseded.agents.factory import AgentFactory
+from superseded.agents.opencode import OpenCodeAdapter
+from superseded.config import StageAgentConfig
 from superseded.models import AgentResult, Issue, Stage
 from superseded.pipeline.harness import HarnessRunner
 
@@ -154,3 +158,41 @@ async def test_harness_multi_repo_single_repo_fallback():
     assert "primary" in results
     assert len(results) == 1
     assert mock_agent.run.call_count == 1
+
+
+def test_resolve_agent_default():
+    factory = AgentFactory(default_agent="claude-code", default_model="")
+    runner = HarnessRunner(
+        agent_factory=factory,
+        repo_path="/tmp/test",
+    )
+    agent = runner.resolve_agent(Stage.SPEC)
+    assert isinstance(agent, ClaudeCodeAdapter)
+
+
+def test_resolve_agent_stage_override():
+    factory = AgentFactory(default_agent="claude-code", default_model="")
+    runner = HarnessRunner(
+        agent_factory=factory,
+        repo_path="/tmp/test",
+        stage_configs={
+            "build": StageAgentConfig(cli="opencode", model="gpt-4o"),
+        },
+    )
+    agent = runner.resolve_agent(Stage.BUILD)
+    assert isinstance(agent, OpenCodeAdapter)
+    assert agent.model == "gpt-4o"
+
+
+def test_resolve_agent_falls_back_to_default():
+    factory = AgentFactory(default_agent="claude-code", default_model="sonnet")
+    runner = HarnessRunner(
+        agent_factory=factory,
+        repo_path="/tmp/test",
+        stage_configs={
+            "build": StageAgentConfig(cli="opencode", model="gpt-4o"),
+        },
+    )
+    agent = runner.resolve_agent(Stage.SPEC)
+    assert isinstance(agent, ClaudeCodeAdapter)
+    assert agent.model == "sonnet"

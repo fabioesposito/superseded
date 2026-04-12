@@ -4,7 +4,8 @@ import datetime
 from pathlib import Path
 
 from superseded.agents.base import AgentAdapter
-from superseded.config import RepoEntry
+from superseded.agents.factory import AgentFactory
+from superseded.config import RepoEntry, StageAgentConfig
 from superseded.db import Database
 from superseded.models import (
     AgentContext,
@@ -22,13 +23,20 @@ from superseded.pipeline.worktree import WorktreeManager
 class HarnessRunner:
     def __init__(
         self,
-        agent: AgentAdapter,
         repo_path: str,
+        agent_factory: AgentFactory | None = None,
+        stage_configs: dict[str, StageAgentConfig] | None = None,
+        agent: AgentAdapter | None = None,
         max_retries: int = 3,
         retryable_stages: list[str] | None = None,
         event_manager: PipelineEventManager | None = None,
     ) -> None:
-        self.agent = agent
+        if agent_factory is None and agent is not None:
+            _fallback = agent
+            agent_factory = AgentFactory()
+            agent_factory.create = lambda **kwargs: _fallback
+        self.agent_factory = agent_factory or AgentFactory()
+        self.stage_configs = stage_configs or {}
         self.repo_path = repo_path
         self.max_retries = max_retries
         self.retryable_stages = retryable_stages or [
@@ -39,6 +47,12 @@ class HarnessRunner:
         self.context_assembler = ContextAssembler(repo_path)
         self.event_manager = event_manager or PipelineEventManager()
         self.worktree_manager = WorktreeManager(repo_path)
+
+    def resolve_agent(self, stage: Stage) -> AgentAdapter:
+        config = self.stage_configs.get(stage.value)
+        if config:
+            return self.agent_factory.create(cli=config.cli, model=config.model)
+        return self.agent_factory.create()
 
     async def run_stage_with_retries(
         self,
@@ -76,7 +90,7 @@ class HarnessRunner:
             )
 
             started = datetime.datetime.now()
-            agent_result: AgentResult = await self.agent.run(prompt, context)
+            agent_result: AgentResult = await self.resolve_agent(stage).run(prompt, context)
             finished = datetime.datetime.now()
 
             passed = agent_result.exit_code == 0
@@ -158,7 +172,7 @@ class HarnessRunner:
             duration_ms = 0
 
             try:
-                async for event in self.agent.run_streaming(prompt, context):
+                async for event in self.resolve_agent(stage).run_streaming(prompt, context):
                     await db.save_agent_event(issue.id, event)
                     await em.publish(issue.id, event)
 
