@@ -1,0 +1,11 @@
+services:
+  superseded:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - superseded-data:/app/.superseded
+    restart: unless-stopped
+
+volumes:
+  superseded-data:
