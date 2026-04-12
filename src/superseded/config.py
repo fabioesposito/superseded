@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class RepoEntry(BaseModel):
     path: str
+    git_url: str = ""
     branch: str = ""
 
 
@@ -33,3 +34,13 @@ def load_config(repo_path: Path) -> SupersededConfig:
             overrides = yaml.safe_load(f) or {}
     overrides.setdefault("repo_path", str(repo_path))
     return SupersededConfig(**overrides)
+
+
+def save_config(config: SupersededConfig, repo_path: Path) -> None:
+    config_file = repo_path / ".superseded" / "config.yaml"
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    data = config.model_dump(exclude={"repo_path"})
+    defaults = SupersededConfig().model_dump()
+    data = {k: v for k, v in data.items() if v != defaults.get(k)}
+    with open(config_file, "w") as f:
+        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
