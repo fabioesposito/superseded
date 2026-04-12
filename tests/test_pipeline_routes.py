@@ -221,3 +221,57 @@ async def test_pipeline_events_sse():
                 pass  # acceptable - endpoint may not emit immediately
 
         await db.close()
+
+
+async def test_advance_issue_invalid_id(tmp_repo):
+    mock_runner = AsyncMock()
+    app, db = await _make_app_with_executor(tmp_repo, mock_runner)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post("/pipeline/issues/INVALID/advance", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+
+    await db.close()
+
+
+async def test_retry_issue_invalid_id(tmp_repo):
+    mock_runner = AsyncMock()
+    app, db = await _make_app_with_executor(tmp_repo, mock_runner)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post("/pipeline/issues/NOT-VALID/retry", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+
+    await db.close()
+
+
+async def test_historical_events_invalid_id(tmp_repo):
+    mock_runner = AsyncMock()
+    app, db = await _make_app_with_executor(tmp_repo, mock_runner)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/pipeline/issues/bad-id/events", follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+
+    await db.close()
+
+
+async def test_stream_events_invalid_id(tmp_repo):
+    mock_runner = AsyncMock()
+    app, db = await _make_app_with_executor(tmp_repo, mock_runner)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get(
+            "/pipeline/issues/xss-attempt/events/stream", follow_redirects=False
+        )
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+
+    await db.close()

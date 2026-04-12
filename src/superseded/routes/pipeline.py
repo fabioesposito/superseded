@@ -17,6 +17,7 @@ from superseded.routes import get_templates
 from superseded.routes.deps import Deps, get_deps
 from superseded.tickets.reader import list_issues
 from superseded.tickets.writer import update_issue_status
+from superseded.validation import InvalidInputError, validate_issue_id
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,10 @@ async def _run_and_advance(deps: Deps, issue_id: str, stage: Stage) -> RedirectR
 
 @router.post("/issues/{issue_id}/advance")
 async def advance_issue(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return RedirectResponse(url="/", status_code=303)
     issue = _find_issue(deps, issue_id)
     if issue is None:
         return RedirectResponse(url="/", status_code=303)
@@ -71,6 +76,10 @@ async def advance_issue(request: Request, issue_id: str, deps: Deps = Depends(ge
 
 @router.post("/issues/{issue_id}/retry")
 async def retry_issue(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return RedirectResponse(url="/", status_code=303)
     issue = _find_issue(deps, issue_id)
     if issue is None:
         return RedirectResponse(url="/", status_code=303)
@@ -114,6 +123,10 @@ async def pipeline_events(request: Request, deps: Deps = Depends(get_deps)):
 
 @router.get("/issues/{issue_id}/events")
 async def get_historical_events(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return RedirectResponse(url="/", status_code=303)
     events = await deps.db.get_agent_events(issue_id)
     return events
 
@@ -121,6 +134,11 @@ async def get_historical_events(request: Request, issue_id: str, deps: Deps = De
 @router.get("/issues/{issue_id}/events/stream")
 async def stream_events(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
     from sse_starlette.sse import EventSourceResponse
+
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return RedirectResponse(url="/", status_code=303)
 
     event_manager = _get_event_manager(deps)
 
