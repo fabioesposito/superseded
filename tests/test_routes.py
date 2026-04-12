@@ -70,6 +70,8 @@ async def test_create_issue(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.get("/")
+        token = client.cookies.get("csrf_token", "")
         response = await client.post(
             "/issues/new",
             data={
@@ -78,6 +80,7 @@ async def test_create_issue(tmp_repo):
                 "labels": "frontend",
                 "assignee": "claude-code",
             },
+            headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
         assert response.status_code == 303

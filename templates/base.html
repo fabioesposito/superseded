@@ -8,6 +8,13 @@
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
     <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+    <meta name="csrf-token" content="{{ request.cookies.get('csrf_token', '') }}">
+    <script>
+    document.body.addEventListener('htmx:configRequest', function(evt) {
+        var token = document.querySelector('meta[name="csrf-token"]');
+        if (token) evt.detail.headers['X-CSRF-Token'] = token.content;
+    });
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">

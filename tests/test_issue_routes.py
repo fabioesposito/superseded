@@ -185,10 +185,16 @@ async def test_stage_detail_with_result(tmp_repo):
         assert resp.status_code == 200
 
 
+async def _get_csrf(client):
+    await client.get("/")
+    return client.cookies.get("csrf_token", "")
+
+
 async def test_create_issue_with_labels_and_repos(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _get_csrf(client)
         resp = await client.post(
             "/issues/new",
             data={
@@ -198,6 +204,7 @@ async def test_create_issue_with_labels_and_repos(tmp_repo):
                 "assignee": "claude-code",
                 "repos": "frontend,backend",
             },
+            headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
         assert resp.status_code == 303
@@ -228,9 +235,11 @@ async def test_import_github_issue_returns_form_partial(tmp_repo):
 
     with patch("superseded.routes.issues.fetch_github_issue", return_value=mock_issue):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            token = await _get_csrf(client)
             resp = await client.post(
                 "/issues/import",
                 data={"github_url": "https://github.com/owner/repo/issues/42"},
+                headers={"X-CSRF-Token": token},
             )
 
     assert resp.status_code == 200
@@ -247,9 +256,11 @@ async def test_import_github_issue_invalid_url(tmp_repo):
     await app.state.db.initialize()
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _get_csrf(client)
         resp = await client.post(
             "/issues/import",
             data={"github_url": "https://not-github.com/foo"},
+            headers={"X-CSRF-Token": token},
         )
 
     assert resp.status_code == 200
@@ -260,6 +271,7 @@ async def test_create_issue_saves_github_url(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _get_csrf(client)
         resp = await client.post(
             "/issues/new",
             data={
@@ -270,6 +282,7 @@ async def test_create_issue_saves_github_url(tmp_repo):
                 "repos": "",
                 "github_url": "https://github.com/owner/repo/issues/42",
             },
+            headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
         assert resp.status_code == 303

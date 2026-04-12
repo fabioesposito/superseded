@@ -24,9 +24,15 @@ async def _make_client(tmp_repo):
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test"), app
 
 
+async def _get_csrf(client):
+    await client.get("/")
+    return client.cookies.get("csrf_token", "")
+
+
 async def test_add_repo_valid(tmp_repo):
     client, _ = await _make_client(tmp_repo)
     async with client:
+        token = await _get_csrf(client)
         response = await client.post(
             "/settings/repos",
             data={
@@ -35,6 +41,7 @@ async def test_add_repo_valid(tmp_repo):
                 "path": "/tmp/test-repo",
                 "branch": "main",
             },
+            headers={"X-CSRF-Token": token},
         )
         assert response.status_code == 200
         assert "myrepo" in response.text
@@ -43,6 +50,7 @@ async def test_add_repo_valid(tmp_repo):
 async def test_add_repo_invalid_git_url(tmp_repo):
     client, _ = await _make_client(tmp_repo)
     async with client:
+        token = await _get_csrf(client)
         response = await client.post(
             "/settings/repos",
             data={
@@ -51,6 +59,7 @@ async def test_add_repo_invalid_git_url(tmp_repo):
                 "path": "/tmp/test-repo",
                 "branch": "",
             },
+            headers={"X-CSRF-Token": token},
         )
         assert response.status_code == 400
         assert "Invalid git URL" in response.text
@@ -59,6 +68,7 @@ async def test_add_repo_invalid_git_url(tmp_repo):
 async def test_add_repo_invalid_path(tmp_repo):
     client, _ = await _make_client(tmp_repo)
     async with client:
+        token = await _get_csrf(client)
         response = await client.post(
             "/settings/repos",
             data={
@@ -67,6 +77,7 @@ async def test_add_repo_invalid_path(tmp_repo):
                 "path": "relative/path",
                 "branch": "",
             },
+            headers={"X-CSRF-Token": token},
         )
         assert response.status_code == 400
         assert "absolute" in response.text
@@ -75,6 +86,7 @@ async def test_add_repo_invalid_path(tmp_repo):
 async def test_add_repo_path_traversal(tmp_repo):
     client, _ = await _make_client(tmp_repo)
     async with client:
+        token = await _get_csrf(client)
         response = await client.post(
             "/settings/repos",
             data={
@@ -83,6 +95,7 @@ async def test_add_repo_path_traversal(tmp_repo):
                 "path": "/foo/../../../etc",
                 "branch": "",
             },
+            headers={"X-CSRF-Token": token},
         )
         assert response.status_code == 400
         assert "traversal" in response.text
@@ -91,6 +104,7 @@ async def test_add_repo_path_traversal(tmp_repo):
 async def test_add_repo_empty_git_url_ok(tmp_repo):
     client, _ = await _make_client(tmp_repo)
     async with client:
+        token = await _get_csrf(client)
         response = await client.post(
             "/settings/repos",
             data={
@@ -99,6 +113,7 @@ async def test_add_repo_empty_git_url_ok(tmp_repo):
                 "path": "/tmp/test-repo",
                 "branch": "",
             },
+            headers={"X-CSRF-Token": token},
         )
         assert response.status_code == 200
         assert "nogit" in response.text

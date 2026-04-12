@@ -61,6 +61,11 @@ async def _make_app_with_executor(tmp_repo, mock_runner):
     return app, db
 
 
+async def _get_csrf(client):
+    await client.get("/")
+    return client.cookies.get("csrf_token", "")
+
+
 async def test_advance_issue_success(tmp_repo):
     mock_runner = AsyncMock()
     mock_runner.run_stage_with_retries.return_value = StageResult(
@@ -71,7 +76,12 @@ async def test_advance_issue_success(tmp_repo):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/pipeline/issues/SUP-001/advance", follow_redirects=False)
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/pipeline/issues/SUP-001/advance",
+            headers={"X-CSRF-Token": token},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
         assert "/issues/SUP-001" in resp.headers["location"]
 
@@ -84,7 +94,12 @@ async def test_advance_issue_not_found(tmp_repo):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/pipeline/issues/SUP-999/advance", follow_redirects=False)
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/pipeline/issues/SUP-999/advance",
+            headers={"X-CSRF-Token": token},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
         assert resp.headers["location"] == "/"
 
@@ -101,7 +116,12 @@ async def test_advance_issue_failure(tmp_repo):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/pipeline/issues/SUP-001/advance", follow_redirects=False)
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/pipeline/issues/SUP-001/advance",
+            headers={"X-CSRF-Token": token},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
 
     await db.close()
@@ -133,7 +153,12 @@ Ship it.
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/pipeline/issues/SUP-002/advance", follow_redirects=False)
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/pipeline/issues/SUP-002/advance",
+            headers={"X-CSRF-Token": token},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
 
     await db.close()
@@ -149,7 +174,12 @@ async def test_retry_issue_success(tmp_repo):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/pipeline/issues/SUP-001/retry", follow_redirects=False)
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/pipeline/issues/SUP-001/retry",
+            headers={"X-CSRF-Token": token},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
         assert "/issues/SUP-001" in resp.headers["location"]
 
@@ -166,7 +196,12 @@ async def test_retry_issue_failure_sets_paused(tmp_repo):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/pipeline/issues/SUP-001/retry", follow_redirects=False)
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/pipeline/issues/SUP-001/retry",
+            headers={"X-CSRF-Token": token},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
 
     await db.close()
@@ -178,7 +213,12 @@ async def test_retry_issue_not_found(tmp_repo):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/pipeline/issues/SUP-999/retry", follow_redirects=False)
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/pipeline/issues/SUP-999/retry",
+            headers={"X-CSRF-Token": token},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
         assert resp.headers["location"] == "/"
 
@@ -229,7 +269,12 @@ async def test_advance_issue_invalid_id(tmp_repo):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/pipeline/issues/INVALID/advance", follow_redirects=False)
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/pipeline/issues/INVALID/advance",
+            headers={"X-CSRF-Token": token},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
         assert resp.headers["location"] == "/"
 
@@ -242,7 +287,12 @@ async def test_retry_issue_invalid_id(tmp_repo):
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/pipeline/issues/NOT-VALID/retry", follow_redirects=False)
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/pipeline/issues/NOT-VALID/retry",
+            headers={"X-CSRF-Token": token},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
         assert resp.headers["location"] == "/"
 

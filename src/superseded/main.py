@@ -17,6 +17,7 @@ from superseded.pipeline.executor import StageExecutor
 from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.worktree import WorktreeManager
 from superseded.routes.auth import AuthMiddleware
+from superseded.routes.csrf import CsrfMiddleware
 from superseded.routes.dashboard import router as dashboard_router
 from superseded.routes.deps import PipelineState
 from superseded.routes.issues import router as issues_router
@@ -69,6 +70,7 @@ def create_app(
 
     app = FastAPI(title="Superseded", version="0.1.0", lifespan=lifespan)
     app.add_middleware(AuthMiddleware)
+    app.add_middleware(CsrfMiddleware)
 
     app.state.config = config
     if db is not None:
