@@ -35,6 +35,37 @@ def tmp_repo():
         yield str(repo)
 
 
+async def test_issue_detail_invalid_issue_id(tmp_repo):
+    app = create_app(repo_path=tmp_repo)
+    await app.state.db.initialize()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/issues/not-valid")
+        assert resp.status_code == 400
+        assert "Invalid issue ID" in resp.text
+
+
+async def test_issue_detail_invalid_issue_id_path_traversal(tmp_repo):
+    app = create_app(repo_path=tmp_repo)
+    await app.state.db.initialize()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/issues/..%2Fetc%2Fpasswd")
+        # FastAPI normalizes path traversal before routing, so this never
+        # reaches the handler — it's blocked at the routing layer as 404.
+        assert resp.status_code in (400, 404)
+
+
+async def test_stage_detail_invalid_issue_id(tmp_repo):
+    app = create_app(repo_path=tmp_repo)
+    await app.state.db.initialize()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/issues/abc123/stage/spec")
+        assert resp.status_code == 400
+        assert "Invalid issue ID" in resp.text
+
+
 async def test_issue_detail_not_found(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()

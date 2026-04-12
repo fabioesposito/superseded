@@ -13,6 +13,7 @@ from superseded.routes import get_templates
 from superseded.routes.deps import Deps, get_deps
 from superseded.tickets.reader import list_issues
 from superseded.tickets.writer import write_issue
+from superseded.validation import InvalidInputError, validate_issue_id
 
 router = APIRouter(prefix="/issues")
 
@@ -109,6 +110,20 @@ repos:
 
 @router.get("/{issue_id}", response_class=HTMLResponse)
 async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Invalid issue ID",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=400,
+        )
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
     if not matching:
@@ -151,6 +166,16 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
 async def stage_detail(
     request: Request, issue_id: str, stage_name: str, deps: Deps = Depends(get_deps)
 ):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return get_templates().TemplateResponse(
+            request,
+            "stage_detail.html",
+            {"issue": None, "stage": None, "error": "Invalid issue ID"},
+            status_code=400,
+        )
+
     try:
         stage = Stage(stage_name)
     except ValueError:
