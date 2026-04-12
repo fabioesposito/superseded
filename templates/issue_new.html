@@ -11,7 +11,7 @@
     <div class="mb-6 p-4 bg-shell-800/50 border border-shell-700/40 rounded-lg">
         <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Import from GitHub</label>
         <div class="flex gap-2">
-            <input type="text" name="github_url" form="import-form"
+            <input type="text" name="github_url" form="import-form" required
                 class="flex-1 bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
                 placeholder="https://github.com/owner/repo/issues/123"
                 value="{{ github_url or '' }}">
