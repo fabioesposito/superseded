@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from superseded.agents.claude_code import ClaudeCodeAdapter
@@ -82,6 +83,10 @@ def create_app(
     @app.get("/health")
     async def health():
         return {"status": "ok"}
+
+    @app.get("/metrics")
+    async def metrics_redirect():
+        return RedirectResponse(url="/pipeline/metrics")
 
     app.include_router(dashboard_router)
     app.include_router(issues_router)
