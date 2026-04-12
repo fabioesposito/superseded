@@ -10,5 +10,7 @@ class ClaudeCodeAdapter(SubprocessAgentAdapter):
             "--print",
             "--output-format",
             "text",
-            prompt,
         ]
+
+    def _get_stdin_data(self, prompt: str) -> bytes | None:
+        return prompt.encode("utf-8")

@@ -18,14 +18,16 @@ def test_claude_code_adapter_builds_command():
     cmd_parts = adapter._build_command("Write a plan for this feature.")
     assert "claude" in cmd_parts[0]
     assert "--print" in cmd_parts
-    assert "Write a plan for this feature." in cmd_parts
+    # Prompt is now passed via stdin, not CLI args
+    assert "Write a plan for this feature." not in cmd_parts
 
 
 def test_opencode_adapter_builds_command():
     adapter = OpenCodeAdapter()
     cmd_parts = adapter._build_command("Write a plan for this feature.")
     assert "opencode" in cmd_parts[0]
-    assert "Write a plan for this feature." in cmd_parts
+    # Prompt is now passed via stdin, not CLI args
+    assert "Write a plan for this feature." not in cmd_parts
 
 
 def test_adapter_protocol_enforced():
@@ -84,3 +86,19 @@ def test_opencode_uses_worktree_when_set():
     )
     adapter = OpenCodeAdapter()
     assert adapter._get_cwd(ctx) == "/tmp/repo/.superseded/worktrees/SUP-001"
+
+
+def test_prompt_not_in_argv():
+    """Prompt should be passed via stdin, not as a CLI argument."""
+    adapter = ClaudeCodeAdapter()
+    cmd = adapter._build_command("malicious; rm -rf /")
+    assert "malicious; rm -rf /" not in cmd
+    assert adapter._get_stdin_data("malicious; rm -rf /") == b"malicious; rm -rf /"
+
+
+def test_prompt_not_in_argv_opencode():
+    """Prompt should be passed via stdin for OpenCode too."""
+    adapter = OpenCodeAdapter()
+    cmd = adapter._build_command("malicious; rm -rf /")
+    assert "malicious; rm -rf /" not in cmd
+    assert adapter._get_stdin_data("malicious; rm -rf /") == b"malicious; rm -rf /"

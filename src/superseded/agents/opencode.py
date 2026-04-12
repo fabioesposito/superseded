@@ -8,5 +8,7 @@ class OpenCodeAdapter(SubprocessAgentAdapter):
         return [
             "opencode",
             "--non-interactive",
-            prompt,
         ]
+
+    def _get_stdin_data(self, prompt: str) -> bytes | None:
+        return prompt.encode("utf-8")
