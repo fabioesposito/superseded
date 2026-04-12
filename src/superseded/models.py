@@ -45,6 +45,7 @@ class Issue(BaseModel):
     labels: list[str] = Field(default_factory=list)
     filepath: str = ""
     repos: list[str] = Field(default_factory=list)
+    github_url: str = ""
 
     @classmethod
     def from_frontmatter(cls, content: str, filepath: str = "") -> Issue:
@@ -59,6 +60,7 @@ class Issue(BaseModel):
             labels=post.get("labels", []),
             filepath=filepath,
             repos=post.get("repos", []),
+            github_url=post.get("github_url", ""),
         )
 
     def next_stage(self) -> Stage | None:
