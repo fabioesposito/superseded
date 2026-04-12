@@ -113,3 +113,66 @@ def test_worktree_unknown_repo_raises():
     wm = WorktreeManager("/tmp/primary")
     with pytest.raises(ValueError, match="Unknown repo"):
         wm._get_repo_path("nonexistent")
+
+
+async def test_worktree_stash_if_dirty():
+    """stash_if_dirty stashes uncommitted changes."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        _init_git_repo(repo)
+        wm = WorktreeManager(str(repo))
+
+        # Modify tracked file to create dirty state
+        (repo / "README.md").write_text("modified content")
+
+        stash_ref = await wm.stash_if_dirty()
+        assert stash_ref is not None
+        assert "superseded" in stash_ref
+
+        # Working tree should be clean now
+        result = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=str(repo), capture_output=True, text=True
+        )
+        assert result.stdout.strip() == ""
+
+        await wm.pop_stash(stash_ref)
+
+
+async def test_worktree_stash_if_clean():
+    """stash_if_dirty returns None when working tree is clean."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        _init_git_repo(repo)
+        wm = WorktreeManager(str(repo))
+
+        stash_ref = await wm.stash_if_dirty()
+        assert stash_ref is None
+
+
+async def test_worktree_pop_stash_none_ref():
+    """pop_stash with None ref is a no-op."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        _init_git_repo(repo)
+        wm = WorktreeManager(str(repo))
+
+        # Should not raise
+        await wm.pop_stash(None)
+
+
+async def test_worktree_create_reuses_existing_branch():
+    """create falls back to existing branch if branch already exists."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        _init_git_repo(repo)
+        wm = WorktreeManager(str(repo))
+
+        # First create sets up the branch
+        path1 = await wm.create("SUP-001")
+        assert path1.exists()
+        await wm.cleanup("SUP-001")
+
+        # Second create should reuse the branch (the fallback path)
+        path2 = await wm.create("SUP-001")
+        assert path2.exists()
+        await wm.cleanup("SUP-001")
