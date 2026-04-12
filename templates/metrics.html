@@ -12,11 +12,11 @@
             <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Total Issues</h3>
             <p class="text-4xl font-bold text-shell-50">{{ metrics.total_issues }}</p>
         </div>
-        <div class="card rounded-xl p-6" style="border-left: 3px solid #d66b29;">
+        <div class="card rounded-xl p-6 card-accent-petal">
             <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Total Retries</h3>
             <p class="text-4xl font-bold text-petal-400">{{ metrics.total_retries }}</p>
         </div>
-        <div class="card rounded-xl p-6" style="border-left: 3px solid #5ca35d;">
+        <div class="card rounded-xl p-6 card-accent-olive">
             <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-3">Issues by Status</h3>
             {% for status, count in metrics.issues_by_status.items() %}
             <div class="flex justify-between text-sm py-1.5 border-b border-shell-800/40 last:border-0">

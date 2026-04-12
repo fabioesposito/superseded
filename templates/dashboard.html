@@ -21,8 +21,8 @@
         {% endfor %}
     </div>
 
-    <div class="card rounded-xl overflow-hidden">
-        <table class="w-full">
+    <div class="card rounded-xl overflow-x-auto">
+        <table class="w-full min-w-[640px]">
             <thead>
                 <tr class="border-b border-shell-700/50">
                     <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">ID</th>
@@ -32,11 +32,12 @@
                     <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Agent</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="issues-tbody">
                 {% for issue in issues %}
-                <tr class="border-t border-shell-800/40 hover:bg-shell-900/50 transition-colors group">
+                <tr class="border-t border-shell-800/40 hover:bg-shell-900/50 transition-colors group cursor-pointer"
+                    onclick="window.location='/issues/{{ issue.id }}'">
                     <td class="px-5 py-3.5">
-                        <a href="/issues/{{ issue.id }}" class="font-mono text-sm text-neon-400 hover:text-neon-300 transition-colors">{{ issue.id }}</a>
+                        <a href="/issues/{{ issue.id }}" class="font-mono text-sm text-neon-400 hover:text-neon-300 transition-colors" onclick="event.stopPropagation()">{{ issue.id }}</a>
                     </td>
                     <td class="px-5 py-3.5 text-shell-200 group-hover:text-shell-100 transition-colors">{{ issue.title }}</td>
                     <td class="px-5 py-3.5">
@@ -75,4 +76,59 @@
         </table>
     </div>
 </div>
+
+<div id="sse-status" class="fixed bottom-4 right-4 text-xs font-mono text-shell-600 opacity-0 transition-opacity duration-300"></div>
+
+<script>
+(function() {
+    var es = new EventSource('/pipeline/events');
+    var statusEl = document.getElementById('sse-status');
+
+    es.onopen = function() {
+        statusEl.textContent = '● live';
+        statusEl.className = 'fixed bottom-4 right-4 text-xs font-mono text-olive-600 transition-opacity duration-300';
+    };
+
+    es.addEventListener('update', function(e) {
+        statusEl.textContent = '● updated';
+        statusEl.className = 'fixed bottom-4 right-4 text-xs font-mono text-neon-500 transition-opacity duration-300';
+        setTimeout(function() {
+            statusEl.textContent = '● live';
+            statusEl.className = 'fixed bottom-4 right-4 text-xs font-mono text-olive-600 transition-opacity duration-300';
+        }, 2000);
+
+        var data = JSON.parse(e.data);
+        var tbody = document.getElementById('issues-tbody');
+        if (!tbody || !data.length) return;
+
+        var rows = tbody.querySelectorAll('tr[onclick]');
+        data.forEach(function(issue, i) {
+            if (i < rows.length) {
+                var stageSpan = rows[i].querySelector('td:nth-child(2) span');
+                if (stageSpan && issue.stage) {
+                    stageSpan.textContent = issue.stage;
+                }
+                var statusSpan = rows[i].querySelector('td:nth-child(4) span');
+                if (statusSpan && issue.status) {
+                    var statusText = statusSpan.querySelector('.w-1\\.5');
+                    if (statusText) {
+                        statusSpan.childNodes.forEach(function(n) {
+                            if (n.nodeType === 3 && n.textContent.trim()) {
+                                n.textContent = '\n                            ' + issue.status + '\n                        ';
+                            }
+                        });
+                    }
+                }
+            }
+        });
+    });
+
+    es.onerror = function() {
+        statusEl.textContent = '● disconnected';
+        statusEl.className = 'fixed bottom-4 right-4 text-xs font-mono text-coral-600 transition-opacity duration-300';
+    };
+
+    window.addEventListener('beforeunload', function() { es.close(); });
+})();
+</script>
 {% endblock %}

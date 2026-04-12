@@ -23,6 +23,26 @@
     </h1>
     <h2 class="text-lg text-shell-400 mb-8">{{ issue.title }}</h2>
 
+    {% set stage_order = ["spec", "plan", "build", "verify", "review", "ship"] %}
+    {% set current_idx = stage_order.index(stage.value) %}
+    <div class="flex items-center justify-between mb-6">
+        {% if current_idx > 0 %}
+        <a href="/issues/{{ issue.id }}/stage/{{ stage_order[current_idx - 1] }}"
+            class="text-sm text-shell-500 hover:text-neon-400 transition-colors inline-flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            {{ stage_order[current_idx - 1] }}
+        </a>
+        {% else %}<div></div>{% endif %}
+        <span class="text-xs font-mono text-shell-600">{{ current_idx + 1 }} / {{ stage_order | length }}</span>
+        {% if current_idx < stage_order | length - 1 %}
+        <a href="/issues/{{ issue.id }}/stage/{{ stage_order[current_idx + 1] }}"
+            class="text-sm text-shell-500 hover:text-neon-400 transition-colors inline-flex items-center gap-1.5">
+            {{ stage_order[current_idx + 1] }}
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
+        {% else %}<div></div>{% endif %}
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="card card-accent rounded-xl p-6">
             <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-4">Stage: {{ stage.value }}</h3>
@@ -36,11 +56,25 @@
                 {% endif %}
             </p>
             <div class="space-y-2.5">
-                <form action="/pipeline/issues/{{ issue.id }}/advance" method="post">
-                    <button type="submit" class="w-full btn-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold">Run Stage</button>
+                <form action="/pipeline/issues/{{ issue.id }}/advance" method="post"
+                    hx-post="/pipeline/issues/{{ issue.id }}/advance"
+                    hx-confirm="Run the {{ stage.value }} stage?">
+                    <button type="submit" class="w-full btn-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold relative">
+                        <span class="htmx-indicator absolute left-3">
+                            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        </span>
+                        Run Stage
+                    </button>
                 </form>
-                <form action="/pipeline/issues/{{ issue.id }}/retry" method="post">
-                    <button type="submit" class="w-full btn-secondary text-petal-400 hover:text-petal-300 px-4 py-2.5 rounded-lg text-sm font-semibold">Retry</button>
+                <form action="/pipeline/issues/{{ issue.id }}/retry" method="post"
+                    hx-post="/pipeline/issues/{{ issue.id }}/retry"
+                    hx-confirm="Retry the {{ stage.value }} stage?">
+                    <button type="submit" class="w-full btn-secondary text-petal-400 hover:text-petal-300 px-4 py-2.5 rounded-lg text-sm font-semibold relative">
+                        <span class="htmx-indicator absolute left-3">
+                            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        </span>
+                        Retry
+                    </button>
                 </form>
             </div>
         </div>
