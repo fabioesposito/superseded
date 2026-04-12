@@ -174,3 +174,52 @@ def test_codex_stdin():
     adapter = CodexAdapter()
     data = adapter._get_stdin_data("hello")
     assert data == b"hello"
+
+
+# --- AgentFactory tests ---
+
+from superseded.agents.factory import AgentFactory
+
+
+def test_factory_default():
+    factory = AgentFactory()
+    agent = factory.create()
+    assert isinstance(agent, ClaudeCodeAdapter)
+    assert agent.model == ""
+
+
+def test_factory_claude_with_model():
+    factory = AgentFactory()
+    agent = factory.create(cli="claude-code", model="claude-sonnet-4-20250514")
+    assert isinstance(agent, ClaudeCodeAdapter)
+    assert agent.model == "claude-sonnet-4-20250514"
+
+
+def test_factory_opencode():
+    factory = AgentFactory()
+    agent = factory.create(cli="opencode", model="gpt-4o")
+    assert isinstance(agent, OpenCodeAdapter)
+    assert agent.model == "gpt-4o"
+
+
+def test_factory_codex():
+    factory = AgentFactory()
+    agent = factory.create(cli="codex", model="o4-mini")
+    assert isinstance(agent, CodexAdapter)
+    assert agent.model == "o4-mini"
+
+
+def test_factory_custom_defaults():
+    factory = AgentFactory(default_agent="opencode", default_model="gpt-4o", timeout=300)
+    agent = factory.create()
+    assert isinstance(agent, OpenCodeAdapter)
+    assert agent.model == "gpt-4o"
+    assert agent.timeout == 300
+
+
+def test_factory_unknown_cli():
+    import pytest
+
+    factory = AgentFactory()
+    with pytest.raises(ValueError, match="Unknown agent CLI: bad"):
+        factory.create(cli="bad")
