@@ -223,3 +223,29 @@ async def test_import_github_issue_invalid_url(tmp_repo):
 
     assert resp.status_code == 200
     assert "Invalid GitHub issue URL" in resp.text
+
+
+async def test_create_issue_saves_github_url(tmp_repo):
+    app = create_app(repo_path=tmp_repo)
+    await app.state.db.initialize()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/issues/new",
+            data={
+                "title": "Imported issue",
+                "body": "From GitHub",
+                "labels": "bug",
+                "assignee": "",
+                "repos": "",
+                "github_url": "https://github.com/owner/repo/issues/42",
+            },
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+
+    issues_dir = Path(tmp_repo) / ".superseded" / "issues"
+    md_files = list(issues_dir.glob("*imported-issue*.md"))
+    assert len(md_files) == 1
+
+    content = md_files[0].read_text()
+    assert 'github_url: "https://github.com/owner/repo/issues/42"' in content

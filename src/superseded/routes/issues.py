@@ -59,6 +59,7 @@ async def create_issue(request: Request, deps: Deps = Depends(get_deps)):
     body = str(form.get("body", "")).strip()
     labels_str = str(form.get("labels", "")).strip()
     assignee = str(form.get("assignee", "")).strip()
+    github_url = str(form.get("github_url", "")).strip()
 
     labels = [l.strip() for l in labels_str.split(",") if l.strip()] if labels_str else []
 
@@ -74,6 +75,7 @@ async def create_issue(request: Request, deps: Deps = Depends(get_deps)):
 
     labels_yaml = "\n".join(f"  - {l}" for l in labels) if labels else "  []"
     repos_yaml = "\n".join(f"  - {r}" for r in repos) if repos else "  []"
+    github_url_line = f'github_url: "{github_url}"' if github_url else ""
     content = f"""---
 id: {issue_id}
 title: {title}
@@ -85,6 +87,7 @@ labels:
 {labels_yaml}
 repos:
 {repos_yaml}
+{github_url_line}
 ---
 
 {body}
