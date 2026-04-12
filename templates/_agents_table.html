@@ -1,0 +1,37 @@
+<div id="agents-config">
+  <h3>Pipeline Agents</h3>
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+  <form hx-post="/settings/agents" hx-target="#agents-config" hx-swap="outerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    <table>
+      <thead>
+        <tr>
+          <th>Stage</th>
+          <th>CLI</th>
+          <th>Model</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set stages = ['spec', 'plan', 'build', 'verify', 'review', 'ship'] %}
+        {% for stage in stages %}
+        <tr>
+          <td>{{ stage | capitalize }}</td>
+          <td>
+            <select name="{{ stage }}_cli">
+              <option value="claude-code" {% if stage_agents[stage].cli == 'claude-code' %}selected{% endif %}>Claude Code</option>
+              <option value="opencode" {% if stage_agents[stage].cli == 'opencode' %}selected{% endif %}>OpenCode</option>
+              <option value="codex" {% if stage_agents[stage].cli == 'codex' %}selected{% endif %}>Codex</option>
+            </select>
+          </td>
+          <td>
+            <input type="text" name="{{ stage }}_model" value="{{ stage_agents[stage].model | default('') }}" placeholder="e.g. claude-sonnet-4-20250514" />
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit">Save Agents</button>
+  </form>
+</div>

@@ -60,5 +60,9 @@
     </div>
 
     {% include "_repos_table.html" %}
+
+    {% if stage_agents is defined %}
+    {% include "_agents_table.html" %}
+    {% endif %}
 </div>
 {% endblock %}
