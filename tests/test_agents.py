@@ -1,5 +1,6 @@
 from superseded.agents.base import AgentAdapter
 from superseded.agents.claude_code import ClaudeCodeAdapter
+from superseded.agents.codex import CodexAdapter
 from superseded.agents.opencode import OpenCodeAdapter
 from superseded.models import AgentContext, AgentResult, Issue
 
@@ -150,9 +151,6 @@ def test_opencode_stdin():
     adapter = OpenCodeAdapter()
     data = adapter._get_stdin_data("hello")
     assert data == b"hello"
-
-
-from superseded.agents.codex import CodexAdapter
 
 
 def test_codex_no_model():
