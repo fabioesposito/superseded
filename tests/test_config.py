@@ -3,7 +3,7 @@ from pathlib import Path
 
 import yaml
 
-from superseded.config import RepoEntry, SupersededConfig, load_config
+from superseded.config import RepoEntry, StageAgentConfig, SupersededConfig, load_config
 
 
 def write_yaml_config(path: Path, data: dict):
@@ -83,3 +83,31 @@ def test_load_config_with_repos():
         config = load_config(Path(tmp))
         assert config.repos["frontend"].path == "/tmp/frontend"
         assert config.repos["backend"].branch == "main"
+
+
+def test_stage_agent_config_defaults():
+    cfg = StageAgentConfig()
+    assert cfg.cli == "claude-code"
+    assert cfg.model == ""
+
+
+def test_stage_agent_config_custom():
+    cfg = StageAgentConfig(cli="opencode", model="gpt-4o")
+    assert cfg.cli == "opencode"
+    assert cfg.model == "gpt-4o"
+
+
+def test_superseded_config_stages_default():
+    cfg = SupersededConfig()
+    assert cfg.stages == {}
+    assert cfg.default_model == ""
+
+
+def test_superseded_config_stages_populated():
+    cfg = SupersededConfig(
+        stages={
+            "build": StageAgentConfig(cli="opencode", model="gpt-4o"),
+        }
+    )
+    assert cfg.stages["build"].cli == "opencode"
+    assert cfg.stages["build"].model == "gpt-4o"

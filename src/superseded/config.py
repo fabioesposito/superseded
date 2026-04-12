@@ -6,6 +6,11 @@ import yaml
 from pydantic import BaseModel, Field
 
 
+class StageAgentConfig(BaseModel):
+    cli: str = "claude-code"
+    model: str = ""
+
+
 class RepoEntry(BaseModel):
     path: str
     git_url: str = ""
@@ -25,6 +30,8 @@ class SupersededConfig(BaseModel):
     max_retries: int = 3
     retryable_stages: list[str] = Field(default_factory=lambda: ["build", "verify", "review"])
     api_key: str = ""
+    default_model: str = ""
+    stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
 
 
 def load_config(repo_path: Path) -> SupersededConfig:
