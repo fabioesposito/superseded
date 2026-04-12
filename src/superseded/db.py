@@ -133,14 +133,12 @@ class Database:
 
     async def get_issue(self, issue_id: str) -> dict[str, Any] | None:
         assert self._conn
-        cursor = await self._conn.execute(
-            "SELECT * FROM issues WHERE id = ?", (issue_id,)
-        )
+        cursor = await self._conn.execute("SELECT * FROM issues WHERE id = ?", (issue_id,))
         row = await cursor.fetchone()
         if row is None:
             return None
         cols = [desc[0] for desc in cursor.description]
-        result = dict(zip(cols, row))
+        result = dict(zip(cols, row, strict=True))
         result["labels"] = json.loads(result["labels"])
         return result
 
@@ -151,14 +149,12 @@ class Database:
         cols = [desc[0] for desc in cursor.description]
         results = []
         for row in rows:
-            d = dict(zip(cols, row))
+            d = dict(zip(cols, row, strict=True))
             d["labels"] = json.loads(d["labels"])
             results.append(d)
         return results
 
-    async def update_issue_status(
-        self, issue_id: str, status: IssueStatus, stage: Stage
-    ) -> None:
+    async def update_issue_status(self, issue_id: str, status: IssueStatus, stage: Stage) -> None:
         assert self._conn
         await self._conn.execute(
             "UPDATE issues SET status=?, stage=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -205,7 +201,7 @@ class Database:
         cols = [desc[0] for desc in cursor.description]
         results = []
         for row in rows:
-            d = dict(zip(cols, row))
+            d = dict(zip(cols, row, strict=True))
             d["passed"] = bool(d["passed"])
             d["artifacts"] = json.loads(d["artifacts"])
             results.append(d)
@@ -247,7 +243,7 @@ class Database:
         cols = [desc[0] for desc in cursor.description]
         results = []
         for row in rows:
-            d = dict(zip(cols, row))
+            d = dict(zip(cols, row, strict=True))
             d["previous_errors"] = json.loads(d["previous_errors"])
             results.append(d)
         return results
@@ -295,7 +291,7 @@ class Database:
         cols = [desc[0] for desc in cursor.description]
         results = []
         for row in rows:
-            d = dict(zip(cols, row))
+            d = dict(zip(cols, row, strict=True))
             d["metadata"] = json.loads(d["metadata"])
             results.append(d)
         return results
@@ -315,9 +311,7 @@ class Database:
         )
         await self._conn.commit()
 
-    async def get_agent_events(
-        self, issue_id: str, limit: int = 200
-    ) -> list[dict[str, Any]]:
+    async def get_agent_events(self, issue_id: str, limit: int = 200) -> list[dict[str, Any]]:
         assert self._conn
         cursor = await self._conn.execute(
             "SELECT * FROM agent_events WHERE issue_id = ? ORDER BY id DESC LIMIT ?",
@@ -327,7 +321,7 @@ class Database:
         cols = [desc[0] for desc in cursor.description]
         results = []
         for row in rows:
-            d = dict(zip(cols, row))
+            d = dict(zip(cols, row, strict=True))
             d["metadata"] = json.loads(d["metadata"])
             results.append(d)
         return list(reversed(results))
@@ -342,7 +336,7 @@ class Database:
         cols = [desc[0] for desc in cursor.description]
         results = []
         for row in rows:
-            d = dict(zip(cols, row))
+            d = dict(zip(cols, row, strict=True))
             d["metadata"] = json.loads(d["metadata"])
             results.append(d)
         return list(reversed(results))

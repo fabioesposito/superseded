@@ -1,5 +1,5 @@
 from superseded.agents.base import SubprocessAgentAdapter
-from superseded.models import AgentContext, AgentEvent, Issue, Stage
+from superseded.models import AgentContext, Issue, Stage
 
 
 class EchoAdapter(SubprocessAgentAdapter):
@@ -59,7 +59,6 @@ async def test_run_streaming_includes_duration():
 
 
 async def test_run_streaming_timeout():
-    import asyncio
 
     class SlowAdapter(SubprocessAgentAdapter):
         def _build_command(self, prompt: str) -> list[str]:

@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from superseded.models import Issue, IssueStatus, Stage
+from superseded.models import Issue, Stage
 from superseded.routes.deps import Deps, get_deps
-from superseded.tickets.reader import read_issue, list_issues
-from superseded.tickets.writer import write_issue, update_issue_status
+from superseded.tickets.reader import list_issues
+from superseded.tickets.writer import write_issue
 
 router = APIRouter(prefix="/issues")
 
@@ -32,9 +32,7 @@ async def create_issue(request: Request, deps: Deps = Depends(get_deps)):
     labels_str = str(form.get("labels", "")).strip()
     assignee = str(form.get("assignee", "")).strip()
 
-    labels = (
-        [l.strip() for l in labels_str.split(",") if l.strip()] if labels_str else []
-    )
+    labels = [l.strip() for l in labels_str.split(",") if l.strip()] if labels_str else []
 
     repos_str = str(form.get("repos", "")).strip()
     repos = [r.strip() for r in repos_str.split(",") if r.strip()] if repos_str else []

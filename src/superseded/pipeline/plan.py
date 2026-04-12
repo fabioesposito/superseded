@@ -28,9 +28,7 @@ def write_plan(path: str, title: str, context: str, tasks: list[PlanTask]) -> No
     for i, task in enumerate(tasks, 1):
         lines.append(f"### Task {i}: {task.title}")
         lines.append(f"- **Description:** {task.description}")
-        criteria = (
-            "; ".join(task.acceptance_criteria) if task.acceptance_criteria else "none"
-        )
+        criteria = "; ".join(task.acceptance_criteria) if task.acceptance_criteria else "none"
         lines.append(f"- **Acceptance criteria:** {criteria}")
         lines.append(f"- **Verification:** {task.verification or 'none'}")
         deps = ", ".join(task.dependencies) if task.dependencies else "none"
@@ -53,9 +51,7 @@ def read_plan(path: str) -> Plan:
     context_match = re.search(r"^## Context\s*\n\n(.*?)(?=\n## )", content, re.DOTALL)
     context = context_match.group(1).strip() if context_match else ""
 
-    task_blocks = re.findall(
-        r"### Task \d+:\s*(.+?)\n((?:- \*\*.+?\n)+)", content, re.DOTALL
-    )
+    task_blocks = re.findall(r"### Task \d+:\s*(.+?)\n((?:- \*\*.+?\n)+)", content, re.DOTALL)
 
     tasks: list[PlanTask] = []
     for task_title, block in task_blocks:
@@ -73,11 +69,7 @@ def read_plan(path: str) -> Plan:
         )
 
         deps_str = deps_match.group(1).strip() if deps_match else "none"
-        deps = (
-            [d.strip() for d in deps_str.split(",") if d.strip()]
-            if deps_str != "none"
-            else []
-        )
+        deps = [d.strip() for d in deps_str.split(",") if d.strip()] if deps_str != "none" else []
 
         tasks.append(
             PlanTask(

@@ -7,7 +7,6 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-
 from fastapi.templating import Jinja2Templates
 
 from superseded.models import (
@@ -19,7 +18,6 @@ from superseded.models import (
 )
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.harness import HarnessRunner
-from superseded.pipeline.stages import STAGE_DEFINITIONS
 from superseded.pipeline.worktree import WorktreeManager
 from superseded.routes.deps import Deps, get_deps
 from superseded.tickets.reader import list_issues
@@ -69,9 +67,7 @@ async def _run_stage(deps: Deps, issue_id: str, stage: Stage) -> StageResult:
     else:
         worktree_manager = WorktreeManager(deps.config.repo_path)
 
-    artifacts_path = str(
-        Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id
-    )
+    artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
     Path(artifacts_path).mkdir(parents=True, exist_ok=True)
 
     needs_worktree = stage in (Stage.BUILD, Stage.VERIFY, Stage.REVIEW)
@@ -115,8 +111,7 @@ async def _run_stage(deps: Deps, issue_id: str, stage: Stage) -> StageResult:
             [
                 i
                 for i in existing_iterations
-                if i.get("stage") == stage.value
-                and i.get("repo", "primary") == effective_repo
+                if i.get("stage") == stage.value and i.get("repo", "primary") == effective_repo
             ]
         )
 
@@ -164,9 +159,7 @@ async def _run_stage(deps: Deps, issue_id: str, stage: Stage) -> StageResult:
 
 
 @router.post("/issues/{issue_id}/advance")
-async def advance_issue(
-    request: Request, issue_id: str, deps: Deps = Depends(get_deps)
-):
+async def advance_issue(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     issues = [i for i in list_issues(issues_dir) if i.id == issue_id]
     if not issues:
@@ -181,9 +174,7 @@ async def advance_issue(
             await deps.db.update_issue_status(issue_id, IssueStatus.DONE, Stage.SHIP)
             update_issue_status(issue.filepath, IssueStatus.DONE, Stage.SHIP)
         else:
-            await deps.db.update_issue_status(
-                issue_id, IssueStatus.IN_PROGRESS, next_stage
-            )
+            await deps.db.update_issue_status(issue_id, IssueStatus.IN_PROGRESS, next_stage)
             update_issue_status(issue.filepath, IssueStatus.IN_PROGRESS, next_stage)
 
     return RedirectResponse(url=f"/issues/{issue_id}", status_code=303)
@@ -205,9 +196,7 @@ async def retry_issue(request: Request, issue_id: str, deps: Deps = Depends(get_
             await deps.db.update_issue_status(issue_id, IssueStatus.DONE, Stage.SHIP)
             update_issue_status(issue.filepath, IssueStatus.DONE, Stage.SHIP)
         else:
-            await deps.db.update_issue_status(
-                issue_id, IssueStatus.IN_PROGRESS, next_stage
-            )
+            await deps.db.update_issue_status(issue_id, IssueStatus.IN_PROGRESS, next_stage)
             update_issue_status(issue.filepath, IssueStatus.IN_PROGRESS, next_stage)
     else:
         await deps.db.update_issue_status(issue_id, IssueStatus.PAUSED, issue.stage)
@@ -236,26 +225,20 @@ async def pipeline_events(request: Request, deps: Deps = Depends(get_deps)):
 
 
 @router.get("/issues/{issue_id}/events")
-async def get_historical_events(
-    request: Request, issue_id: str, deps: Deps = Depends(get_deps)
-):
+async def get_historical_events(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
     events = await deps.db.get_agent_events(issue_id)
     return events
 
 
 @router.get("/issues/{issue_id}/events/stream")
-async def stream_events(
-    request: Request, issue_id: str, deps: Deps = Depends(get_deps)
-):
+async def stream_events(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
     from sse_starlette.sse import EventSourceResponse
 
     async def event_generator():
         async for event in _event_manager.subscribe(issue_id):
             yield {
                 "event": event.event_type,
-                "data": json.dumps(
-                    {"content": event.content, "metadata": event.metadata}
-                ),
+                "data": json.dumps({"content": event.content, "metadata": event.metadata}),
             }
         yield {"event": "done", "data": "{}"}
 
@@ -281,8 +264,7 @@ async def get_metrics(request: Request, deps: Deps = Depends(get_deps)):
         stage_attempts.setdefault(r["stage"], []).append(r["passed"])
 
     success_rates = {
-        stage: sum(1 for p in passes if p) / len(passes)
-        for stage, passes in stage_attempts.items()
+        stage: sum(1 for p in passes if p) / len(passes) for stage, passes in stage_attempts.items()
     }
 
     all_iterations = []

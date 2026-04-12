@@ -9,7 +9,6 @@ from superseded.db import Database
 from superseded.models import (
     AgentContext,
     AgentResult,
-    HarnessIteration,
     Issue,
     SessionTurn,
     Stage,

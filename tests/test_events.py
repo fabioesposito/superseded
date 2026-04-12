@@ -39,7 +39,7 @@ async def test_publish_to_nonexistent_raises():
     event = AgentEvent(event_type="stdout", content="hello", stage=Stage.BUILD)
     try:
         await manager.publish("SUP-999", event)
-        assert False, "Should have raised"
+        raise AssertionError("Should have raised")
     except KeyError:
         pass
 

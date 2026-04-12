@@ -2,10 +2,9 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from superseded.main import create_app
-
 
 SAMPLE_TICKET = """---
 id: SUP-001
@@ -34,9 +33,7 @@ def tmp_repo():
 async def test_dashboard_loads(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")
         assert response.status_code == 200
         assert "Superseded" in response.text
@@ -45,9 +42,7 @@ async def test_dashboard_loads(tmp_repo):
 async def test_dashboard_shows_issues(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")
         assert response.status_code == 200
         assert "SUP-001" in response.text
@@ -56,9 +51,7 @@ async def test_dashboard_shows_issues(tmp_repo):
 async def test_issue_detail_page(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/issues/SUP-001")
         assert response.status_code == 200
         assert "SUP-001" in response.text
@@ -67,9 +60,7 @@ async def test_issue_detail_page(tmp_repo):
 async def test_new_issue_form(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/issues/new")
         assert response.status_code == 200
         assert "New Issue" in response.text
@@ -78,9 +69,7 @@ async def test_new_issue_form(tmp_repo):
 async def test_create_issue(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/issues/new",
             data={
@@ -125,10 +114,10 @@ def tmp_multi_repo():
 async def test_run_stage_multi_repo_fans_out(tmp_multi_repo):
     from unittest.mock import AsyncMock, patch
 
-    from superseded.config import RepoEntry, SupersededConfig
+    from superseded.config import SupersededConfig
     from superseded.models import Stage, StageResult
-    from superseded.routes.pipeline import _run_stage
     from superseded.routes.deps import Deps
+    from superseded.routes.pipeline import _run_stage
 
     app = create_app(repo_path=tmp_multi_repo)
     await app.state.db.initialize()
@@ -159,8 +148,8 @@ async def test_run_stage_single_repo_backward_compat(tmp_multi_repo):
     from unittest.mock import AsyncMock, patch
 
     from superseded.models import Stage, StageResult
-    from superseded.routes.pipeline import _run_stage
     from superseded.routes.deps import Deps
+    from superseded.routes.pipeline import _run_stage
 
     app = create_app(repo_path=tmp_multi_repo)
     await app.state.db.initialize()

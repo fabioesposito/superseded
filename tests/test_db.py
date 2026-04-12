@@ -83,9 +83,7 @@ async def test_db_harness_iterations():
             stage=Stage.BUILD,
             previous_errors=[],
         )
-        await db.save_harness_iteration(
-            "SUP-100", iteration, exit_code=0, output="ok", error=""
-        )
+        await db.save_harness_iteration("SUP-100", iteration, exit_code=0, output="ok", error="")
 
         iterations = await db.get_harness_iterations("SUP-100")
         assert len(iterations) == 1

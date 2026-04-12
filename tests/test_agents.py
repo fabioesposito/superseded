@@ -1,4 +1,4 @@
-from superseded.agents.base import AgentAdapter, SubprocessAgentAdapter
+from superseded.agents.base import AgentAdapter
 from superseded.agents.claude_code import ClaudeCodeAdapter
 from superseded.agents.opencode import OpenCodeAdapter
 from superseded.models import AgentContext, AgentResult, Issue
@@ -7,9 +7,7 @@ from superseded.models import AgentContext, AgentResult, Issue
 def _make_context(tmp: str) -> AgentContext:
     return AgentContext(
         repo_path=tmp,
-        issue=Issue(
-            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
-        ),
+        issue=Issue(id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"),
         skill_prompt="Write a plan for this feature.",
         artifacts_path=".superseded/artifacts/SUP-001",
     )
@@ -56,9 +54,7 @@ def test_agent_result_model():
 def test_claude_code_uses_worktree_when_set():
     ctx = AgentContext(
         repo_path="/tmp/repo",
-        issue=Issue(
-            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
-        ),
+        issue=Issue(id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"),
         skill_prompt="Build this",
         artifacts_path=".superseded/artifacts/SUP-001",
         worktree_path="/tmp/repo/.superseded/worktrees/SUP-001",
@@ -70,9 +66,7 @@ def test_claude_code_uses_worktree_when_set():
 def test_claude_code_uses_repo_when_no_worktree():
     ctx = AgentContext(
         repo_path="/tmp/repo",
-        issue=Issue(
-            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
-        ),
+        issue=Issue(id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"),
         skill_prompt="Build this",
         artifacts_path=".superseded/artifacts/SUP-001",
     )
@@ -83,9 +77,7 @@ def test_claude_code_uses_repo_when_no_worktree():
 def test_opencode_uses_worktree_when_set():
     ctx = AgentContext(
         repo_path="/tmp/repo",
-        issue=Issue(
-            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
-        ),
+        issue=Issue(id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"),
         skill_prompt="Build this",
         artifacts_path=".superseded/artifacts/SUP-001",
         worktree_path="/tmp/repo/.superseded/worktrees/SUP-001",

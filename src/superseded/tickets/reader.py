@@ -4,7 +4,7 @@ from pathlib import Path
 
 import frontmatter
 
-from superseded.models import Issue, Stage, IssueStatus
+from superseded.models import Issue, IssueStatus, Stage
 
 
 def read_issue(filepath: str) -> Issue:

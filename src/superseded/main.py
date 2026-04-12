@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-
-import logging
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -60,15 +59,9 @@ def create_app(
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(
-        description="Superseded - local-first agentic pipeline tool"
-    )
-    parser.add_argument(
-        "repo_path", nargs="?", default=".", help="Path to the git repository"
-    )
-    parser.add_argument(
-        "--port", type=int, default=None, help="Port to run the server on"
-    )
+    parser = argparse.ArgumentParser(description="Superseded - local-first agentic pipeline tool")
+    parser.add_argument("repo_path", nargs="?", default=".", help="Path to the git repository")
+    parser.add_argument("--port", type=int, default=None, help="Port to run the server on")
     parser.add_argument("--host", type=str, default=None, help="Host to bind to")
     args = parser.parse_args()
 
@@ -78,6 +71,4 @@ def cli() -> None:
 
     import uvicorn
 
-    uvicorn.run(
-        f"superseded.main:create_app", host=host, port=port, factory=True, reload=False
-    )
+    uvicorn.run("superseded.main:create_app", host=host, port=port, factory=True, reload=False)

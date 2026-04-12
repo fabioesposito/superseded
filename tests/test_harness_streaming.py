@@ -25,9 +25,7 @@ async def test_streaming_saves_session_turns():
         mock_agent = AsyncMock()
 
         async def fake_stream(prompt, context):
-            yield AgentEvent(
-                event_type="stdout", content="building...", stage=Stage.BUILD
-            )
+            yield AgentEvent(event_type="stdout", content="building...", stage=Stage.BUILD)
             yield AgentEvent(
                 event_type="status",
                 content="",
@@ -208,7 +206,7 @@ async def test_streaming_truncates_long_output():
         )
 
         turns = await db.get_session_turns("SUP-001")
-        assistant_turn = [t for t in turns if t["role"] == "assistant"][0]
+        assistant_turn = next(t for t in turns if t["role"] == "assistant")
         assert len(assistant_turn["content"]) <= 2000
 
         await db.close()

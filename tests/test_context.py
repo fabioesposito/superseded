@@ -86,9 +86,7 @@ def test_context_assembler_docs_index():
     with tempfile.TemporaryDirectory() as tmp:
         docs_dir = Path(tmp) / "docs"
         docs_dir.mkdir()
-        (docs_dir / "ARCHITECTURE.md").write_text(
-            "# Architecture\nSystem design overview."
-        )
+        (docs_dir / "ARCHITECTURE.md").write_text("# Architecture\nSystem design overview.")
         (docs_dir / "DESIGN.md").write_text("# Design\nKey design decisions.")
         assembler = ContextAssembler(repo_path=tmp)
         prompt = assembler.build(

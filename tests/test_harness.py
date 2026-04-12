@@ -38,9 +38,7 @@ async def test_harness_retries_on_failure():
 
 async def test_harness_stops_after_max_retries():
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(
-        exit_code=1, stdout="", stderr="persistent failure"
-    )
+    mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="persistent failure")
 
     runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=2)
     with tempfile.TemporaryDirectory() as tmp:
@@ -59,9 +57,7 @@ async def test_harness_stops_after_max_retries():
 
 async def test_harness_passes_on_first_try():
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(
-        exit_code=0, stdout="spec written", stderr=""
-    )
+    mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec written", stderr="")
 
     runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=3)
     with tempfile.TemporaryDirectory() as tmp:
@@ -79,9 +75,7 @@ async def test_harness_passes_on_first_try():
 
 async def test_harness_non_retryable_stage_no_retry():
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(
-        exit_code=1, stdout="", stderr="ship failed"
-    )
+    mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="ship failed")
 
     runner = HarnessRunner(
         agent=mock_agent,
@@ -105,9 +99,7 @@ async def test_harness_non_retryable_stage_no_retry():
 async def test_harness_multi_repo_fan_out():
     """run_stage_multi_repo runs once per target repo."""
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(
-        exit_code=0, stdout="build succeeded", stderr=""
-    )
+    mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
 
     runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=1)
 
@@ -139,9 +131,7 @@ async def test_harness_multi_repo_fan_out():
 async def test_harness_multi_repo_single_repo_fallback():
     """run_stage_multi_repo falls back to single-repo when issue.repos is empty."""
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(
-        exit_code=0, stdout="build succeeded", stderr=""
-    )
+    mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
 
     runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=1)
 

@@ -1,6 +1,6 @@
-from unittest.mock import AsyncMock
 import tempfile
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 from superseded.models import (
     AgentResult,
@@ -8,8 +8,8 @@ from superseded.models import (
     Stage,
 )
 from superseded.pipeline.harness import HarnessRunner
-from superseded.pipeline.stages import STAGE_DEFINITIONS
 from superseded.pipeline.prompts import get_prompt_for_stage
+from superseded.pipeline.stages import STAGE_DEFINITIONS
 
 
 def test_stage_definitions_exist():
@@ -49,9 +49,7 @@ def test_stage_order():
 
 async def test_harness_processes_stage():
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(
-        exit_code=0, stdout="spec written", stderr=""
-    )
+    mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec written", stderr="")
 
     runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo")
 
@@ -63,9 +61,7 @@ async def test_harness_processes_stage():
     with tempfile.TemporaryDirectory() as tmp:
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
-        result = await runner.run_stage_with_retries(
-            issue, Stage.SPEC, str(artifacts_path)
-        )
+        result = await runner.run_stage_with_retries(issue, Stage.SPEC, str(artifacts_path))
 
     assert result.passed is True
     assert result.stage == Stage.SPEC
@@ -74,9 +70,7 @@ async def test_harness_processes_stage():
 
 async def test_harness_halts_on_failure():
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(
-        exit_code=1, stdout="", stderr="agent crashed"
-    )
+    mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="agent crashed")
 
     runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=1)
 
@@ -88,9 +82,7 @@ async def test_harness_halts_on_failure():
     with tempfile.TemporaryDirectory() as tmp:
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
-        result = await runner.run_stage_with_retries(
-            issue, Stage.BUILD, str(artifacts_path)
-        )
+        result = await runner.run_stage_with_retries(issue, Stage.BUILD, str(artifacts_path))
 
     assert result.passed is False
     assert "agent crashed" in result.error
@@ -98,16 +90,11 @@ async def test_harness_halts_on_failure():
 
 def test_prompts_contain_agent_skills_content():
     spec_prompt = get_prompt_for_stage(Stage.SPEC)
-    assert (
-        "spec-driven-development" in spec_prompt.lower()
-        or "objective" in spec_prompt.lower()
-    )
+    assert "spec-driven-development" in spec_prompt.lower() or "objective" in spec_prompt.lower()
     assert "boundaries" in spec_prompt.lower()
 
     plan_prompt = get_prompt_for_stage(Stage.PLAN)
-    assert (
-        "task" in plan_prompt.lower() and "acceptance criteria" in plan_prompt.lower()
-    )
+    assert "task" in plan_prompt.lower() and "acceptance criteria" in plan_prompt.lower()
 
     build_prompt = get_prompt_for_stage(Stage.BUILD)
     assert "incremental" in build_prompt.lower() or "slice" in build_prompt.lower()
@@ -116,9 +103,7 @@ def test_prompts_contain_agent_skills_content():
     assert "test" in verify_prompt.lower() and "failing" in verify_prompt.lower()
 
     review_prompt = get_prompt_for_stage(Stage.REVIEW)
-    assert (
-        "correctness" in review_prompt.lower() and "security" in review_prompt.lower()
-    )
+    assert "correctness" in review_prompt.lower() and "security" in review_prompt.lower()
 
     ship_prompt = get_prompt_for_stage(Stage.SHIP)
     assert "commit" in ship_prompt.lower() and "atomic" in ship_prompt.lower()

@@ -14,9 +14,7 @@ def _init_git_repo(path: Path) -> None:
         cwd=str(path),
         capture_output=True,
     )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"], cwd=str(path), capture_output=True
-    )
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=str(path), capture_output=True)
     (path / "README.md").write_text("test")
     subprocess.run(["git", "add", "."], cwd=str(path), capture_output=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=str(path), capture_output=True)

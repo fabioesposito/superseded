@@ -36,7 +36,5 @@ STAGE_DEFINITIONS: list[StageDefinition] = [
         "Review code quality and security",
         "code-review-and-quality",
     ),
-    StageDefinition(
-        Stage.SHIP, "Ship", "Commit and create PR", "git-workflow-and-versioning"
-    ),
+    StageDefinition(Stage.SHIP, "Ship", "Commit and create PR", "git-workflow-and-versioning"),
 ]

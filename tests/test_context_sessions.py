@@ -26,9 +26,7 @@ async def test_session_history_layer_included():
 
         await db.save_session_turn(
             "SUP-001",
-            SessionTurn(
-                role="user", content="spec prompt", stage=Stage.SPEC, attempt=0
-            ),
+            SessionTurn(role="user", content="spec prompt", stage=Stage.SPEC, attempt=0),
         )
         await db.save_session_turn(
             "SUP-001",
@@ -66,9 +64,7 @@ async def test_session_history_excludes_current_stage():
 
         await db.save_session_turn(
             "SUP-002",
-            SessionTurn(
-                role="user", content="build prompt", stage=Stage.BUILD, attempt=0
-            ),
+            SessionTurn(role="user", content="build prompt", stage=Stage.BUILD, attempt=0),
         )
 
         assembler = ContextAssembler(tmp)

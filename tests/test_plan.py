@@ -1,8 +1,7 @@
 import tempfile
 from pathlib import Path
 
-from superseded.pipeline.plan import PlanTask, write_plan, read_plan
-
+from superseded.pipeline.plan import PlanTask, read_plan, write_plan
 
 SAMPLE_PLAN = """# Plan: Add rate limiting
 

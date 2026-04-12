@@ -32,9 +32,7 @@ class WorktreeManager:
             return f"issue/{issue_id}/{repo}"
         return f"issue/{issue_id}"
 
-    async def _run_git(
-        self, *args: str, cwd: str | None = None
-    ) -> asyncio.subprocess.Process:
+    async def _run_git(self, *args: str, cwd: str | None = None) -> asyncio.subprocess.Process:
         proc = await asyncio.create_subprocess_exec(
             "git",
             *args,

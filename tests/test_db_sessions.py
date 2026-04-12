@@ -42,21 +42,15 @@ async def test_get_session_turns_filters_by_stage():
 
         await db.save_session_turn(
             "SUP-002",
-            SessionTurn(
-                role="user", content="spec prompt", stage=Stage.SPEC, attempt=0
-            ),
+            SessionTurn(role="user", content="spec prompt", stage=Stage.SPEC, attempt=0),
         )
         await db.save_session_turn(
             "SUP-002",
-            SessionTurn(
-                role="assistant", content="spec output", stage=Stage.SPEC, attempt=0
-            ),
+            SessionTurn(role="assistant", content="spec output", stage=Stage.SPEC, attempt=0),
         )
         await db.save_session_turn(
             "SUP-002",
-            SessionTurn(
-                role="user", content="build prompt", stage=Stage.BUILD, attempt=0
-            ),
+            SessionTurn(role="user", content="build prompt", stage=Stage.BUILD, attempt=0),
         )
 
         spec_turns = await db.get_session_turns("SUP-002", stage=Stage.SPEC)

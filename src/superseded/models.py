@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import datetime
-from enum import Enum
-from pathlib import Path
+from enum import StrEnum
 from typing import Any, Literal
 
 import frontmatter
 from pydantic import BaseModel, Field
 
 
-class IssueStatus(str, Enum):
+class IssueStatus(StrEnum):
     NEW = "new"
     IN_PROGRESS = "in-progress"
     PAUSED = "paused"
@@ -17,7 +16,7 @@ class IssueStatus(str, Enum):
     FAILED = "failed"
 
 
-class Stage(str, Enum):
+class Stage(StrEnum):
     SPEC = "spec"
     PLAN = "plan"
     BUILD = "build"
@@ -48,7 +47,7 @@ class Issue(BaseModel):
     repos: list[str] = Field(default_factory=list)
 
     @classmethod
-    def from_frontmatter(cls, content: str, filepath: str = "") -> "Issue":
+    def from_frontmatter(cls, content: str, filepath: str = "") -> Issue:
         post = frontmatter.loads(content)
         return cls(
             id=post.get("id", "SUP-000"),

@@ -42,9 +42,7 @@ class ContextAssembler:
         entries: list[str] = []
         for md_file in sorted(docs_dir.glob("**/*.md")):
             rel = md_file.relative_to(repo_path)
-            first_line = (
-                md_file.read_text(encoding="utf-8").split("\n")[0].strip("# ").strip()
-            )
+            first_line = md_file.read_text(encoding="utf-8").split("\n")[0].strip("# ").strip()
             entries.append(f"- {rel}: {first_line}")
         if not entries:
             return None
@@ -93,7 +91,7 @@ class ContextAssembler:
 
     def _run_async(self, coro: Any) -> Any:
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
             return asyncio.run(coro)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from superseded.models import HarnessIteration, AgentContext, Issue, Stage
+from superseded.models import AgentContext, HarnessIteration, Issue, Stage
 
 
 def test_harness_iteration_defaults():
@@ -26,9 +26,7 @@ def test_harness_iteration_with_errors():
 def test_agent_context_has_new_fields():
     ctx = AgentContext(
         repo_path="/tmp/repo",
-        issue=Issue(
-            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
-        ),
+        issue=Issue(id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"),
         skill_prompt="Build this",
         artifacts_path=".superseded/artifacts/SUP-001",
     )
@@ -40,9 +38,7 @@ def test_agent_context_has_new_fields():
 def test_agent_context_with_worktree():
     ctx = AgentContext(
         repo_path="/tmp/repo",
-        issue=Issue(
-            id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"
-        ),
+        issue=Issue(id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"),
         skill_prompt="Build this",
         artifacts_path=".superseded/artifacts/SUP-001",
         worktree_path="/tmp/repo/.superseded/worktrees/SUP-001",

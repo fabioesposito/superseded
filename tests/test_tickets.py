@@ -3,8 +3,7 @@ from pathlib import Path
 
 from superseded.models import IssueStatus, Stage
 from superseded.tickets.reader import list_issues, read_issue
-from superseded.tickets.writer import write_issue, update_issue_status
-
+from superseded.tickets.writer import update_issue_status, write_issue
 
 SAMPLE_TICKET = """---
 id: SUP-001
@@ -51,9 +50,7 @@ def test_list_issues():
         write_issue(str(issues_dir / "SUP-001-add-rate-limiting.md"), SAMPLE_TICKET)
         write_issue(
             str(issues_dir / "SUP-002-fix-bug.md"),
-            SAMPLE_TICKET.replace("SUP-001", "SUP-002").replace(
-                "Add rate limiting", "Fix bug"
-            ),
+            SAMPLE_TICKET.replace("SUP-001", "SUP-002").replace("Add rate limiting", "Fix bug"),
         )
 
         issues = list_issues(str(issues_dir))

@@ -18,6 +18,9 @@ Superseded is a local-first agentic pipeline tool. You write tickets (markdown s
 uv run pytest tests/ -v          # Run all tests
 uv run superseded                  # Start the server
 uv sync                            # Install dependencies
+uv run ruff check src/ tests/     # Lint
+uv run ruff format src/ tests/    # Format
+uv run ruff check --fix src/ tests/  # Lint + auto-fix
 npx playwright test                # Run Playwright browser tests (UI validation)
 ```
 
