@@ -102,3 +102,33 @@ def test_prompt_not_in_argv_opencode():
     cmd = adapter._build_command("malicious; rm -rf /")
     assert "malicious; rm -rf /" not in cmd
     assert adapter._get_stdin_data("malicious; rm -rf /") == b"malicious; rm -rf /"
+
+
+def test_claude_code_no_model():
+    adapter = ClaudeCodeAdapter()
+    cmd = adapter._build_command("test prompt")
+    assert cmd == ["claude", "--print", "--output-format", "text"]
+
+
+def test_claude_code_with_model():
+    adapter = ClaudeCodeAdapter(model="claude-sonnet-4-20250514")
+    cmd = adapter._build_command("test prompt")
+    assert cmd == [
+        "claude",
+        "--print",
+        "--output-format",
+        "text",
+        "--model",
+        "claude-sonnet-4-20250514",
+    ]
+
+
+def test_claude_code_with_timeout():
+    adapter = ClaudeCodeAdapter(timeout=300)
+    assert adapter.timeout == 300
+
+
+def test_claude_code_stdin():
+    adapter = ClaudeCodeAdapter()
+    data = adapter._get_stdin_data("hello")
+    assert data == b"hello"
