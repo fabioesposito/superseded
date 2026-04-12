@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
 from superseded.config import RepoEntry, SupersededConfig, save_config
-from superseded.main import _build_pipeline_state
 from superseded.routes import get_templates
 from superseded.routes.deps import Deps, get_deps
 
@@ -55,6 +54,8 @@ async def delete_repo(
 
 
 def _reload_pipeline(app, config: SupersededConfig) -> None:
+    from superseded.main import _build_pipeline_state
+
     app.state.config = config
     pipeline = _build_pipeline_state(config)
     pipeline.executor.db = app.state.db
