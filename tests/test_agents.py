@@ -132,3 +132,47 @@ def test_claude_code_stdin():
     adapter = ClaudeCodeAdapter()
     data = adapter._get_stdin_data("hello")
     assert data == b"hello"
+
+
+def test_opencode_no_model():
+    adapter = OpenCodeAdapter()
+    cmd = adapter._build_command("test prompt")
+    assert cmd == ["opencode", "--non-interactive"]
+
+
+def test_opencode_with_model():
+    adapter = OpenCodeAdapter(model="gpt-4o")
+    cmd = adapter._build_command("test prompt")
+    assert cmd == ["opencode", "--non-interactive", "--model", "gpt-4o"]
+
+
+def test_opencode_stdin():
+    adapter = OpenCodeAdapter()
+    data = adapter._get_stdin_data("hello")
+    assert data == b"hello"
+
+
+from superseded.agents.codex import CodexAdapter
+
+
+def test_codex_no_model():
+    adapter = CodexAdapter()
+    cmd = adapter._build_command("test prompt")
+    assert cmd == ["codex", "--quiet"]
+
+
+def test_codex_with_model():
+    adapter = CodexAdapter(model="o4-mini")
+    cmd = adapter._build_command("test prompt")
+    assert cmd == ["codex", "--quiet", "--model", "o4-mini"]
+
+
+def test_codex_with_timeout():
+    adapter = CodexAdapter(timeout=300)
+    assert adapter.timeout == 300
+
+
+def test_codex_stdin():
+    adapter = CodexAdapter()
+    data = adapter._get_stdin_data("hello")
+    assert data == b"hello"
