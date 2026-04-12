@@ -1,6 +1,7 @@
 from superseded.agents.base import AgentAdapter
 from superseded.agents.claude_code import ClaudeCodeAdapter
 from superseded.agents.codex import CodexAdapter
+from superseded.agents.factory import AgentFactory
 from superseded.agents.opencode import OpenCodeAdapter
 from superseded.models import AgentContext, AgentResult, Issue
 
@@ -177,8 +178,6 @@ def test_codex_stdin():
 
 
 # --- AgentFactory tests ---
-
-from superseded.agents.factory import AgentFactory
 
 
 def test_factory_default():
