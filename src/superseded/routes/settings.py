@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from superseded.config import RepoEntry, SupersededConfig, save_config
 from superseded.routes import get_templates
 from superseded.routes.deps import Deps, get_deps
+from superseded.validation import InvalidInputError, validate_git_url, validate_repo_path
 
 router = APIRouter()
 
@@ -34,6 +35,17 @@ async def add_repo(
     branch: str = Form(""),
 ):
     config = deps.config
+    try:
+        if git_url.strip():
+            git_url = validate_git_url(git_url)
+        path = validate_repo_path(path)
+    except InvalidInputError as e:
+        return get_templates().TemplateResponse(
+            request,
+            "_repos_table.html",
+            {"repos": config.repos, "error": str(e)},
+            status_code=400,
+        )
     config.repos[name] = RepoEntry(path=path, git_url=git_url, branch=branch)
     save_config(config, Path(config.repo_path))
     _reload_pipeline(request.app, config)

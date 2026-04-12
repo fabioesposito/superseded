@@ -1,4 +1,7 @@
 <div id="repos-table" class="card rounded-xl overflow-x-auto">
+    {% if error %}
+    <div class="px-5 py-3 text-sm text-coral-400 bg-coral-900/20 border-b border-coral-800/30">{{ error }}</div>
+    {% endif %}
     <table class="w-full min-w-[640px]">
         <thead>
             <tr class="border-b border-shell-700/50">
