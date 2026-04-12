@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from superseded.github import fetch_github_issue, format_description
 from superseded.models import Issue, Stage
 from superseded.routes import get_templates
 from superseded.routes.deps import Deps, get_deps
@@ -19,6 +20,36 @@ router = APIRouter(prefix="/issues")
 @router.get("/new", response_class=HTMLResponse)
 async def new_issue_form(request: Request, deps: Deps = Depends(get_deps)):
     return get_templates().TemplateResponse(request, "issue_new.html", {})
+
+
+@router.post("/import", response_class=HTMLResponse)
+async def import_github_issue(request: Request, deps: Deps = Depends(get_deps)):
+    form = await request.form()
+    github_url = str(form.get("github_url", "")).strip()
+
+    try:
+        gh_issue = await fetch_github_issue(github_url)
+    except (ValueError, RuntimeError) as e:
+        return get_templates().TemplateResponse(
+            request,
+            "issue_new.html",
+            {"error": str(e)},
+        )
+
+    description = format_description(gh_issue.body, gh_issue.comments)
+    labels_str = ", ".join(gh_issue.labels)
+
+    return get_templates().TemplateResponse(
+        request,
+        "issue_new.html",
+        {
+            "title": gh_issue.title,
+            "body": description,
+            "labels": labels_str,
+            "assignee": gh_issue.assignee,
+            "github_url": gh_issue.url,
+        },
+    )
 
 
 @router.post("/new", response_class=RedirectResponse)

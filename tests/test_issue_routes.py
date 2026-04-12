@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from superseded.github import GhComment, GhIssue
 from superseded.main import create_app
 from superseded.models import HarnessIteration, Issue, Stage, StageResult
 
@@ -176,3 +178,48 @@ async def test_health_endpoint(tmp_repo):
         resp = await client.get("/health")
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
+
+
+async def test_import_github_issue_returns_form_partial(tmp_repo):
+    app = create_app(repo_path=tmp_repo)
+    await app.state.db.initialize()
+
+    mock_issue = GhIssue(
+        title="Fix login bug",
+        body="The login page crashes.",
+        labels=["bug", "priority-high"],
+        assignee="claude-code",
+        comments=[
+            GhComment(author="alice", body="Reproduced.", created_at="2026-04-10T12:00:00Z"),
+        ],
+        url="https://github.com/owner/repo/issues/42",
+    )
+
+    with patch("superseded.routes.issues.fetch_github_issue", return_value=mock_issue):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/issues/import",
+                data={"github_url": "https://github.com/owner/repo/issues/42"},
+            )
+
+    assert resp.status_code == 200
+    assert "Fix login bug" in resp.text
+    assert "The login page crashes." in resp.text
+    assert "bug, priority-high" in resp.text
+    assert "claude-code" in resp.text
+    assert "@alice" in resp.text
+    assert "https://github.com/owner/repo/issues/42" in resp.text
+
+
+async def test_import_github_issue_invalid_url(tmp_repo):
+    app = create_app(repo_path=tmp_repo)
+    await app.state.db.initialize()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/issues/import",
+            data={"github_url": "https://not-github.com/foo"},
+        )
+
+    assert resp.status_code == 200
+    assert "Invalid GitHub issue URL" in resp.text

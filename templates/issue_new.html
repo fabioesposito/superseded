@@ -4,10 +4,14 @@
 <div class="animate-fade-in max-w-2xl">
     <h1 class="text-3xl font-bold text-shell-50 tracking-tight mb-8">New Issue</h1>
 
+    {% if error %}
+    <div class="mb-6 p-4 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-sm">{{ error }}</div>
+    {% endif %}
+
     <form action="/issues/new" method="post" class="space-y-5">
         <div>
             <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Title</label>
-            <input type="text" name="title" required
+            <input type="text" name="title" required value="{{ title or '' }}"
                 class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
                 placeholder="Brief description of the task">
         </div>
@@ -15,13 +19,19 @@
             <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Description</label>
             <textarea name="body" rows="10"
                 class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all font-mono text-sm"
-                placeholder="Detailed specification, requirements, acceptance criteria..."></textarea>
+                placeholder="Detailed specification, requirements, acceptance criteria...">{{ body or '' }}</textarea>
         </div>
         <div>
             <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Labels</label>
-            <input type="text" name="labels"
+            <input type="text" name="labels" value="{{ labels or '' }}"
                 class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
                 placeholder="bug, feature, enhancement">
+        </div>
+        <div>
+            <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">GitHub URL</label>
+            <input type="text" name="github_url" value="{{ github_url or '' }}"
+                class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
+                placeholder="https://github.com/owner/repo/issues/123">
         </div>
         <div>
             <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Target Repositories</label>
@@ -35,8 +45,8 @@
             <select name="assignee"
                 class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all appearance-none cursor-pointer">
                 <option value="">auto</option>
-                <option value="claude-code">claude-code</option>
-                <option value="opencode">opencode</option>
+                <option value="claude-code" {% if assignee == 'claude-code' %}selected{% endif %}>claude-code</option>
+                <option value="opencode" {% if assignee == 'opencode' %}selected{% endif %}>opencode</option>
             </select>
         </div>
         <div class="flex gap-3 pt-2">
