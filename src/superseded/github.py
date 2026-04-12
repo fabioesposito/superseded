@@ -27,7 +27,7 @@ GITHUB_ISSUE_URL_RE = re.compile(r"^https://github\.com/([^/]+)/([^/]+)/issues/(
 
 
 def parse_github_url(url: str) -> tuple[str, str, int]:
-    match = GITHUB_ISSUE_URL_RE.match(url.strip())
+    match = GITHUB_ISSUE_URL_RE.match(url.strip().rstrip("/"))
     if not match:
         raise ValueError(
             "Invalid GitHub issue URL. Expected: https://github.com/owner/repo/issues/123"
