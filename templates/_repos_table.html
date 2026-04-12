@@ -1,0 +1,40 @@
+<div id="repos-table" class="card rounded-xl overflow-x-auto">
+    <table class="w-full min-w-[640px]">
+        <thead>
+            <tr class="border-b border-shell-700/50">
+                <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Name</th>
+                <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Git URL</th>
+                <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Path</th>
+                <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Branch</th>
+                <th class="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-widest text-sand-500">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for name, entry in repos.items() %}
+            <tr class="border-t border-shell-800/40 hover:bg-shell-900/50 transition-colors group">
+                <td class="px-5 py-3.5 font-mono text-sm text-neon-400">{{ name }}</td>
+                <td class="px-5 py-3.5 text-shell-300 text-sm font-mono truncate max-w-[280px]">{{ entry.git_url or "\u2014" }}</td>
+                <td class="px-5 py-3.5 text-shell-400 text-sm font-mono truncate max-w-[240px]">{{ entry.path }}</td>
+                <td class="px-5 py-3.5 text-shell-400 text-sm">{{ entry.branch or "\u2014" }}</td>
+                <td class="px-5 py-3.5 text-right">
+                    <button hx-delete="/settings/repos/{{ name }}"
+                            hx-target="#repos-table"
+                            hx-swap="outerHTML"
+                            hx-confirm="Remove repo '{{ name }}'?"
+                            class="text-shell-600 hover:text-coral-400 transition-colors text-sm">
+                        Remove
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not repos %}
+            <tr>
+                <td colspan="5" class="px-5 py-16 text-center">
+                    <div class="text-shell-500 text-sm mb-3">No repositories configured</div>
+                    <p class="text-shell-600 text-xs">Click "Add Repo" to configure your first repository</p>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>

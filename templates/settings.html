@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Settings - Superseded{% endblock %}
+{% block content %}
+<div class="animate-fade-in" x-data="{ showAddForm: false }">
+    <div class="flex items-center justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-shell-50 tracking-tight">Settings</h1>
+            <p class="text-shell-500 text-sm mt-1">Manage repositories for the pipeline</p>
+        </div>
+        <button @click="showAddForm = !showAddForm"
+                class="btn-primary text-white px-5 py-2.5 rounded-lg text-sm font-semibold inline-flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            Add Repo
+        </button>
+    </div>
+
+    <div x-show="showAddForm" x-cloak
+         class="card rounded-xl p-6 mb-6 animate-fade-in"
+         x-data="{ name: '', git_url: '', path: '', branch: '' }">
+        <h2 class="text-lg font-semibold text-shell-100 mb-4">Add Repository</h2>
+        <form hx-post="/settings/repos"
+              hx-target="#repos-table"
+              hx-swap="outerHTML"
+              @htmx:after-request="showAddForm = false; $reset()">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Name</label>
+                    <input type="text" name="name" x-model="name" required
+                           class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                           placeholder="e.g. frontend">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Git URL</label>
+                    <input type="text" name="git_url" x-model="git_url"
+                           class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                           placeholder="https://github.com/org/repo.git">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Local Path</label>
+                    <input type="text" name="path" x-model="path" required
+                           class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                           placeholder="/path/to/repo">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Branch</label>
+                    <input type="text" name="branch" x-model="branch"
+                           class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                           placeholder="main">
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button type="submit" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    Save Repo
+                </button>
+                <button type="button" @click="showAddForm = false" class="btn-secondary text-shell-300 px-4 py-2 rounded-lg text-sm font-medium">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% include "_repos_table.html" %}
+</div>
+{% endblock %}
