@@ -213,7 +213,7 @@ class HarnessRunner:
             finished_at=datetime.datetime.now(),
         )
 
-    def _configure_repos(self, repos: dict[str, RepoEntry]) -> None:
+    def configure_repos(self, repos: dict[str, RepoEntry]) -> None:
         """Register named repos with worktree manager and context assembler."""
         for name, entry in repos.items():
             self.worktree_manager.register_repo(name, entry.path)

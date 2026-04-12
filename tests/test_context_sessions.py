@@ -38,12 +38,14 @@ async def test_session_history_layer_included():
             ),
         )
 
+        turns = await db.get_session_turns("SUP-001")
+
         assembler = ContextAssembler(tmp)
         result = assembler.build(
             stage=Stage.PLAN,
             issue=issue,
             artifacts_path="",
-            db=db,
+            session_turns=turns,
         )
 
         assert "Previous Session History" in result
@@ -67,12 +69,14 @@ async def test_session_history_excludes_current_stage():
             SessionTurn(role="user", content="build prompt", stage=Stage.BUILD, attempt=0),
         )
 
+        turns = await db.get_session_turns("SUP-002")
+
         assembler = ContextAssembler(tmp)
         result = assembler.build(
             stage=Stage.BUILD,
             issue=issue,
             artifacts_path="",
-            db=db,
+            session_turns=turns,
         )
 
         assert "Previous Session History" not in result
@@ -99,12 +103,14 @@ async def test_session_history_truncates_long_output():
             ),
         )
 
+        turns = await db.get_session_turns("SUP-003")
+
         assembler = ContextAssembler(tmp)
         result = assembler.build(
             stage=Stage.PLAN,
             issue=issue,
             artifacts_path="",
-            db=db,
+            session_turns=turns,
         )
 
         # Should be truncated to 2000 chars
@@ -114,7 +120,7 @@ async def test_session_history_truncates_long_output():
         await db.close()
 
 
-async def test_no_db_means_no_session_history():
+async def test_no_turns_means_no_session_history():
     with tempfile.TemporaryDirectory() as tmp:
         issue = Issue(id="SUP-004", title="Test", filepath="")
         assembler = ContextAssembler(tmp)
@@ -122,6 +128,6 @@ async def test_no_db_means_no_session_history():
             stage=Stage.PLAN,
             issue=issue,
             artifacts_path="",
-            db=None,
+            session_turns=None,
         )
         assert "Previous Session History" not in result

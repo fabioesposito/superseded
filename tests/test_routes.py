@@ -112,44 +112,51 @@ def tmp_multi_repo():
 
 
 async def test_run_stage_multi_repo_fans_out(tmp_multi_repo):
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock
 
-    from superseded.config import SupersededConfig
     from superseded.models import Stage, StageResult
-    from superseded.routes.deps import Deps
-    from superseded.routes.pipeline import _run_stage
+    from superseded.pipeline.executor import StageExecutor
+    from superseded.pipeline.worktree import WorktreeManager
 
     app = create_app(repo_path=tmp_multi_repo)
     await app.state.db.initialize()
 
-    config = SupersededConfig(repo_path=tmp_multi_repo)
-    deps = Deps(config=config, db=app.state.db)
-
     mock_result = StageResult(stage=Stage.SPEC, passed=True, output="ok")
+    mock_runner = AsyncMock()
+    mock_runner.run_stage_with_retries.return_value = mock_result
 
-    with patch("superseded.routes.pipeline._get_harness_runner") as mock_get_runner:
-        mock_runner = AsyncMock()
-        mock_runner.run_stage_with_retries.return_value = mock_result
-        mock_get_runner.return_value = mock_runner
+    worktree_manager = WorktreeManager(tmp_multi_repo)
+    executor = StageExecutor(
+        runner=mock_runner,
+        db=app.state.db,
+        worktree_manager=worktree_manager,
+    )
 
-        result = await _run_stage(deps, "SUP-002", Stage.SPEC)
+    issues_dir = Path(tmp_multi_repo) / ".superseded" / "issues"
+    from superseded.tickets.reader import list_issues
 
-        assert result.passed is True
-        assert "[frontend]" in result.output
-        assert "[backend]" in result.output
+    issues = list_issues(str(issues_dir))
+    issue = issues[0]
 
-        calls = mock_runner.run_stage_with_retries.call_args_list
-        assert len(calls) == 2
-        repos_called = {c.kwargs.get("repo") for c in calls}
-        assert repos_called == {"frontend", "backend"}
+    result = await executor.run_stage(issue, Stage.SPEC, app.state.config)
+
+    assert result.passed is True
+    assert "[frontend]" in result.output
+    assert "[backend]" in result.output
+
+    calls = mock_runner.run_stage_with_retries.call_args_list
+    assert len(calls) == 2
+    repos_called = {c.kwargs.get("repo") for c in calls}
+    assert repos_called == {"frontend", "backend"}
 
 
 async def test_run_stage_single_repo_backward_compat(tmp_multi_repo):
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import AsyncMock
 
     from superseded.models import Stage, StageResult
-    from superseded.routes.deps import Deps
-    from superseded.routes.pipeline import _run_stage
+    from superseded.pipeline.executor import StageExecutor
+    from superseded.pipeline.worktree import WorktreeManager
+    from superseded.tickets.reader import list_issues
 
     app = create_app(repo_path=tmp_multi_repo)
     await app.state.db.initialize()
@@ -170,23 +177,25 @@ Single repo body.
 """
     )
 
-    from superseded.config import SupersededConfig
-
-    config = SupersededConfig(repo_path=tmp_multi_repo)
-    deps = Deps(config=config, db=app.state.db)
-
     mock_result = StageResult(stage=Stage.SPEC, passed=True, output="ok")
+    mock_runner = AsyncMock()
+    mock_runner.run_stage_with_retries.return_value = mock_result
 
-    with patch("superseded.routes.pipeline._get_harness_runner") as mock_get_runner:
-        mock_runner = AsyncMock()
-        mock_runner.run_stage_with_retries.return_value = mock_result
-        mock_get_runner.return_value = mock_runner
+    worktree_manager = WorktreeManager(tmp_multi_repo)
+    executor = StageExecutor(
+        runner=mock_runner,
+        db=app.state.db,
+        worktree_manager=worktree_manager,
+    )
 
-        result = await _run_stage(deps, "SUP-003", Stage.SPEC)
+    issues = list_issues(str(issues_dir))
+    single_issue = next(i for i in issues if i.id == "SUP-003")
 
-        assert result.passed is True
-        assert "[primary]" in result.output
+    result = await executor.run_stage(single_issue, Stage.SPEC, app.state.config)
 
-        calls = mock_runner.run_stage_with_retries.call_args_list
-        assert len(calls) == 1
-        assert calls[0].kwargs.get("repo") is None
+    assert result.passed is True
+    assert "[primary]" in result.output
+
+    calls = mock_runner.run_stage_with_retries.call_args_list
+    assert len(calls) == 1
+    assert calls[0].kwargs.get("repo") is None

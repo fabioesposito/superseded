@@ -87,7 +87,7 @@ Add feature that spans frontend and backend.
 
         # Create harness runner and configure repos
         runner = HarnessRunner(agent=mock_agent, repo_path=str(primary), max_retries=1)
-        runner._configure_repos(config.repos)
+        runner.configure_repos(config.repos)
 
         # Run BUILD stage (multi-repo)
         artifacts_path = str(primary / ".superseded" / "artifacts" / "SUP-050")

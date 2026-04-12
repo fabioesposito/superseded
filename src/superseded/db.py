@@ -24,9 +24,10 @@ class Database:
 
     async def initialize(self) -> None:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = await aiosqlite.connect(self.db_path)
-        await self._conn.execute("PRAGMA journal_mode=WAL")
-        await self._conn.executescript("""
+        conn = await aiosqlite.connect(self.db_path)
+        self._conn = conn
+        await conn.execute("PRAGMA journal_mode=WAL")
+        await conn.executescript("""
             CREATE TABLE IF NOT EXISTS issues (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -85,30 +86,32 @@ class Database:
                 FOREIGN KEY (issue_id) REFERENCES issues(id)
             );
         """)
-        await self._conn.commit()
+        await conn.commit()
         # Migration: add repo column if missing
-        try:
-            await self._conn.execute(
-                "ALTER TABLE stage_results ADD COLUMN repo TEXT DEFAULT 'primary'"
-            )
-            await self._conn.commit()
-        except Exception:
-            pass  # Column already exists
-        try:
-            await self._conn.execute(
-                "ALTER TABLE harness_iterations ADD COLUMN repo TEXT DEFAULT 'primary'"
-            )
-            await self._conn.commit()
-        except Exception:
-            pass  # Column already exists
+        for table, column in [
+            ("stage_results", "repo"),
+            ("harness_iterations", "repo"),
+        ]:
+            try:
+                await conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {column} TEXT DEFAULT 'primary'"
+                )
+                await conn.commit()
+            except aiosqlite.OperationalError:
+                pass  # Column already exists
+
+    def _require_conn(self) -> aiosqlite.Connection:
+        if self._conn is None:
+            raise RuntimeError("Database not initialized. Call initialize() first.")
+        return self._conn
 
     async def close(self) -> None:
         if self._conn:
             await self._conn.close()
 
     async def upsert_issue(self, issue: Issue) -> None:
-        assert self._conn
-        await self._conn.execute(
+        conn = self._require_conn()
+        await conn.execute(
             """INSERT INTO issues (id, title, status, stage, assignee, labels, filepath, created)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET title=?, status=?, stage=?, assignee=?, labels=?, filepath=?, updated_at=CURRENT_TIMESTAMP""",
@@ -129,11 +132,11 @@ class Database:
                 issue.filepath,
             ),
         )
-        await self._conn.commit()
+        await conn.commit()
 
     async def get_issue(self, issue_id: str) -> dict[str, Any] | None:
-        assert self._conn
-        cursor = await self._conn.execute("SELECT * FROM issues WHERE id = ?", (issue_id,))
+        conn = self._require_conn()
+        cursor = await conn.execute("SELECT * FROM issues WHERE id = ?", (issue_id,))
         row = await cursor.fetchone()
         if row is None:
             return None
@@ -143,8 +146,8 @@ class Database:
         return result
 
     async def list_issues(self) -> list[dict[str, Any]]:
-        assert self._conn
-        cursor = await self._conn.execute("SELECT * FROM issues ORDER BY id")
+        conn = self._require_conn()
+        cursor = await conn.execute("SELECT * FROM issues ORDER BY id")
         rows = await cursor.fetchall()
         cols = [desc[0] for desc in cursor.description]
         results = []
@@ -155,18 +158,18 @@ class Database:
         return results
 
     async def update_issue_status(self, issue_id: str, status: IssueStatus, stage: Stage) -> None:
-        assert self._conn
-        await self._conn.execute(
+        conn = self._require_conn()
+        await conn.execute(
             "UPDATE issues SET status=?, stage=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
             (status.value, stage.value, issue_id),
         )
-        await self._conn.commit()
+        await conn.commit()
 
     async def save_stage_result(
         self, issue_id: str, result: StageResult, repo: str = "primary"
     ) -> None:
-        assert self._conn
-        await self._conn.execute(
+        conn = self._require_conn()
+        await conn.execute(
             """INSERT INTO stage_results (issue_id, repo, stage, passed, output, error, artifacts, started_at, finished_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
@@ -181,19 +184,19 @@ class Database:
                 str(result.finished_at) if result.finished_at else None,
             ),
         )
-        await self._conn.commit()
+        await conn.commit()
 
     async def get_stage_results(
         self, issue_id: str, repo: str | None = None
     ) -> list[dict[str, Any]]:
-        assert self._conn
+        conn = self._require_conn()
         if repo:
-            cursor = await self._conn.execute(
+            cursor = await conn.execute(
                 "SELECT * FROM stage_results WHERE issue_id = ? AND repo = ? ORDER BY id",
                 (issue_id, repo),
             )
         else:
-            cursor = await self._conn.execute(
+            cursor = await conn.execute(
                 "SELECT * FROM stage_results WHERE issue_id = ? ORDER BY id",
                 (issue_id,),
             )
@@ -216,8 +219,8 @@ class Database:
         error: str,
         repo: str = "primary",
     ) -> None:
-        assert self._conn
-        await self._conn.execute(
+        conn = self._require_conn()
+        await conn.execute(
             """INSERT INTO harness_iterations (issue_id, repo, attempt, stage, exit_code, output, error, previous_errors)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
@@ -231,11 +234,11 @@ class Database:
                 json.dumps(iteration.previous_errors),
             ),
         )
-        await self._conn.commit()
+        await conn.commit()
 
     async def get_harness_iterations(self, issue_id: str) -> list[dict[str, Any]]:
-        assert self._conn
-        cursor = await self._conn.execute(
+        conn = self._require_conn()
+        cursor = await conn.execute(
             "SELECT * FROM harness_iterations WHERE issue_id = ? ORDER BY id",
             (issue_id,),
         )
@@ -249,8 +252,8 @@ class Database:
         return results
 
     async def next_issue_id(self) -> str:
-        assert self._conn
-        cursor = await self._conn.execute(
+        conn = self._require_conn()
+        cursor = await conn.execute(
             "SELECT MAX(CAST(SUBSTR(id, 5) AS INTEGER)) FROM issues WHERE id LIKE 'SUP-%'"
         )
         row = await cursor.fetchone()
@@ -258,8 +261,8 @@ class Database:
         return f"SUP-{max_num + 1:03d}"
 
     async def save_session_turn(self, issue_id: str, turn: SessionTurn) -> None:
-        assert self._conn
-        await self._conn.execute(
+        conn = self._require_conn()
+        await conn.execute(
             """INSERT INTO session_turns (issue_id, stage, attempt, role, content, metadata)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (
@@ -271,19 +274,19 @@ class Database:
                 json.dumps(turn.metadata),
             ),
         )
-        await self._conn.commit()
+        await conn.commit()
 
     async def get_session_turns(
         self, issue_id: str, stage: Stage | None = None
     ) -> list[dict[str, Any]]:
-        assert self._conn
+        conn = self._require_conn()
         if stage:
-            cursor = await self._conn.execute(
+            cursor = await conn.execute(
                 "SELECT * FROM session_turns WHERE issue_id = ? AND stage = ? ORDER BY id",
                 (issue_id, stage.value),
             )
         else:
-            cursor = await self._conn.execute(
+            cursor = await conn.execute(
                 "SELECT * FROM session_turns WHERE issue_id = ? ORDER BY id",
                 (issue_id,),
             )
@@ -297,8 +300,8 @@ class Database:
         return results
 
     async def save_agent_event(self, issue_id: str, event: AgentEvent) -> None:
-        assert self._conn
-        await self._conn.execute(
+        conn = self._require_conn()
+        await conn.execute(
             """INSERT INTO agent_events (issue_id, stage, event_type, content, metadata)
                VALUES (?, ?, ?, ?, ?)""",
             (
@@ -309,11 +312,11 @@ class Database:
                 json.dumps(event.metadata),
             ),
         )
-        await self._conn.commit()
+        await conn.commit()
 
     async def get_agent_events(self, issue_id: str, limit: int = 200) -> list[dict[str, Any]]:
-        assert self._conn
-        cursor = await self._conn.execute(
+        conn = self._require_conn()
+        cursor = await conn.execute(
             "SELECT * FROM agent_events WHERE issue_id = ? ORDER BY id DESC LIMIT ?",
             (issue_id, limit),
         )
@@ -327,8 +330,8 @@ class Database:
         return list(reversed(results))
 
     async def get_recent_events(self, limit: int = 20) -> list[dict[str, Any]]:
-        assert self._conn
-        cursor = await self._conn.execute(
+        conn = self._require_conn()
+        cursor = await conn.execute(
             "SELECT * FROM agent_events ORDER BY id DESC LIMIT ?",
             (limit,),
         )

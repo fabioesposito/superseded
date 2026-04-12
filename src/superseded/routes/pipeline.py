@@ -7,18 +7,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 
 from superseded.models import (
-    HarnessIteration,
     IssueStatus,
     PipelineMetrics,
     Stage,
-    StageResult,
 )
-from superseded.pipeline.events import PipelineEventManager
-from superseded.pipeline.harness import HarnessRunner
-from superseded.pipeline.worktree import WorktreeManager
+from superseded.routes import get_templates
 from superseded.routes.deps import Deps, get_deps
 from superseded.tickets.reader import list_issues
 from superseded.tickets.writer import update_issue_status
@@ -27,146 +22,32 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pipeline")
 
-_templates_dir = Path(__file__).parent.parent.parent.parent / "templates"
-_templates = Jinja2Templates(directory=str(_templates_dir))
 
-_cached_runner: HarnessRunner | None = None
-_event_manager = PipelineEventManager()
-
-
-def _get_harness_runner(deps: Deps) -> HarnessRunner:
-    global _cached_runner
-    if _cached_runner is None:
-        from superseded.agents.claude_code import ClaudeCodeAdapter
-
-        agent = ClaudeCodeAdapter(timeout=deps.config.stage_timeout_seconds)
-        _cached_runner = HarnessRunner(
-            agent=agent,
-            repo_path=deps.config.repo_path,
-            max_retries=deps.config.max_retries,
-            retryable_stages=deps.config.retryable_stages,
-            event_manager=_event_manager,
-        )
-    return _cached_runner
+def _get_executor(deps: Deps):
+    if deps.pipeline is None:
+        raise RuntimeError("Pipeline not initialized")
+    return deps.pipeline.executor
 
 
-async def _run_stage(deps: Deps, issue_id: str, stage: Stage) -> StageResult:
+def _get_event_manager(deps: Deps):
+    if deps.pipeline is None:
+        raise RuntimeError("Pipeline not initialized")
+    return deps.pipeline.event_manager
+
+
+def _find_issue(deps: Deps, issue_id: str):
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
-    issues = [i for i in list_issues(issues_dir) if i.id == issue_id]
-    if not issues:
-        return StageResult(stage=stage, passed=False, error="Issue not found")
-
-    issue = issues[0]
-    runner = _get_harness_runner(deps)
-
-    if deps.config.repos:
-        runner._configure_repos(deps.config.repos)
-        worktree_manager = WorktreeManager(deps.config.repo_path)
-        for name, entry in deps.config.repos.items():
-            worktree_manager.register_repo(name, entry.path)
-    else:
-        worktree_manager = WorktreeManager(deps.config.repo_path)
-
-    artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
-    Path(artifacts_path).mkdir(parents=True, exist_ok=True)
-
-    needs_worktree = stage in (Stage.BUILD, Stage.VERIFY, Stage.REVIEW)
-
-    target_repos = issue.repos if issue.repos else [None]
-
-    all_passed = True
-    combined_output: list[str] = []
-
-    for repo_name in target_repos:
-        effective_repo = repo_name or "primary"
-        stash_ref = None
-        worktree_created = False
-
-        if needs_worktree and not worktree_manager.exists(issue_id, repo=repo_name):
-            stash_ref = await worktree_manager.stash_if_dirty(repo=repo_name)
-            await worktree_manager.create(issue_id, repo=repo_name)
-            worktree_created = True
-
-        repo_previous_errors: list[str] = []
-        stage_results = await deps.db.get_stage_results(issue_id, repo=effective_repo)
-        for sr in stage_results:
-            if not sr.get("passed") and sr.get("error"):
-                repo_previous_errors.append(sr["error"])
-
-        repo_artifacts = str(Path(artifacts_path) / effective_repo)
-        Path(repo_artifacts).mkdir(parents=True, exist_ok=True)
-
-        result = await runner.run_stage_with_retries(
-            issue=issue,
-            stage=stage,
-            artifacts_path=repo_artifacts,
-            previous_errors=repo_previous_errors if repo_previous_errors else None,
-            repo=repo_name,
-        )
-
-        await deps.db.save_stage_result(issue_id, result, repo=effective_repo)
-
-        existing_iterations = await deps.db.get_harness_iterations(issue_id)
-        attempt_num = len(
-            [
-                i
-                for i in existing_iterations
-                if i.get("stage") == stage.value and i.get("repo", "primary") == effective_repo
-            ]
-        )
-
-        iteration = HarnessIteration(
-            attempt=attempt_num,
-            stage=stage,
-            previous_errors=repo_previous_errors,
-        )
-        await deps.db.save_harness_iteration(
-            issue_id,
-            iteration,
-            exit_code=0 if result.passed else 1,
-            output=result.output,
-            error=result.error,
-            repo=effective_repo,
-        )
-
-        if not result.passed:
-            all_passed = False
-            if stash_ref:
-                await worktree_manager.pop_stash(stash_ref, repo=repo_name)
-
-        combined_output.append(f"[{effective_repo}] {result.output or result.error}")
-
-        if result.passed and worktree_created:
-            next_stage = issue.next_stage()
-            if next_stage is None or stage == Stage.SHIP:
-                await worktree_manager.cleanup(issue_id, repo=repo_name)
-
-    aggregate = StageResult(
-        stage=stage,
-        passed=all_passed,
-        output="\n".join(combined_output),
-        error="" if all_passed else "One or more repos failed",
-    )
-
-    if all_passed:
-        await deps.db.update_issue_status(issue_id, IssueStatus.IN_PROGRESS, stage)
-        update_issue_status(issue.filepath, IssueStatus.IN_PROGRESS, stage)
-    else:
-        await deps.db.update_issue_status(issue_id, IssueStatus.PAUSED, stage)
-        update_issue_status(issue.filepath, IssueStatus.PAUSED, stage)
-
-    return aggregate
+    matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
+    return matching[0] if matching else None
 
 
-@router.post("/issues/{issue_id}/advance")
-async def advance_issue(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
-    issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
-    issues = [i for i in list_issues(issues_dir) if i.id == issue_id]
-    if not issues:
+async def _run_and_advance(deps: Deps, issue_id: str, stage: Stage) -> RedirectResponse:
+    issue = _find_issue(deps, issue_id)
+    if issue is None:
         return RedirectResponse(url="/", status_code=303)
 
-    issue = issues[0]
-    result = await _run_stage(deps, issue_id, issue.stage)
+    executor = _get_executor(deps)
+    result = await executor.run_stage(issue, stage, deps.config)
 
     if result.passed:
         next_stage = issue.next_stage()
@@ -180,15 +61,22 @@ async def advance_issue(request: Request, issue_id: str, deps: Deps = Depends(ge
     return RedirectResponse(url=f"/issues/{issue_id}", status_code=303)
 
 
+@router.post("/issues/{issue_id}/advance")
+async def advance_issue(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+    issue = _find_issue(deps, issue_id)
+    if issue is None:
+        return RedirectResponse(url="/", status_code=303)
+    return await _run_and_advance(deps, issue_id, issue.stage)
+
+
 @router.post("/issues/{issue_id}/retry")
 async def retry_issue(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
-    issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
-    issues = [i for i in list_issues(issues_dir) if i.id == issue_id]
-    if not issues:
+    issue = _find_issue(deps, issue_id)
+    if issue is None:
         return RedirectResponse(url="/", status_code=303)
 
-    issue = issues[0]
-    result = await _run_stage(deps, issue_id, issue.stage)
+    executor = _get_executor(deps)
+    result = await executor.run_stage(issue, issue.stage, deps.config)
 
     if result.passed:
         next_stage = issue.next_stage()
@@ -234,8 +122,10 @@ async def get_historical_events(request: Request, issue_id: str, deps: Deps = De
 async def stream_events(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
     from sse_starlette.sse import EventSourceResponse
 
+    event_manager = _get_event_manager(deps)
+
     async def event_generator():
-        async for event in _event_manager.subscribe(issue_id):
+        async for event in event_manager.subscribe(issue_id):
             yield {
                 "event": event.event_type,
                 "data": json.dumps({"content": event.content, "metadata": event.metadata}),
@@ -292,7 +182,7 @@ async def get_metrics(request: Request, deps: Deps = Depends(get_deps)):
 @router.get("/metrics/dashboard", response_class=HTMLResponse)
 async def metrics_dashboard(request: Request, deps: Deps = Depends(get_deps)):
     metrics_resp = await get_metrics(request, deps)
-    return _templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "metrics.html",
         {"metrics": metrics_resp},

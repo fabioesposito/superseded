@@ -71,7 +71,7 @@ async def test_full_streaming_pipeline():
             stage=Stage.VERIFY,
             issue=issue,
             artifacts_path=str(artifacts_path),
-            db=db,
+            session_turns=turns,
         )
         assert "Previous Session History" in context
         assert "build" in context.lower()
@@ -81,7 +81,7 @@ async def test_full_streaming_pipeline():
             stage=Stage.BUILD,
             issue=issue,
             artifacts_path=str(artifacts_path),
-            db=db,
+            session_turns=turns,
         )
         assert "Previous Session History" not in context_same_stage
 

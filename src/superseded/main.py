@@ -8,9 +8,15 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from superseded.agents.claude_code import ClaudeCodeAdapter
 from superseded.config import SupersededConfig, load_config
 from superseded.db import Database
+from superseded.pipeline.events import PipelineEventManager
+from superseded.pipeline.executor import StageExecutor
+from superseded.pipeline.harness import HarnessRunner
+from superseded.pipeline.worktree import WorktreeManager
 from superseded.routes.dashboard import router as dashboard_router
+from superseded.routes.deps import PipelineState
 from superseded.routes.issues import router as issues_router
 from superseded.routes.pipeline import router as pipeline_router
 
@@ -23,6 +29,29 @@ async def lifespan(app: FastAPI):
     await db.initialize()
     yield
     await db.close()
+
+
+def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
+    event_manager = PipelineEventManager()
+    agent = ClaudeCodeAdapter(timeout=config.stage_timeout_seconds)
+    runner = HarnessRunner(
+        agent=agent,
+        repo_path=config.repo_path,
+        max_retries=config.max_retries,
+        retryable_stages=config.retryable_stages,
+        event_manager=event_manager,
+    )
+    worktree_manager = WorktreeManager(config.repo_path)
+    if config.repos:
+        runner.configure_repos(config.repos)
+        for name, entry in config.repos.items():
+            worktree_manager.register_repo(name, entry.path)
+    executor = StageExecutor(
+        runner=runner,
+        db=None,  # set after db is initialized
+        worktree_manager=worktree_manager,
+    )
+    return PipelineState(executor=executor, event_manager=event_manager)
 
 
 def create_app(
@@ -42,6 +71,9 @@ def create_app(
         app.state.db = db
     else:
         app.state.db = Database(str(Path(config.repo_path) / config.db_path))
+
+    app.state.pipeline = _build_pipeline_state(config)
+    app.state.pipeline.executor.db = app.state.db
 
     static_dir = Path(__file__).parent.parent.parent / "static"
     if static_dir.exists():

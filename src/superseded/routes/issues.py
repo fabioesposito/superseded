@@ -6,22 +6,19 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 
 from superseded.models import Issue, Stage
+from superseded.routes import get_templates
 from superseded.routes.deps import Deps, get_deps
 from superseded.tickets.reader import list_issues
 from superseded.tickets.writer import write_issue
 
 router = APIRouter(prefix="/issues")
 
-_templates_dir = Path(__file__).parent.parent.parent.parent / "templates"
-_templates = Jinja2Templates(directory=str(_templates_dir))
-
 
 @router.get("/new", response_class=HTMLResponse)
 async def new_issue_form(request: Request, deps: Deps = Depends(get_deps)):
-    return _templates.TemplateResponse(request, "issue_new.html", {})
+    return get_templates().TemplateResponse(request, "issue_new.html", {})
 
 
 @router.post("/new", response_class=RedirectResponse)
@@ -81,7 +78,7 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
     if not matching:
-        return _templates.TemplateResponse(
+        return get_templates().TemplateResponse(
             request,
             "issue_detail.html",
             {
@@ -102,7 +99,7 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
         repo = r.get("repo", "primary")
         results_by_repo.setdefault(repo, []).append(r)
 
-    return _templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "issue_detail.html",
         {
@@ -123,7 +120,7 @@ async def stage_detail(
     try:
         stage = Stage(stage_name)
     except ValueError:
-        return _templates.TemplateResponse(
+        return get_templates().TemplateResponse(
             request,
             "stage_detail.html",
             {
@@ -137,7 +134,7 @@ async def stage_detail(
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
     if not matching:
-        return _templates.TemplateResponse(
+        return get_templates().TemplateResponse(
             request,
             "stage_detail.html",
             {
@@ -156,7 +153,7 @@ async def stage_detail(
             result = r
             break
 
-    return _templates.TemplateResponse(
+    return get_templates().TemplateResponse(
         request,
         "stage_detail.html",
         {

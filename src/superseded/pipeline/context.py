@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
-from typing import Any
 
 from superseded.models import Issue, Stage
 from superseded.pipeline.prompts import get_prompt_for_stage
@@ -89,26 +87,13 @@ class ContextAssembler:
             )
         return f"## Stage Instructions: {stage.value.upper()}\n\n{prompt}{repo_context}"
 
-    def _run_async(self, coro: Any) -> Any:
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(coro)
-
-        import concurrent.futures
-
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            return pool.submit(asyncio.run, coro).result()
-
     def _build_session_history_layer(
-        self, issue_id: str, current_stage: Stage, db: Any
+        self, current_stage: Stage, session_turns: list[dict] | None = None
     ) -> str | None:
-        if db is None:
+        if not session_turns:
             return None
 
-        turns = self._run_async(db.get_session_turns(issue_id))
-
-        prior_turns = [t for t in turns if t["stage"] != current_stage.value]
+        prior_turns = [t for t in session_turns if t["stage"] != current_stage.value]
         if not prior_turns:
             return None
 
@@ -145,7 +130,7 @@ class ContextAssembler:
         artifacts_path: str,
         previous_errors: list[str] | None = None,
         iteration: int = 0,
-        db: Any = None,
+        session_turns: list[dict] | None = None,
         target_repo: str | None = None,
     ) -> str:
         layers: list[str] = []
@@ -177,7 +162,7 @@ class ContextAssembler:
         if artifacts:
             layers.append(artifacts)
 
-        session_history = self._build_session_history_layer(issue.id, stage, db)
+        session_history = self._build_session_history_layer(stage, session_turns)
         if session_history:
             layers.append(session_history)
 

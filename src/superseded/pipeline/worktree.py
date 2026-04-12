@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from pathlib import Path
+
+
+@dataclass
+class GitResult:
+    returncode: int
+    stdout: str
+    stderr: str
 
 
 class WorktreeManager:
@@ -32,7 +40,7 @@ class WorktreeManager:
             return f"issue/{issue_id}/{repo}"
         return f"issue/{issue_id}"
 
-    async def _run_git(self, *args: str, cwd: str | None = None) -> asyncio.subprocess.Process:
+    async def _run_git(self, *args: str, cwd: str | None = None) -> GitResult:
         proc = await asyncio.create_subprocess_exec(
             "git",
             *args,
@@ -41,15 +49,11 @@ class WorktreeManager:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
-        return type(
-            "_Result",
-            (),
-            {
-                "returncode": proc.returncode,
-                "stdout": stdout.decode("utf-8", errors="replace"),
-                "stderr": stderr.decode("utf-8", errors="replace"),
-            },
-        )()
+        return GitResult(
+            returncode=proc.returncode,
+            stdout=stdout.decode("utf-8", errors="replace"),
+            stderr=stderr.decode("utf-8", errors="replace"),
+        )
 
     async def create(self, issue_id: str, repo: str | None = None) -> Path:
         repo_path = self._get_repo_path(repo)
