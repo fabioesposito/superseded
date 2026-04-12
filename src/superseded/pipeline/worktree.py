@@ -17,9 +17,26 @@ class WorktreeManager:
         self.repo_path = Path(repo_path)
         self._worktrees_dir = self.repo_path / ".superseded" / "worktrees"
         self._repo_registry: dict[str, Path] = {}
+        self._git_urls: dict[str, str] = {}
 
-    def register_repo(self, name: str, repo_path: str) -> None:
+    def register_repo(self, name: str, repo_path: str, git_url: str = "") -> None:
         self._repo_registry[name] = Path(repo_path)
+        if git_url:
+            self._git_urls[name] = git_url
+
+    async def _ensure_repo_exists(self, repo: str) -> None:
+        repo_path = self._get_repo_path(repo)
+        if repo_path.exists():
+            return
+        git_url = self._git_urls.get(repo, "")
+        if not git_url:
+            raise ValueError(
+                f"Repo path {repo_path} does not exist and no git_url configured for '{repo}'"
+            )
+        repo_path.parent.mkdir(parents=True, exist_ok=True)
+        result = await self._run_git("clone", git_url, str(repo_path))
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to clone {git_url} to {repo_path}: {result.stderr}")
 
     def _get_repo_path(self, repo: str | None = None) -> Path:
         if repo and repo != "primary":
@@ -56,6 +73,8 @@ class WorktreeManager:
         )
 
     async def create(self, issue_id: str, repo: str | None = None) -> Path:
+        if repo and repo != "primary":
+            await self._ensure_repo_exists(repo)
         repo_path = self._get_repo_path(repo)
         worktree_path = self._worktree_path(issue_id, repo)
         branch_name = self._branch_name(issue_id, repo)

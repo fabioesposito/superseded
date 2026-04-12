@@ -47,7 +47,7 @@ def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
     if config.repos:
         runner.configure_repos(config.repos)
         for name, entry in config.repos.items():
-            worktree_manager.register_repo(name, entry.path)
+            worktree_manager.register_repo(name, entry.path, entry.git_url)
     executor = StageExecutor(
         runner=runner,
         db=None,  # set after db is initialized
