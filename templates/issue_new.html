@@ -8,7 +8,26 @@
     <div class="mb-6 p-4 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-sm">{{ error }}</div>
     {% endif %}
 
+    <div class="mb-6 p-4 bg-shell-800/50 border border-shell-700/40 rounded-lg">
+        <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Import from GitHub</label>
+        <div class="flex gap-2">
+            <input type="text" name="github_url" form="import-form"
+                class="flex-1 bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
+                placeholder="https://github.com/owner/repo/issues/123"
+                value="{{ github_url or '' }}">
+            <form id="import-form" hx-post="/issues/import" hx-target="#form-container" hx-swap="outerHTML" hx-indicator="#import-spinner">
+                <button type="submit" class="btn-secondary text-shell-300 hover:text-shell-100 bg-shell-800 hover:bg-shell-700 border border-shell-700/60 px-5 py-3 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap">
+                    <span class="htmx-indicator" id="import-spinner">Loading...</span>
+                    <span class="htmx-no-indicator">Import</span>
+                </button>
+            </form>
+        </div>
+        <p class="mt-1.5 text-xs text-shell-600">Paste a GitHub issue URL to auto-fill the fields below.</p>
+    </div>
+
+    <div id="form-container">
     <form action="/issues/new" method="post" class="space-y-5">
+        <input type="hidden" name="github_url" value="{{ github_url or '' }}">
         <div>
             <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Title</label>
             <input type="text" name="title" required value="{{ title or '' }}"
@@ -26,12 +45,6 @@
             <input type="text" name="labels" value="{{ labels or '' }}"
                 class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
                 placeholder="bug, feature, enhancement">
-        </div>
-        <div>
-            <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">GitHub URL</label>
-            <input type="text" name="github_url" value="{{ github_url or '' }}"
-                class="w-full bg-shell-900 border border-shell-700/60 rounded-lg px-4 py-3 text-shell-100 placeholder-shell-600 focus:outline-none focus:border-neon-600 focus:ring-1 focus:ring-neon-600/30 transition-all"
-                placeholder="https://github.com/owner/repo/issues/123">
         </div>
         <div>
             <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Target Repositories</label>
@@ -54,5 +67,6 @@
             <a href="/" class="btn-secondary text-shell-400 hover:text-shell-200 px-6 py-2.5 rounded-lg text-sm font-medium transition-colors">Cancel</a>
         </div>
     </form>
+    </div>
 </div>
 {% endblock %}
