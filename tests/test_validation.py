@@ -39,6 +39,12 @@ class TestValidateGitUrl:
     def test_ssh_url(self):
         assert validate_git_url("git@github.com:user/repo.git") == "git@github.com:user/repo.git"
 
+    def test_ssh_protocol_url(self):
+        assert (
+            validate_git_url("ssh://git@github.com/user/repo.git")
+            == "ssh://git@github.com/user/repo.git"
+        )
+
     def test_rejects_shell_injection(self):
         with pytest.raises(InvalidInputError):
             validate_git_url("https://example.com; rm -rf /")
