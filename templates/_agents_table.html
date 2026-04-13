@@ -1,37 +1,50 @@
 <div id="agents-config">
-  <h3>Pipeline Agents</h3>
-  {% if error %}
-  <div class="error">{{ error }}</div>
-  {% endif %}
-  <form hx-post="/settings/agents" hx-target="#agents-config" hx-swap="outerHTML">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-    <table>
-      <thead>
-        <tr>
-          <th>Stage</th>
-          <th>CLI</th>
-          <th>Model</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% set stages = ['spec', 'plan', 'build', 'verify', 'review', 'ship'] %}
-        {% for stage in stages %}
-        <tr>
-          <td>{{ stage | capitalize }}</td>
-          <td>
-            <select name="{{ stage }}_cli">
-              <option value="claude-code" {% if stage_agents[stage].cli == 'claude-code' %}selected{% endif %}>Claude Code</option>
-              <option value="opencode" {% if stage_agents[stage].cli == 'opencode' %}selected{% endif %}>OpenCode</option>
-              <option value="codex" {% if stage_agents[stage].cli == 'codex' %}selected{% endif %}>Codex</option>
-            </select>
-          </td>
-          <td>
-            <input type="text" name="{{ stage }}_model" value="{{ stage_agents[stage].model | default('') }}" placeholder="e.g. claude-sonnet-4-20250514" />
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <button type="submit">Save Agents</button>
-  </form>
+    {% if error %}
+    <div class="mb-4 px-5 py-3 text-sm text-coral-400 bg-coral-900/20 rounded-lg border border-coral-800/30">{{ error }}</div>
+    {% endif %}
+    <div class="card rounded-xl overflow-x-auto">
+        <form hx-post="/settings/agents" hx-target="#agents-config" hx-swap="outerHTML">
+            {% if success %}
+            <div class="px-5 py-3 text-sm text-olive-400 bg-olive-900/20 border-b border-olive-800/30">
+                Agent configuration saved successfully.
+            </div>
+            {% endif %}
+            <table class="w-full min-w-[640px]">
+                <thead>
+                    <tr class="border-b border-shell-700/50">
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Stage</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">CLI</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Model</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set stages = ['spec', 'plan', 'build', 'verify', 'review', 'ship'] %}
+                    {% for stage in stages %}
+                    <tr class="border-t border-shell-800/40 hover:bg-shell-900/50 transition-colors group">
+                        <td class="px-5 py-3.5 font-mono text-sm text-neon-400">{{ stage | capitalize }}</td>
+                        <td class="px-5 py-3.5">
+                            <select name="{{ stage }}_cli"
+                                    class="bg-shell-900 border border-shell-700 rounded-lg px-3 py-1.5 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors">
+                                <option value="claude-code" {% if stage_agents[stage].cli == 'claude-code' %}selected{% endif %}>Claude Code</option>
+                                <option value="opencode" {% if stage_agents[stage].cli == 'opencode' %}selected{% endif %}>OpenCode</option>
+                                <option value="codex" {% if stage_agents[stage].cli == 'codex' %}selected{% endif %}>Codex</option>
+                            </select>
+                        </td>
+                        <td class="px-5 py-3.5">
+                            <input type="text" name="{{ stage }}_model" value="{{ stage_agents[stage].model | default('') }}"
+                                   class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-1.5 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                                   placeholder="e.g. claude-sonnet-4-20250514" />
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="px-5 py-4 border-t border-shell-700/50 flex justify-end">
+                <button type="submit" class="btn-primary text-white px-5 py-2.5 rounded-lg text-sm font-semibold inline-flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Save Agents
+                </button>
+            </div>
+        </form>
+    </div>
 </div>

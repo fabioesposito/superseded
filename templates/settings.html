@@ -5,7 +5,7 @@
     <div class="flex items-center justify-between mb-8">
         <div>
             <h1 class="text-3xl font-bold text-shell-50 tracking-tight">Settings</h1>
-            <p class="text-shell-500 text-sm mt-1">Manage repositories for the pipeline</p>
+            <p class="text-shell-500 text-sm mt-1">Manage repositories and pipeline agents</p>
         </div>
         <button @click="showAddForm = !showAddForm"
                 class="btn-primary text-white px-5 py-2.5 rounded-lg text-sm font-semibold inline-flex items-center gap-2">
@@ -59,9 +59,16 @@
         </form>
     </div>
 
+    <div class="mt-8 mb-3">
+        <h2 class="text-lg font-semibold text-shell-100">Repositories</h2>
+    </div>
     {% include "_repos_table.html" %}
 
     {% if stage_agents is defined %}
+    <div class="mt-10 mb-3">
+        <h2 class="text-lg font-semibold text-shell-100">Pipeline Agents</h2>
+        <p class="text-shell-500 text-sm mt-1">Configure which CLI and model each pipeline stage uses</p>
+    </div>
     {% include "_agents_table.html" %}
     {% endif %}
 </div>
