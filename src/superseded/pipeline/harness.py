@@ -10,6 +10,7 @@ from superseded.db import Database
 from superseded.models import (
     AgentContext,
     AgentResult,
+    HarnessIteration,
     Issue,
     SessionTurn,
     Stage,
@@ -26,15 +27,10 @@ class HarnessRunner:
         repo_path: str,
         agent_factory: AgentFactory | None = None,
         stage_configs: dict[str, StageAgentConfig] | None = None,
-        agent: AgentAdapter | None = None,
         max_retries: int = 3,
         retryable_stages: list[str] | None = None,
         event_manager: PipelineEventManager | None = None,
     ) -> None:
-        if agent_factory is None and agent is not None:
-            _fallback = agent
-            agent_factory = AgentFactory()
-            agent_factory.create = lambda **kwargs: _fallback
         self.agent_factory = agent_factory or AgentFactory()
         self.stage_configs = stage_configs or {}
         self.repo_path = repo_path
@@ -89,9 +85,9 @@ class HarnessRunner:
                 previous_errors=errors,
             )
 
-            started = datetime.datetime.now()
+            started = datetime.datetime.now(datetime.UTC)
             agent_result: AgentResult = await self.resolve_agent(stage).run(prompt, context)
-            finished = datetime.datetime.now()
+            finished = datetime.datetime.now(datetime.UTC)
 
             passed = agent_result.exit_code == 0
 
@@ -121,8 +117,8 @@ class HarnessRunner:
             output="",
             error=combined_errors,
             artifacts=[],
-            started_at=datetime.datetime.now(),
-            finished_at=datetime.datetime.now(),
+            started_at=datetime.datetime.now(datetime.UTC),
+            finished_at=datetime.datetime.now(datetime.UTC),
         )
 
     async def run_stage_streaming(
@@ -202,6 +198,20 @@ class HarnessRunner:
 
             passed = exit_code == 0
 
+            await db.save_harness_iteration(
+                issue.id,
+                HarnessIteration(
+                    attempt=attempt,
+                    stage=stage,
+                    previous_errors=errors,
+                ),
+                exit_code=exit_code,
+                output=stdout[:2000],
+                error=""
+                if passed
+                else (stdout if stdout else f"Agent exited with code {exit_code}"),
+            )
+
             if passed:
                 return StageResult(
                     stage=stage,
@@ -209,8 +219,8 @@ class HarnessRunner:
                     output=stdout,
                     error="",
                     artifacts=[],
-                    started_at=datetime.datetime.now(),
-                    finished_at=datetime.datetime.now(),
+                    started_at=datetime.datetime.now(datetime.UTC),
+                    finished_at=datetime.datetime.now(datetime.UTC),
                 )
 
             error_msg = stdout if stdout else f"Agent exited with code {exit_code}"
@@ -223,8 +233,8 @@ class HarnessRunner:
             output="",
             error=combined_errors,
             artifacts=[],
-            started_at=datetime.datetime.now(),
-            finished_at=datetime.datetime.now(),
+            started_at=datetime.datetime.now(datetime.UTC),
+            finished_at=datetime.datetime.now(datetime.UTC),
         )
 
     def configure_repos(self, repos: dict[str, RepoEntry]) -> None:

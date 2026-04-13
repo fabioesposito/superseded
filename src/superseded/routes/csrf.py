@@ -33,7 +33,13 @@ class CsrfMiddleware(BaseHTTPMiddleware):
             # Set CSRF cookie on GET requests if not present
             if request.method == "GET" and "csrf_token" not in request.cookies:
                 token = _generate_csrf_token()
-                response.set_cookie("csrf_token", token, httponly=False, samesite="lax")
+                response.set_cookie(
+                    "csrf_token",
+                    token,
+                    httponly=False,
+                    samesite="lax",
+                    secure=request.url.scheme == "https",
+                )
             return response
 
         # Validate CSRF token on unsafe methods

@@ -2,10 +2,17 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
+from superseded.agents.factory import AgentFactory
 from superseded.db import Database
 from superseded.models import AgentEvent, Issue, Stage
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.harness import HarnessRunner
+
+
+def _mock_factory(mock_agent):
+    factory = AgentFactory()
+    factory.create = lambda **kwargs: mock_agent
+    return factory
 
 
 def _make_issue() -> Issue:
@@ -35,7 +42,7 @@ async def test_streaming_saves_session_turns():
 
         mock_agent.run_streaming = fake_stream
 
-        runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo")
+        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
         event_manager = PipelineEventManager()
 
         artifacts_path = Path(tmp) / "artifacts"
@@ -78,7 +85,7 @@ async def test_streaming_saves_agent_events():
 
         mock_agent.run_streaming = fake_stream
 
-        runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo")
+        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
         event_manager = PipelineEventManager()
 
         artifacts_path = Path(tmp) / "artifacts"
@@ -141,7 +148,7 @@ async def test_streaming_retries_on_failure():
         mock_agent.run_streaming = fake_stream
 
         runner = HarnessRunner(
-            agent=mock_agent,
+            agent_factory=_mock_factory(mock_agent),
             repo_path="/tmp/testrepo",
             max_retries=3,
             retryable_stages=["build"],
@@ -191,7 +198,7 @@ async def test_streaming_truncates_long_output():
 
         mock_agent.run_streaming = fake_stream
 
-        runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo")
+        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
         event_manager = PipelineEventManager()
 
         artifacts_path = Path(tmp) / "artifacts"

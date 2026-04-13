@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
+from superseded.agents.factory import AgentFactory
 from superseded.config import load_config
 from superseded.db import Database
 from superseded.models import AgentResult, Issue, IssueStatus, Stage
@@ -13,6 +14,13 @@ from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.worktree import WorktreeManager
 from superseded.tickets.reader import list_issues, read_issue
 from superseded.tickets.writer import update_issue_status, write_issue
+
+
+def _mock_factory(mock_agent):
+    factory = AgentFactory()
+    factory.create = lambda **kwargs: mock_agent
+    return factory
+
 
 SAMPLE_TICKET = """---
 id: SUP-001
@@ -145,7 +153,9 @@ async def test_harness_full_lifecycle():
         mock_agent = AsyncMock()
         mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec written", stderr="")
 
-        runner = HarnessRunner(agent=mock_agent, repo_path=str(repo), max_retries=3)
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent), repo_path=str(repo), max_retries=3
+        )
         result = await runner.run_stage_with_retries(
             issue=issue,
             stage=Stage.SPEC,

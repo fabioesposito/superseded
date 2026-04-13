@@ -28,8 +28,11 @@ class PipelineEventManager:
         queue = self._queues.get(issue_id)
         if queue is None:
             return
-        while True:
-            event = await queue.get()
-            if event is None:
-                return
-            yield event
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    return
+                yield event
+        finally:
+            self._queues.pop(issue_id, None)

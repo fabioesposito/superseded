@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
+from superseded.agents.factory import AgentFactory
 from superseded.models import (
     AgentResult,
     Issue,
@@ -10,6 +11,12 @@ from superseded.models import (
 from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.prompts import get_prompt_for_stage
 from superseded.pipeline.stages import STAGE_DEFINITIONS
+
+
+def _mock_factory(mock_agent):
+    factory = AgentFactory()
+    factory.create = lambda **kwargs: mock_agent
+    return factory
 
 
 def test_stage_definitions_exist():
@@ -51,7 +58,7 @@ async def test_harness_processes_stage():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec written", stderr="")
 
-    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo")
+    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
 
     issue = Issue(
         id="SUP-001",
@@ -72,7 +79,9 @@ async def test_harness_halts_on_failure():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="agent crashed")
 
-    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=1)
+    runner = HarnessRunner(
+        agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", max_retries=1
+    )
 
     issue = Issue(
         id="SUP-001",

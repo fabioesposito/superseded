@@ -3,6 +3,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
+from superseded.agents.factory import AgentFactory
 from superseded.config import RepoEntry, SupersededConfig
 from superseded.db import Database
 from superseded.models import AgentResult, Issue, Stage
@@ -10,6 +11,12 @@ from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.worktree import WorktreeManager
 from superseded.tickets.reader import read_issue
 from superseded.tickets.writer import write_issue
+
+
+def _mock_factory(mock_agent):
+    factory = AgentFactory()
+    factory.create = lambda **kwargs: mock_agent
+    return factory
 
 
 def _init_git_repo(path: Path) -> None:
@@ -86,7 +93,9 @@ Add feature that spans frontend and backend.
         mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
 
         # Create harness runner and configure repos
-        runner = HarnessRunner(agent=mock_agent, repo_path=str(primary), max_retries=1)
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent), repo_path=str(primary), max_retries=1
+        )
         runner.configure_repos(config.repos)
 
         # Run BUILD stage (multi-repo)
@@ -143,7 +152,9 @@ async def test_multi_repo_backward_compatible():
         mock_agent = AsyncMock()
         mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec done", stderr="")
 
-        runner = HarnessRunner(agent=mock_agent, repo_path=str(primary), max_retries=1)
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent), repo_path=str(primary), max_retries=1
+        )
 
         issue = Issue(
             id="SUP-051",

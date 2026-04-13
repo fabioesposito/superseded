@@ -76,10 +76,15 @@ class StageExecutor:
         stash_ref = None
         worktree_created = False
 
-        if needs_worktree and not self.worktree_manager.exists(issue.id, repo=repo_name):
-            stash_ref = await self.worktree_manager.stash_if_dirty(repo=repo_name)
-            await self.worktree_manager.create(issue.id, repo=repo_name)
-            worktree_created = True
+        try:
+            if needs_worktree and not self.worktree_manager.exists(issue.id, repo=repo_name):
+                stash_ref = await self.worktree_manager.stash_if_dirty(repo=repo_name)
+                await self.worktree_manager.create(issue.id, repo=repo_name)
+                worktree_created = True
+        except Exception:
+            if stash_ref:
+                await self.worktree_manager.pop_stash(stash_ref, repo=repo_name)
+            raise
 
         repo_previous_errors = await self._collect_previous_errors(issue.id, effective_repo)
 

@@ -141,13 +141,17 @@ async def stream_events(request: Request, issue_id: str, deps: Deps = Depends(ge
         return RedirectResponse(url="/", status_code=303)
 
     event_manager = _get_event_manager(deps)
+    event_manager.start(issue_id)
 
     async def event_generator():
-        async for event in event_manager.subscribe(issue_id):
-            yield {
-                "event": event.event_type,
-                "data": json.dumps({"content": event.content, "metadata": event.metadata}),
-            }
+        try:
+            async for event in event_manager.subscribe(issue_id):
+                yield {
+                    "event": event.event_type,
+                    "data": json.dumps({"content": event.content, "metadata": event.metadata}),
+                }
+        finally:
+            event_manager.stop(issue_id)
         yield {"event": "done", "data": "{}"}
 
     return EventSourceResponse(event_generator())

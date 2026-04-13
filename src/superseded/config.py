@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import yaml
@@ -41,6 +42,9 @@ def load_config(repo_path: Path) -> SupersededConfig:
         with open(config_file) as f:
             overrides = yaml.safe_load(f) or {}
     overrides.setdefault("repo_path", str(repo_path))
+    env_api_key = os.environ.get("SUPERSEDED_API_KEY", "")
+    if env_api_key:
+        overrides["api_key"] = env_api_key
     return SupersededConfig(**overrides)
 
 

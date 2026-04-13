@@ -4,7 +4,11 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-EXEMPT_PATHS = {"/health", "/static"}
+EXEMPT_PATH_PREFIXES = ("/health", "/static")
+
+
+def _is_exempt(path: str) -> bool:
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in EXEMPT_PATH_PREFIXES)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -18,7 +22,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         path = request.url.path
-        if path in EXEMPT_PATHS or path.startswith("/static/"):
+        if _is_exempt(path):
             return await call_next(request)
 
         provided = request.headers.get("X-API-Key", "")

@@ -2,25 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import frontmatter
-
-from superseded.models import Issue, IssueStatus, Stage
+from superseded.models import Issue
 
 
 def read_issue(filepath: str) -> Issue:
     path = Path(filepath)
-    post = frontmatter.load(path)
-    return Issue(
-        id=post.get("id", "SUP-000"),
-        title=post.get("title", "Untitled"),
-        status=IssueStatus(post.get("status", "new")),
-        stage=Stage(post.get("stage", "spec")),
-        created=post.get("created", ""),
-        assignee=post.get("assignee", ""),
-        labels=post.get("labels", []),
-        filepath=str(path),
-        repos=post.get("repos", []),
-    )
+    content = path.read_text(encoding="utf-8")
+    return Issue.from_frontmatter(content, filepath=str(path))
 
 
 def list_issues(issues_dir: str) -> list[Issue]:

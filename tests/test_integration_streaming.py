@@ -2,11 +2,18 @@ import tempfile
 from pathlib import Path
 
 from superseded.agents.base import SubprocessAgentAdapter
+from superseded.agents.factory import AgentFactory
 from superseded.db import Database
 from superseded.models import Issue, Stage
 from superseded.pipeline.context import ContextAssembler
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.harness import HarnessRunner
+
+
+def _agent_factory(agent):
+    factory = AgentFactory()
+    factory.create = lambda **kwargs: agent
+    return factory
 
 
 class EchoAdapter(SubprocessAgentAdapter):
@@ -31,7 +38,7 @@ async def test_full_streaming_pipeline():
         agent = EchoAdapter()
         event_manager = PipelineEventManager()
         runner = HarnessRunner(
-            agent=agent,
+            agent_factory=_agent_factory(agent),
             repo_path="/tmp/testrepo",
             event_manager=event_manager,
         )
@@ -116,7 +123,7 @@ async def test_streaming_with_retries_records_all_attempts():
         agent = FailThenPassAdapter()
         event_manager = PipelineEventManager()
         runner = HarnessRunner(
-            agent=agent,
+            agent_factory=_agent_factory(agent),
             repo_path="/tmp/testrepo",
             max_retries=3,
             retryable_stages=["build"],

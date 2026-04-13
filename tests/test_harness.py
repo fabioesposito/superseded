@@ -18,6 +18,12 @@ def _make_issue() -> Issue:
     )
 
 
+def _mock_factory(mock_agent):
+    factory = AgentFactory()
+    factory.create = lambda **kwargs: mock_agent
+    return factory
+
+
 async def test_harness_retries_on_failure():
     mock_agent = AsyncMock()
     mock_agent.run.side_effect = [
@@ -26,7 +32,9 @@ async def test_harness_retries_on_failure():
         AgentResult(exit_code=0, stdout="build succeeded", stderr=""),
     ]
 
-    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=3)
+    runner = HarnessRunner(
+        agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", max_retries=3
+    )
     with tempfile.TemporaryDirectory() as tmp:
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
@@ -44,7 +52,9 @@ async def test_harness_stops_after_max_retries():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="persistent failure")
 
-    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=2)
+    runner = HarnessRunner(
+        agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", max_retries=2
+    )
     with tempfile.TemporaryDirectory() as tmp:
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
@@ -63,7 +73,9 @@ async def test_harness_passes_on_first_try():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec written", stderr="")
 
-    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=3)
+    runner = HarnessRunner(
+        agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", max_retries=3
+    )
     with tempfile.TemporaryDirectory() as tmp:
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
@@ -82,7 +94,7 @@ async def test_harness_non_retryable_stage_no_retry():
     mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="ship failed")
 
     runner = HarnessRunner(
-        agent=mock_agent,
+        agent_factory=_mock_factory(mock_agent),
         repo_path="/tmp/testrepo",
         max_retries=3,
         retryable_stages=["build", "verify", "review"],
@@ -105,7 +117,9 @@ async def test_harness_multi_repo_fan_out():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
 
-    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=1)
+    runner = HarnessRunner(
+        agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", max_retries=1
+    )
 
     issue = Issue(
         id="SUP-001",
@@ -137,7 +151,9 @@ async def test_harness_multi_repo_single_repo_fallback():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
 
-    runner = HarnessRunner(agent=mock_agent, repo_path="/tmp/testrepo", max_retries=1)
+    runner = HarnessRunner(
+        agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", max_retries=1
+    )
 
     issue = Issue(
         id="SUP-001",

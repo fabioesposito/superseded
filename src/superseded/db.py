@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ class Database:
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
         self._conn: aiosqlite.Connection | None = None
+        self._id_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -87,18 +89,21 @@ class Database:
             );
         """)
         await conn.commit()
-        # Migration: add repo column if missing
-        for table, column in [
+        migrations: list[tuple[str, str]] = [
             ("stage_results", "repo"),
             ("harness_iterations", "repo"),
-        ]:
+        ]
+        valid_tables = {"stage_results", "harness_iterations"}
+        for table, column in migrations:
+            if table not in valid_tables:
+                continue
             try:
                 await conn.execute(
                     f"ALTER TABLE {table} ADD COLUMN {column} TEXT DEFAULT 'primary'"
                 )
                 await conn.commit()
             except aiosqlite.OperationalError:
-                pass  # Column already exists
+                pass
 
     def _require_conn(self) -> aiosqlite.Connection:
         if self._conn is None:
@@ -252,13 +257,14 @@ class Database:
         return results
 
     async def next_issue_id(self) -> str:
-        conn = self._require_conn()
-        cursor = await conn.execute(
-            "SELECT MAX(CAST(SUBSTR(id, 5) AS INTEGER)) FROM issues WHERE id LIKE 'SUP-%'"
-        )
-        row = await cursor.fetchone()
-        max_num = row[0] if row and row[0] else 0
-        return f"SUP-{max_num + 1:03d}"
+        async with self._id_lock:
+            conn = self._require_conn()
+            cursor = await conn.execute(
+                "SELECT MAX(CAST(SUBSTR(id, 5) AS INTEGER)) FROM issues WHERE id LIKE 'SUP-%'"
+            )
+            row = await cursor.fetchone()
+            max_num = row[0] if row and row[0] else 0
+            return f"SUP-{max_num + 1:03d}"
 
     async def save_session_turn(self, issue_id: str, turn: SessionTurn) -> None:
         conn = self._require_conn()

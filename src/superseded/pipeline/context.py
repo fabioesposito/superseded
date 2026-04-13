@@ -4,6 +4,7 @@ from pathlib import Path
 
 from superseded.models import Issue, Stage
 from superseded.pipeline.prompts import get_prompt_for_stage
+from superseded.validation import sanitize_agent_prompt
 
 
 class ContextAssembler:
@@ -175,4 +176,5 @@ class ContextAssembler:
         if previous_errors:
             layers.append(self._build_error_layer(previous_errors, iteration))
 
-        return "\n\n---\n\n".join(layers)
+        prompt = "\n\n---\n\n".join(layers)
+        return sanitize_agent_prompt(prompt)
