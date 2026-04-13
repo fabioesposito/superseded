@@ -18,14 +18,37 @@ from superseded.validation import InvalidInputError, validate_issue_id
 router = APIRouter(prefix="/issues")
 
 
+def _get_form_data(request: Request):
+    """Get form data, checking request.state first (set by CSRF middleware)."""
+    if hasattr(request.state, "form_data"):
+        return request.state.form_data
+    return {}
+
+
 @router.get("/new", response_class=HTMLResponse)
 async def new_issue_form(request: Request, deps: Deps = Depends(get_deps)):
-    return get_templates().TemplateResponse(request, "issue_new.html", {})
+    from superseded.routes.csrf import _generate_csrf_token
+
+    csrf_token = request.cookies.get("csrf_token", "")
+    if not csrf_token:
+        csrf_token = _generate_csrf_token()
+    response = get_templates().TemplateResponse(
+        request, "issue_new.html", {"csrf_token": csrf_token}
+    )
+    if "csrf_token" not in request.cookies:
+        response.set_cookie(
+            "csrf_token",
+            csrf_token,
+            httponly=False,
+            samesite="lax",
+            secure=request.url.scheme == "https",
+        )
+    return response
 
 
 @router.post("/import", response_class=HTMLResponse)
 async def import_github_issue(request: Request, deps: Deps = Depends(get_deps)):
-    form = await request.form()
+    form = _get_form_data(request)
     github_url = str(form.get("github_url", "")).strip()
 
     try:
@@ -55,7 +78,7 @@ async def import_github_issue(request: Request, deps: Deps = Depends(get_deps)):
 
 @router.post("/new", response_class=RedirectResponse)
 async def create_issue(request: Request, deps: Deps = Depends(get_deps)):
-    form = await request.form()
+    form = _get_form_data(request)
     title = str(form.get("title", "")).strip()
     body = str(form.get("body", "")).strip()
     labels_str = str(form.get("labels", "")).strip()

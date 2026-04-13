@@ -27,6 +27,7 @@
 
     <div id="form-container">
     <form action="/issues/new" method="post" class="space-y-5">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="github_url" value="{{ github_url or '' }}">
         <div>
             <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Title</label>

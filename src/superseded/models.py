@@ -52,15 +52,15 @@ class Issue(BaseModel):
         post = frontmatter.loads(content)
         return cls(
             id=post.get("id", "SUP-000"),
-            title=post.get("title", "Untitled"),
+            title=post.get("title") or "Untitled",
             status=IssueStatus(post.get("status", "new")),
             stage=Stage(post.get("stage", "spec")),
             created=post.get("created", datetime.date.today()),
-            assignee=post.get("assignee", ""),
-            labels=post.get("labels", []),
+            assignee=post.get("assignee") or "",
+            labels=post.get("labels") or [],
             filepath=filepath,
-            repos=post.get("repos", []),
-            github_url=post.get("github_url", ""),
+            repos=post.get("repos") or [],
+            github_url=post.get("github_url") or "",
         )
 
     def next_stage(self) -> Stage | None:

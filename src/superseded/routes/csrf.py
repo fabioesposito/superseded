@@ -46,7 +46,27 @@ class CsrfMiddleware(BaseHTTPMiddleware):
         csrf_cookie = request.cookies.get("csrf_token", "")
         csrf_header = request.headers.get("X-CSRF-Token", "")
 
-        if not csrf_cookie or csrf_header != csrf_cookie:
+        # For form submissions, also check form data
+        csrf_form = ""
+        if not csrf_header:
+            content_type = request.headers.get("content-type", "")
+            if (
+                "application/x-www-form-urlencoded" in content_type
+                or "multipart/form-data" in content_type
+            ):
+                try:
+                    form = await request.form()
+                    csrf_form = form.get("csrf_token", "")
+                    # Store form data in request state so routes can access it
+                    # without re-reading the consumed stream
+                    request.state.form_data = dict(form)
+                except Exception:
+                    pass
+
+        # Accept token from header (HTMX) or form field (regular forms)
+        csrf_token = csrf_header or csrf_form
+
+        if not csrf_cookie or csrf_token != csrf_cookie:
             return JSONResponse(status_code=403, content={"error": "CSRF validation failed"})
 
         return await call_next(request)

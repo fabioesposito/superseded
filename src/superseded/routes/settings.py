@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from superseded.config import RepoEntry, StageAgentConfig, SupersededConfig, save_config
@@ -11,6 +11,13 @@ from superseded.routes.deps import Deps, get_deps
 from superseded.validation import InvalidInputError, validate_git_url, validate_repo_path
 
 router = APIRouter()
+
+
+def _get_form_data(request: Request):
+    """Get form data, checking request.state first (set by CSRF middleware)."""
+    if hasattr(request.state, "form_data"):
+        return request.state.form_data
+    return {}
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -34,11 +41,13 @@ async def settings_page(request: Request, deps: Deps = Depends(get_deps)):
 async def add_repo(
     request: Request,
     deps: Deps = Depends(get_deps),
-    name: str = Form(...),
-    git_url: str = Form(""),
-    path: str = Form(...),
-    branch: str = Form(""),
 ):
+    form = _get_form_data(request)
+    name = str(form.get("name", "")).strip()
+    git_url = str(form.get("git_url", "")).strip()
+    path = str(form.get("path", "")).strip()
+    branch = str(form.get("branch", "")).strip()
+
     config = deps.config
     try:
         if git_url.strip():
@@ -74,27 +83,34 @@ async def delete_repo(
 async def update_agents(
     request: Request,
     deps: Deps = Depends(get_deps),
-    spec_cli: str = Form("opencode"),
-    spec_model: str = Form("opencode-go/kimi-k2.5"),
-    plan_cli: str = Form("opencode"),
-    plan_model: str = Form("opencode-go/kimi-k2.5"),
-    build_cli: str = Form("opencode"),
-    build_model: str = Form("opencode-go/kimi-k2.5"),
-    verify_cli: str = Form("opencode"),
-    verify_model: str = Form("opencode-go/kimi-k2.5"),
-    review_cli: str = Form("opencode"),
-    review_model: str = Form("opencode-go/kimi-k2.5"),
-    ship_cli: str = Form("opencode"),
-    ship_model: str = Form("opencode-go/kimi-k2.5"),
 ):
+    form = _get_form_data(request)
     config = deps.config
     stages_data = {
-        "spec": StageAgentConfig(cli=spec_cli, model=spec_model),
-        "plan": StageAgentConfig(cli=plan_cli, model=plan_model),
-        "build": StageAgentConfig(cli=build_cli, model=build_model),
-        "verify": StageAgentConfig(cli=verify_cli, model=verify_model),
-        "review": StageAgentConfig(cli=review_cli, model=review_model),
-        "ship": StageAgentConfig(cli=ship_cli, model=ship_model),
+        "spec": StageAgentConfig(
+            cli=str(form.get("spec_cli", "opencode")),
+            model=str(form.get("spec_model", "opencode-go/kimi-k2.5")),
+        ),
+        "plan": StageAgentConfig(
+            cli=str(form.get("plan_cli", "opencode")),
+            model=str(form.get("plan_model", "opencode-go/kimi-k2.5")),
+        ),
+        "build": StageAgentConfig(
+            cli=str(form.get("build_cli", "opencode")),
+            model=str(form.get("build_model", "opencode-go/kimi-k2.5")),
+        ),
+        "verify": StageAgentConfig(
+            cli=str(form.get("verify_cli", "opencode")),
+            model=str(form.get("verify_model", "opencode-go/kimi-k2.5")),
+        ),
+        "review": StageAgentConfig(
+            cli=str(form.get("review_cli", "opencode")),
+            model=str(form.get("review_model", "opencode-go/kimi-k2.5")),
+        ),
+        "ship": StageAgentConfig(
+            cli=str(form.get("ship_cli", "opencode")),
+            model=str(form.get("ship_model", "opencode-go/kimi-k2.5")),
+        ),
     }
     config.stages = stages_data
     save_config(config, Path(config.repo_path))
