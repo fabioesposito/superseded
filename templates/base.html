@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
     <meta name="csrf-token" content="{{ request.cookies.get('csrf_token', '') }}">
     <script>
-    document.body.addEventListener('htmx:configRequest', function(evt) {
+    document.addEventListener('htmx:configRequest', function(evt) {
         var token = document.querySelector('meta[name="csrf-token"]');
         if (token) evt.detail.headers['X-CSRF-Token'] = token.content;
     });

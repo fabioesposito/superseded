@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 
 class StageAgentConfig(BaseModel):
-    cli: str = "claude-code"
-    model: str = ""
+    cli: str = "opencode"
+    model: str = "opencode-go/kimi-k2.5"
 
 
 class RepoEntry(BaseModel):
@@ -19,19 +19,20 @@ class RepoEntry(BaseModel):
 
 
 class SupersededConfig(BaseModel):
-    default_agent: str = "claude-code"
+    default_agent: str = "opencode"
     stage_timeout_seconds: int = 600
     repo_path: str = ""
     repos: dict[str, RepoEntry] = Field(default_factory=dict)
     port: int = 8000
-    host: str = "127.0.0.1"
+    # host: str = "127.0.0.1"
+    host: str = "0.0.0.0"
     db_path: str = ".superseded/state.db"
     issues_dir: str = ".superseded/issues"
     artifacts_dir: str = ".superseded/artifacts"
     max_retries: int = 3
     retryable_stages: list[str] = Field(default_factory=lambda: ["build", "verify", "review"])
     api_key: str = ""
-    default_model: str = ""
+    default_model: str = "opencode-go/kimi-k2.5"
     stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
 
 
