@@ -4,8 +4,8 @@ from superseded.agents.base import SubprocessAgentAdapter
 
 
 class CodexAdapter(SubprocessAgentAdapter):
-    def __init__(self, model: str = "", timeout: int = 600) -> None:
-        super().__init__(timeout=timeout)
+    def __init__(self, model: str = "", timeout: int = 600, github_token: str = "") -> None:
+        super().__init__(timeout=timeout, github_token=github_token)
         self.model = model
 
     def _build_command(self, prompt: str) -> list[str]:

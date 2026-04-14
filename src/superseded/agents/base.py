@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
@@ -21,8 +22,16 @@ class AgentAdapter(Protocol):
 
 
 class SubprocessAgentAdapter(AgentAdapter, ABC):
-    def __init__(self, timeout: int = 600) -> None:
+    def __init__(self, timeout: int = 600, github_token: str = "") -> None:
         self.timeout = timeout
+        self.github_token = github_token
+
+    def _build_env(self) -> dict[str, str] | None:
+        if not self.github_token:
+            return None
+        env = os.environ.copy()
+        env["GITHUB_TOKEN"] = self.github_token
+        return env
 
     @abstractmethod
     def _build_command(self, prompt: str) -> list[str]: ...
@@ -42,6 +51,7 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 cwd=cwd,
+                env=self._build_env(),
                 stdin=asyncio.subprocess.PIPE if stdin_data else None,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -70,6 +80,7 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 cwd=cwd,
+                env=self._build_env(),
                 stdin=asyncio.subprocess.PIPE if stdin_data else None,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,

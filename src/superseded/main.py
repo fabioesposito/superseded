@@ -41,6 +41,7 @@ def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
         default_agent=config.default_agent,
         default_model=config.default_model,
         timeout=config.stage_timeout_seconds,
+        github_token=config.github_token,
     )
     runner = HarnessRunner(
         agent_factory=factory,
