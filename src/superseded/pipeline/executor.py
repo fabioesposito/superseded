@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from pathlib import Path
 
 from superseded.config import SupersededConfig
@@ -76,6 +78,16 @@ class StageExecutor:
         stash_ref = None
         worktree_created = False
 
+        if stage == Stage.SHIP:
+            ok, msg = await self._check_gh_auth(self.runner.agent_factory.github_token)
+            if not ok:
+                return StageResult(
+                    stage=stage,
+                    passed=False,
+                    output="",
+                    error=f"gh auth failed: {msg}",
+                )
+
         try:
             if needs_worktree and not self.worktree_manager.exists(issue.id, repo=repo_name):
                 stash_ref = await self.worktree_manager.stash_if_dirty(repo=repo_name)
@@ -139,3 +151,23 @@ class StageExecutor:
                 if i.get("stage") == stage.value and i.get("repo", "primary") == repo
             ]
         )
+
+    async def _check_gh_auth(self, github_token: str) -> tuple[bool, str]:
+        env = os.environ.copy()
+        if github_token:
+            env["GITHUB_TOKEN"] = github_token
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "gh",
+                "auth",
+                "status",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            _stdout, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                return True, ""
+            return False, stderr.decode("utf-8", errors="replace")
+        except FileNotFoundError:
+            return False, "gh CLI not installed"
