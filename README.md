@@ -2,6 +2,24 @@
 
 Local-first agentic pipeline harness. Write a ticket in markdown, and Superseded delegates implementation, testing, and release to AI agents running on your machine.
 
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+  - [Requirements](#requirements)
+- [Configuration](#configuration)
+- [Project Rules](#project-rules)
+- [Multi-Repo Support](#multi-repo-support)
+- [Per-Stage Agent Selection](#per-stage-agent-selection)
+- [Ticket Format](#ticket-format)
+- [Architecture](#architecture)
+  - [Data Flow](#data-flow)
+  - [Stage → Skill Mapping](#stage--skill-mapping)
+- [Project Structure](#project-structure)
+- [Running Tests](#running-tests)
+- [Vendored Skills](#vendored-skills)
+- [Key Design Decisions](#key-design-decisions)
+
 ## Features
 
 - **Markdown tickets** — Issues live as `.md` files with YAML frontmatter in `.superseded/issues/`. Markdown is the single source of truth; SQLite is a fast cache/index.
