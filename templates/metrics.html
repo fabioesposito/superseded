@@ -27,10 +27,12 @@
             <div class="card card-accent-olive rounded-xl p-5">
                 <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Best Stage</h3>
                 <p id="best-stage" class="text-lg font-bold text-olive-400"></p>
+                <p id="best-empty" class="text-shell-500 text-sm hidden">—</p>
             </div>
             <div class="card card-accent-petal rounded-xl p-5">
                 <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">Worst Stage</h3>
                 <p id="worst-stage" class="text-lg font-bold text-coral-400"></p>
+                <p id="worst-empty" class="text-shell-500 text-sm hidden">—</p>
             </div>
         </div>
     </div>
@@ -83,6 +85,10 @@
         document.getElementById('health-gauge').classList.add('hidden');
         document.getElementById('health-label').classList.add('hidden');
         document.getElementById('health-empty').classList.remove('hidden');
+        document.getElementById('best-stage').classList.add('hidden');
+        document.getElementById('best-empty').classList.remove('hidden');
+        document.getElementById('worst-stage').classList.add('hidden');
+        document.getElementById('worst-empty').classList.remove('hidden');
     } else {
         var rateValues = stages.map(function(s) { return stageRates[s] || 0; });
         var avgRate = rateValues.reduce(function(a, b) { return a + b; }, 0) / rateValues.length;
@@ -116,18 +122,18 @@
             labels: ['Health'],
             theme: { mode: 'dark' }
         }).render();
-    }
 
-    // --- Best/Worst Stage ---
-    var best = { name: '', rate: -1 };
-    var worst = { name: '', rate: 2 };
-    stages.forEach(function(s) {
-        var r = stageRates[s] || 0;
-        if (r > best.rate) best = { name: s, rate: r };
-        if (r < worst.rate) worst = { name: s, rate: r };
-    });
-    document.getElementById('best-stage').textContent = best.name + ' ' + Math.round(best.rate * 100) + '%';
-    document.getElementById('worst-stage').textContent = worst.name + ' ' + Math.round(worst.rate * 100) + '%';
+        // --- Best/Worst Stage ---
+        var best = { name: '', rate: -1 };
+        var worst = { name: '', rate: 2 };
+        stages.forEach(function(s) {
+            var r = stageRates[s] || 0;
+            if (r > best.rate) best = { name: s, rate: r };
+            if (r < worst.rate) worst = { name: s, rate: r };
+        });
+        document.getElementById('best-stage').textContent = best.name + ' ' + Math.round(best.rate * 100) + '%';
+        document.getElementById('worst-stage').textContent = worst.name + ' ' + Math.round(worst.rate * 100) + '%';
+    }
 
     // --- Issues Donut ---
     var statusColors = {
