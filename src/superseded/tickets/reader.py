@@ -16,6 +16,6 @@ def list_issues(issues_dir: str) -> list[Issue]:
     if not path.exists():
         return []
     issues: list[Issue] = []
-    for md_file in sorted(path.glob("*.md")):
+    for md_file in sorted(path.glob("*.md"), reverse=True):
         issues.append(read_issue(str(md_file)))
     return issues
