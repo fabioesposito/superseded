@@ -95,8 +95,8 @@ async def test_full_streaming_pipeline():
         await db.close()
 
 
-async def test_streaming_with_retries_records_all_attempts():
-    """Verify that retry attempts each get their own session turns."""
+async def test_streaming_records_single_attempt():
+    """Verify that a single run gets its own session turns."""
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "state.db"
         db = Database(str(db_path))
@@ -104,29 +104,20 @@ async def test_streaming_with_retries_records_all_attempts():
 
         issue = Issue(
             id="SUP-002",
-            title="Retry test",
+            title="Single run test",
             filepath=".superseded/issues/SUP-002-test.md",
         )
         await db.upsert_issue(issue)
 
-        class FailThenPassAdapter(SubprocessAgentAdapter):
-            def __init__(self):
-                super().__init__()
-                self.call_count = 0
-
+        class FailAdapter(SubprocessAgentAdapter):
             def _build_command(self, prompt: str) -> list[str]:
-                self.call_count += 1
-                if self.call_count < 3:
-                    return ["sh", "-c", "echo fail; exit 1"]
-                return ["echo", "success"]
+                return ["sh", "-c", "echo fail; exit 1"]
 
-        agent = FailThenPassAdapter()
+        agent = FailAdapter()
         event_manager = PipelineEventManager()
         runner = HarnessRunner(
             agent_factory=_agent_factory(agent),
             repo_path="/tmp/testrepo",
-            max_retries=3,
-            retryable_stages=["build"],
             event_manager=event_manager,
         )
 
@@ -141,11 +132,11 @@ async def test_streaming_with_retries_records_all_attempts():
             event_manager=event_manager,
         )
 
-        assert result.passed is True
-        assert agent.call_count == 3
+        assert result.passed is False
+        assert "fail" in result.error
 
-        # 3 attempts = 3 user turns + 3 assistant turns = 6
+        # Single run = 1 user turn + 1 assistant turn = 2
         turns = await db.get_session_turns("SUP-002")
-        assert len(turns) == 6
+        assert len(turns) == 2
 
         await db.close()

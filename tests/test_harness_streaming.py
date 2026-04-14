@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 from superseded.agents.factory import AgentFactory
 from superseded.db import Database
-from superseded.models import AgentEvent, Issue, Stage
+from superseded.models import AgentEvent, AgentResult, Issue, Stage
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.harness import HarnessRunner
 
@@ -108,69 +108,32 @@ async def test_streaming_saves_agent_events():
         await db.close()
 
 
-async def test_streaming_retries_on_failure():
+async def test_streaming_runs_once_on_failure():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "state.db"
         db = Database(str(db_path))
         await db.initialize()
 
         mock_agent = AsyncMock()
-        call_count = 0
-
-        async def fake_stream(prompt, context):
-            nonlocal call_count
-            call_count += 1
-            if call_count < 3:
-                yield AgentEvent(
-                    event_type="stderr",
-                    content=f"error attempt {call_count}",
-                    stage=Stage.BUILD,
-                )
-                yield AgentEvent(
-                    event_type="status",
-                    content="",
-                    stage=Stage.BUILD,
-                    metadata={"exit_code": 1, "duration_ms": 100},
-                )
-            else:
-                yield AgentEvent(
-                    event_type="stdout",
-                    content="success",
-                    stage=Stage.BUILD,
-                )
-                yield AgentEvent(
-                    event_type="status",
-                    content="",
-                    stage=Stage.BUILD,
-                    metadata={"exit_code": 0, "duration_ms": 100},
-                )
-
-        mock_agent.run_streaming = fake_stream
+        mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="error on build")
 
         runner = HarnessRunner(
             agent_factory=_mock_factory(mock_agent),
             repo_path="/tmp/testrepo",
-            max_retries=3,
-            retryable_stages=["build"],
         )
-        event_manager = PipelineEventManager()
 
         artifacts_path = Path(tmp) / "artifacts"
         artifacts_path.mkdir()
 
-        result = await runner.run_stage_streaming(
+        result = await runner.run_stage(
             issue=_make_issue(),
             stage=Stage.BUILD,
             artifacts_path=str(artifacts_path),
-            db=db,
-            event_manager=event_manager,
         )
 
-        assert result.passed is True
-        assert call_count == 3
-        turns = await db.get_session_turns("SUP-001")
-        # 3 attempts = 3 user turns + 3 assistant turns = 6
-        assert len(turns) == 6
+        assert result.passed is False
+        assert "error on build" in result.error
+        assert mock_agent.run.call_count == 1
 
         await db.close()
 

@@ -68,7 +68,7 @@ async def _get_csrf(client):
 
 async def test_advance_issue_success(tmp_repo):
     mock_runner = AsyncMock()
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SPEC, passed=True, output="spec done"
     )
 
@@ -107,7 +107,7 @@ async def test_advance_issue_not_found(tmp_repo):
 
 async def test_advance_issue_failure(tmp_repo):
     mock_runner = AsyncMock()
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SPEC, passed=False, output="", error="spec failed"
     )
 
@@ -144,7 +144,7 @@ Ship it.
     (issues_dir / "SUP-002-ship.md").write_text(ticket)
 
     mock_runner = AsyncMock()
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SHIP, passed=True, output="shipped"
     )
 
@@ -165,7 +165,7 @@ Ship it.
 
 async def test_retry_issue_success(tmp_repo):
     mock_runner = AsyncMock()
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SPEC, passed=True, output="spec done"
     )
 
@@ -187,7 +187,7 @@ async def test_retry_issue_success(tmp_repo):
 
 async def test_retry_issue_failure_sets_paused(tmp_repo):
     mock_runner = AsyncMock()
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SPEC, passed=False, output="", error="still broken"
     )
 

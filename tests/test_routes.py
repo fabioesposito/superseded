@@ -126,7 +126,7 @@ async def test_run_stage_multi_repo_fans_out(tmp_multi_repo):
 
     mock_result = StageResult(stage=Stage.SPEC, passed=True, output="ok")
     mock_runner = AsyncMock()
-    mock_runner.run_stage_with_retries.return_value = mock_result
+    mock_runner.run_stage_streaming.return_value = mock_result
 
     worktree_manager = WorktreeManager(tmp_multi_repo)
     executor = StageExecutor(
@@ -147,7 +147,7 @@ async def test_run_stage_multi_repo_fans_out(tmp_multi_repo):
     assert "[frontend]" in result.output
     assert "[backend]" in result.output
 
-    calls = mock_runner.run_stage_with_retries.call_args_list
+    calls = mock_runner.run_stage_streaming.call_args_list
     assert len(calls) == 2
     repos_called = {c.kwargs.get("repo") for c in calls}
     assert repos_called == {"frontend", "backend"}
@@ -182,7 +182,7 @@ Single repo body.
 
     mock_result = StageResult(stage=Stage.SPEC, passed=True, output="ok")
     mock_runner = AsyncMock()
-    mock_runner.run_stage_with_retries.return_value = mock_result
+    mock_runner.run_stage_streaming.return_value = mock_result
 
     worktree_manager = WorktreeManager(tmp_multi_repo)
     executor = StageExecutor(
@@ -199,6 +199,6 @@ Single repo body.
     assert result.passed is True
     assert "[primary]" in result.output
 
-    calls = mock_runner.run_stage_with_retries.call_args_list
+    calls = mock_runner.run_stage_streaming.call_args_list
     assert len(calls) == 1
     assert calls[0].kwargs.get("repo") is None

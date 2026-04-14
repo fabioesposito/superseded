@@ -8,7 +8,6 @@ from pathlib import Path
 from superseded.config import SupersededConfig
 from superseded.db import Database
 from superseded.models import (
-    HarnessIteration,
     Issue,
     IssueStatus,
     Stage,
@@ -107,13 +106,14 @@ class StageExecutor:
         repo_artifacts = str(Path(artifacts_path) / effective_repo)
         Path(repo_artifacts).mkdir(parents=True, exist_ok=True)
 
-        result = await self.runner.run_stage_with_retries(
+        result = await self.runner.run_stage_streaming(
             issue=issue,
             stage=stage,
             artifacts_path=repo_artifacts,
+            db=self.db,
+            event_manager=self.runner.event_manager,
             previous_errors=repo_previous_errors if repo_previous_errors else None,
             repo=repo_name,
-            event_manager=self.runner.event_manager,
         )
 
         if not result.passed:
@@ -121,26 +121,11 @@ class StageExecutor:
             if questions_file.exists():
                 await self.db.update_pause_reason(issue.id, "awaiting-input")
             else:
-                await self.db.update_pause_reason(issue.id, "retries-exhausted")
+                await self.db.update_pause_reason(issue.id, "failed")
         else:
             await self.db.update_pause_reason(issue.id, "")
 
         await self.db.save_stage_result(issue.id, result, repo=effective_repo)
-
-        attempt_num = await self._count_attempts(issue.id, stage, effective_repo)
-        iteration = HarnessIteration(
-            attempt=attempt_num,
-            stage=stage,
-            previous_errors=repo_previous_errors,
-        )
-        await self.db.save_harness_iteration(
-            issue.id,
-            iteration,
-            exit_code=0 if result.passed else 1,
-            output=result.output,
-            error=result.error,
-            repo=effective_repo,
-        )
 
         if not result.passed and stash_ref:
             await self.worktree_manager.pop_stash(stash_ref, repo=repo_name)
@@ -155,16 +140,6 @@ class StageExecutor:
     async def _collect_previous_errors(self, issue_id: str, repo: str) -> list[str]:
         stage_results = await self.db.get_stage_results(issue_id, repo=repo)
         return [sr["error"] for sr in stage_results if not sr.get("passed") and sr.get("error")]
-
-    async def _count_attempts(self, issue_id: str, stage: Stage, repo: str) -> int:
-        existing = await self.db.get_harness_iterations(issue_id)
-        return len(
-            [
-                i
-                for i in existing
-                if i.get("stage") == stage.value and i.get("repo", "primary") == repo
-            ]
-        )
 
     async def _check_gh_auth(self, github_token: str) -> tuple[bool, str]:
         env = os.environ.copy()

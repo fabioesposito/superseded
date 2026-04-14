@@ -58,7 +58,7 @@ async def executor_setup():
 async def test_executor_spec_stage_no_worktree(executor_setup):
     executor, db, config, mock_runner, _, _, ticket_path = executor_setup
 
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SPEC, passed=True, output="spec done"
     )
 
@@ -73,7 +73,7 @@ async def test_executor_spec_stage_no_worktree(executor_setup):
 async def test_executor_build_stage_creates_worktree(executor_setup):
     executor, db, config, mock_runner, _, repo_path, ticket_path = executor_setup
 
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.BUILD, passed=True, output="built"
     )
 
@@ -93,7 +93,7 @@ async def test_executor_build_stage_creates_worktree(executor_setup):
 async def test_executor_failure_updates_status(executor_setup):
     executor, db, config, mock_runner, _, _, ticket_path = executor_setup
 
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SPEC, passed=False, output="", error="spec failed"
     )
 
@@ -113,7 +113,7 @@ async def test_executor_collects_previous_errors(executor_setup):
         StageResult(stage=Stage.SPEC, passed=False, output="", error="prev error"),
     )
 
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SPEC, passed=True, output="fixed"
     )
 
@@ -122,7 +122,7 @@ async def test_executor_collects_previous_errors(executor_setup):
 
     await executor.run_stage(issue, Stage.SPEC, config)
 
-    call_kwargs = mock_runner.run_stage_with_retries.call_args.kwargs
+    call_kwargs = mock_runner.run_stage_streaming.call_args.kwargs
     assert call_kwargs["previous_errors"] == ["prev error"]
 
 
@@ -135,7 +135,7 @@ async def test_executor_ship_stage_cleans_up_worktree(executor_setup):
     subprocess_run(["git", "add", "."], cwd=repo_path)
     subprocess_run(["git", "commit", "-m", "init"], cwd=repo_path)
 
-    mock_runner.run_stage_with_retries.return_value = StageResult(
+    mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SHIP, passed=True, output="shipped"
     )
 
@@ -144,25 +144,6 @@ async def test_executor_ship_stage_cleans_up_worktree(executor_setup):
 
     result = await executor.run_stage(issue, Stage.SHIP, config)
     assert result.passed is True
-
-
-async def test_executor_saves_harness_iteration(executor_setup):
-    executor, db, config, mock_runner, _, _, ticket_path = executor_setup
-
-    mock_runner.run_stage_with_retries.return_value = StageResult(
-        stage=Stage.SPEC, passed=True, output="ok"
-    )
-
-    issue = Issue(id="SUP-001", title="Test", filepath=ticket_path)
-    await db.upsert_issue(issue)
-
-    await executor.run_stage(issue, Stage.SPEC, config)
-
-    iterations = await db.get_harness_iterations("SUP-001")
-    assert len(iterations) == 1
-    assert iterations[0]["attempt"] == 0
-    assert iterations[0]["stage"] == "spec"
-    assert iterations[0]["exit_code"] == 0
 
 
 async def test_executor_multi_repo_partial_failure(executor_setup):
@@ -180,7 +161,7 @@ async def test_executor_multi_repo_partial_failure(executor_setup):
             return StageResult(stage=Stage.SPEC, passed=True, output="frontend ok")
         return StageResult(stage=Stage.SPEC, passed=False, output="", error="backend failed")
 
-    mock_runner.run_stage_with_retries.side_effect = side_effect
+    mock_runner.run_stage_streaming.side_effect = side_effect
 
     result = await executor.run_stage(issue, Stage.SPEC, config)
     assert result.passed is False

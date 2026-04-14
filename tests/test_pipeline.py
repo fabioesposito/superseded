@@ -68,7 +68,7 @@ async def test_harness_processes_stage():
     with tempfile.TemporaryDirectory() as tmp:
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
-        result = await runner.run_stage_with_retries(issue, Stage.SPEC, str(artifacts_path))
+        result = await runner.run_stage(issue, Stage.SPEC, str(artifacts_path))
 
     assert result.passed is True
     assert result.stage == Stage.SPEC
@@ -79,9 +79,7 @@ async def test_harness_halts_on_failure():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="agent crashed")
 
-    runner = HarnessRunner(
-        agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", max_retries=1
-    )
+    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
 
     issue = Issue(
         id="SUP-001",
@@ -91,7 +89,7 @@ async def test_harness_halts_on_failure():
     with tempfile.TemporaryDirectory() as tmp:
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
-        result = await runner.run_stage_with_retries(issue, Stage.BUILD, str(artifacts_path))
+        result = await runner.run_stage(issue, Stage.BUILD, str(artifacts_path))
 
     assert result.passed is False
     assert "agent crashed" in result.error

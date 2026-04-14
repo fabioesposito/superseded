@@ -9,7 +9,6 @@ from superseded.config import RepoEntry, StageAgentConfig
 from superseded.db import Database
 from superseded.models import (
     AgentContext,
-    AgentEvent,
     AgentResult,
     HarnessIteration,
     Issue,
@@ -51,112 +50,85 @@ class HarnessRunner:
             return self.agent_factory.create(cli=config.cli, model=config.model)
         return self.agent_factory.create()
 
-    async def run_stage_with_retries(
+    async def run_stage(
         self,
         issue: Issue,
         stage: Stage,
         artifacts_path: str,
         previous_errors: list[str] | None = None,
         repo: str | None = None,
-        event_manager: PipelineEventManager | None = None,
     ) -> StageResult:
-        errors: list[str] = previous_errors or []
-        effective_max = self.max_retries if stage.value in self.retryable_stages else 1
-
+        """Run a stage once (no retries). User decides when to retry."""
         worktree_path = ""
         if repo and self.worktree_manager.exists(issue.id, repo=repo):
             worktree_path = str(self.worktree_manager.get_path(issue.id, repo=repo))
 
-        for attempt in range(effective_max):
-            prompt = self.context_assembler.build(
-                stage=stage,
-                issue=issue,
-                artifacts_path=artifacts_path,
-                previous_errors=errors if errors else None,
-                iteration=attempt,
-                target_repo=repo,
-            )
+        prompt = self.context_assembler.build(
+            stage=stage,
+            issue=issue,
+            artifacts_path=artifacts_path,
+            previous_errors=previous_errors,
+            iteration=0,
+            target_repo=repo,
+        )
 
-            context = AgentContext(
-                repo_path=self.repo_path,
-                issue=issue,
-                skill_prompt=prompt,
-                artifacts_path=artifacts_path,
-                worktree_path=worktree_path,
-                iteration=attempt,
-                previous_errors=errors,
-            )
+        context = AgentContext(
+            repo_path=self.repo_path,
+            issue=issue,
+            skill_prompt=prompt,
+            artifacts_path=artifacts_path,
+            worktree_path=worktree_path,
+            iteration=0,
+            previous_errors=previous_errors or [],
+        )
 
-            if event_manager:
-                await event_manager.publish(
-                    issue.id,
-                    AgentEvent(
-                        event_type="progress",
-                        content=f"Running {stage.value} stage (attempt {attempt + 1})...",
-                        stage=stage,
-                    ),
-                )
+        started = datetime.datetime.now(datetime.UTC)
+        agent_result: AgentResult = await self.resolve_agent(stage).run(prompt, context)
+        finished = datetime.datetime.now(datetime.UTC)
 
-            started = datetime.datetime.now(datetime.UTC)
-            agent_result: AgentResult = await self.resolve_agent(stage).run(prompt, context)
-            finished = datetime.datetime.now(datetime.UTC)
+        passed = agent_result.exit_code == 0
 
-            passed = agent_result.exit_code == 0
+        if passed:
+            if stage in (Stage.SPEC, Stage.PLAN):
+                artifact_file = Path(artifacts_path) / f"{stage.value}.md"
+                artifact_file.parent.mkdir(parents=True, exist_ok=True)
+                artifact_file.write_text(agent_result.stdout, encoding="utf-8")
 
-            if event_manager:
-                status = "passed" if passed else "failed"
-                await event_manager.publish(
-                    issue.id,
-                    AgentEvent(
-                        event_type="progress", content=f"{stage.value} stage {status}", stage=stage
-                    ),
-                )
-
-            if passed:
-                if stage in (Stage.SPEC, Stage.PLAN):
-                    artifact_file = Path(artifacts_path) / f"{stage.value}.md"
-                    artifact_file.parent.mkdir(parents=True, exist_ok=True)
-                    artifact_file.write_text(agent_result.stdout, encoding="utf-8")
-
-                questions_file = Path(artifacts_path) / "questions.md"
-                if questions_file.exists():
-                    return StageResult(
-                        stage=stage,
-                        passed=False,
-                        output=agent_result.stdout,
-                        error="awaiting-input",
-                        artifacts=[],
-                        started_at=started,
-                        finished_at=finished,
-                    )
-
-                error = ""
+            questions_file = Path(artifacts_path) / "questions.md"
+            if questions_file.exists():
                 return StageResult(
                     stage=stage,
-                    passed=True,
+                    passed=False,
                     output=agent_result.stdout,
-                    error=error,
-                    artifacts=agent_result.files_changed,
+                    error="awaiting-input",
+                    artifacts=[],
                     started_at=started,
                     finished_at=finished,
                 )
 
-            error_msg = (
-                agent_result.stderr
-                if agent_result.stderr
-                else f"Agent exited with code {agent_result.exit_code}"
+            return StageResult(
+                stage=stage,
+                passed=True,
+                output=agent_result.stdout,
+                error="",
+                artifacts=agent_result.files_changed,
+                started_at=started,
+                finished_at=finished,
             )
-            errors.append(error_msg)
 
-        combined_errors = "; ".join(errors)
+        error_msg = (
+            agent_result.stderr
+            if agent_result.stderr
+            else f"Agent exited with code {agent_result.exit_code}"
+        )
         return StageResult(
             stage=stage,
             passed=False,
-            output="",
-            error=combined_errors,
+            output=agent_result.stdout,
+            error=error_msg,
             artifacts=[],
-            started_at=datetime.datetime.now(datetime.UTC),
-            finished_at=datetime.datetime.now(datetime.UTC),
+            started_at=started,
+            finished_at=finished,
         )
 
     async def run_stage_streaming(
@@ -167,109 +139,126 @@ class HarnessRunner:
         db: Database,
         event_manager: PipelineEventManager | None = None,
         previous_errors: list[str] | None = None,
+        repo: str | None = None,
     ) -> StageResult:
-        errors: list[str] = previous_errors or []
-        effective_max = self.max_retries if stage.value in self.retryable_stages else 1
+        """Run a stage once with streaming, saving all events to DB. User decides when to retry."""
         em = event_manager or self.event_manager
+        worktree_path = ""
+        if repo and self.worktree_manager.exists(issue.id, repo=repo):
+            worktree_path = str(self.worktree_manager.get_path(issue.id, repo=repo))
 
-        for attempt in range(effective_max):
-            prompt = self.context_assembler.build(
+        prompt = self.context_assembler.build(
+            stage=stage,
+            issue=issue,
+            artifacts_path=artifacts_path,
+            previous_errors=previous_errors,
+            iteration=0,
+            target_repo=repo,
+        )
+
+        context = AgentContext(
+            repo_path=self.repo_path,
+            issue=issue,
+            skill_prompt=prompt,
+            artifacts_path=artifacts_path,
+            worktree_path=worktree_path,
+            iteration=0,
+            previous_errors=previous_errors or [],
+        )
+
+        await db.save_session_turn(
+            issue.id,
+            SessionTurn(
+                role="user",
+                content=prompt,
                 stage=stage,
-                issue=issue,
-                artifacts_path=artifacts_path,
-                previous_errors=errors if errors else None,
-                iteration=attempt,
-            )
+                attempt=0,
+            ),
+        )
 
-            context = AgentContext(
-                repo_path=self.repo_path,
-                issue=issue,
-                skill_prompt=prompt,
-                artifacts_path=artifacts_path,
-                iteration=attempt,
-                previous_errors=errors,
-            )
+        em.start(issue.id)
+        stdout_parts: list[str] = []
+        exit_code = -1
+        duration_ms = 0
 
-            await db.save_session_turn(
-                issue.id,
-                SessionTurn(
-                    role="user",
-                    content=prompt,
-                    stage=stage,
-                    attempt=attempt,
-                ),
-            )
+        try:
+            async for event in self.resolve_agent(stage).run_streaming(prompt, context):
+                await db.save_agent_event(issue.id, event)
+                await em.publish(issue.id, event)
 
-            em.start(issue.id)
-            stdout_parts: list[str] = []
-            exit_code = -1
-            duration_ms = 0
+                if event.event_type == "stdout":
+                    stdout_parts.append(event.content)
+                elif event.event_type == "status":
+                    exit_code = event.metadata.get("exit_code", -1)
+                    duration_ms = event.metadata.get("duration_ms", 0)
+        finally:
+            em.stop(issue.id)
 
-            try:
-                async for event in self.resolve_agent(stage).run_streaming(prompt, context):
-                    await db.save_agent_event(issue.id, event)
-                    await em.publish(issue.id, event)
+        stdout = "\n".join(stdout_parts)
 
-                    if event.event_type == "stdout":
-                        stdout_parts.append(event.content)
-                    elif event.event_type == "status":
-                        exit_code = event.metadata.get("exit_code", -1)
-                        duration_ms = event.metadata.get("duration_ms", 0)
-            finally:
-                em.stop(issue.id)
+        await db.save_session_turn(
+            issue.id,
+            SessionTurn(
+                role="assistant",
+                content=stdout[:2000],
+                stage=stage,
+                attempt=0,
+                metadata={
+                    "exit_code": exit_code,
+                    "duration_ms": duration_ms,
+                },
+            ),
+        )
 
-            stdout = "\n".join(stdout_parts)
+        passed = exit_code == 0
 
-            await db.save_session_turn(
-                issue.id,
-                SessionTurn(
-                    role="assistant",
-                    content=stdout[:2000],
-                    stage=stage,
-                    attempt=attempt,
-                    metadata={
-                        "exit_code": exit_code,
-                        "duration_ms": duration_ms,
-                    },
-                ),
-            )
+        await db.save_harness_iteration(
+            issue.id,
+            HarnessIteration(
+                attempt=0,
+                stage=stage,
+                previous_errors=previous_errors or [],
+            ),
+            exit_code=exit_code,
+            output=stdout[:2000],
+            error="" if passed else (stdout if stdout else f"Agent exited with code {exit_code}"),
+            repo=repo or "primary",
+        )
 
-            passed = exit_code == 0
+        if passed:
+            if stage in (Stage.SPEC, Stage.PLAN):
+                artifact_file = Path(artifacts_path) / f"{stage.value}.md"
+                artifact_file.parent.mkdir(parents=True, exist_ok=True)
+                artifact_file.write_text(stdout, encoding="utf-8")
 
-            await db.save_harness_iteration(
-                issue.id,
-                HarnessIteration(
-                    attempt=attempt,
-                    stage=stage,
-                    previous_errors=errors,
-                ),
-                exit_code=exit_code,
-                output=stdout[:2000],
-                error=""
-                if passed
-                else (stdout if stdout else f"Agent exited with code {exit_code}"),
-            )
-
-            if passed:
+            questions_file = Path(artifacts_path) / "questions.md"
+            if questions_file.exists():
                 return StageResult(
                     stage=stage,
-                    passed=True,
+                    passed=False,
                     output=stdout,
-                    error="",
+                    error="awaiting-input",
                     artifacts=[],
                     started_at=datetime.datetime.now(datetime.UTC),
                     finished_at=datetime.datetime.now(datetime.UTC),
                 )
 
-            error_msg = stdout if stdout else f"Agent exited with code {exit_code}"
-            errors.append(error_msg)
+            return StageResult(
+                stage=stage,
+                passed=True,
+                output=stdout,
+                error="",
+                artifacts=[],
+                started_at=datetime.datetime.now(datetime.UTC),
+                finished_at=datetime.datetime.now(datetime.UTC),
+            )
 
-        combined_errors = "; ".join(errors)
+        error_msg = stdout if stdout else f"Agent exited with code {exit_code}"
         return StageResult(
             stage=stage,
             passed=False,
-            output="",
-            error=combined_errors,
+            output=stdout,
+            error=error_msg,
             artifacts=[],
             started_at=datetime.datetime.now(datetime.UTC),
             finished_at=datetime.datetime.now(datetime.UTC),
@@ -290,9 +279,7 @@ class HarnessRunner:
     ) -> dict[str, StageResult]:
         """Run a stage once per target repo. Returns {repo_name: StageResult}."""
         if not issue.repos:
-            result = await self.run_stage_with_retries(
-                issue, stage, artifacts_path, previous_errors
-            )
+            result = await self.run_stage(issue, stage, artifacts_path, previous_errors)
             return {"primary": result}
 
         results: dict[str, StageResult] = {}
@@ -302,9 +289,7 @@ class HarnessRunner:
 
             repo_errors = list(previous_errors) if previous_errors else None
 
-            result = await self.run_stage_with_retries(
-                issue, stage, repo_artifacts, repo_errors, repo=repo_name
-            )
+            result = await self.run_stage(issue, stage, repo_artifacts, repo_errors, repo=repo_name)
             results[repo_name] = result
 
         return results

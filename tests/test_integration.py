@@ -153,10 +153,8 @@ async def test_harness_full_lifecycle():
         mock_agent = AsyncMock()
         mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec written", stderr="")
 
-        runner = HarnessRunner(
-            agent_factory=_mock_factory(mock_agent), repo_path=str(repo), max_retries=3
-        )
-        result = await runner.run_stage_with_retries(
+        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path=str(repo))
+        result = await runner.run_stage(
             issue=issue,
             stage=Stage.SPEC,
             artifacts_path=str(artifacts_dir / "SUP-001"),
