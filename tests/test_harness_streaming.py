@@ -32,7 +32,11 @@ async def test_streaming_saves_session_turns():
         mock_agent = AsyncMock()
 
         async def fake_stream(prompt, context):
-            yield AgentEvent(event_type="stdout", content="building...", stage=Stage.BUILD)
+            yield AgentEvent(
+                event_type="stdout",
+                content="building the project output with sufficient content to pass minimum checks",
+                stage=Stage.BUILD,
+            )
             yield AgentEvent(
                 event_type="status",
                 content="",
@@ -74,8 +78,16 @@ async def test_streaming_saves_agent_events():
         mock_agent = AsyncMock()
 
         async def fake_stream(prompt, context):
-            yield AgentEvent(event_type="stdout", content="line 1", stage=Stage.BUILD)
-            yield AgentEvent(event_type="stdout", content="line 2", stage=Stage.BUILD)
+            yield AgentEvent(
+                event_type="stdout",
+                content="line 1: performing build operations with sufficient output for minimum",
+                stage=Stage.BUILD,
+            )
+            yield AgentEvent(
+                event_type="stdout",
+                content="line 2: continuing build operations with more output content",
+                stage=Stage.BUILD,
+            )
             yield AgentEvent(
                 event_type="status",
                 content="",
@@ -101,8 +113,13 @@ async def test_streaming_saves_agent_events():
 
         events = await db.get_agent_events("SUP-001")
         assert len(events) == 3
-        assert events[0]["content"] == "line 1"
-        assert events[1]["content"] == "line 2"
+        assert (
+            events[0]["content"]
+            == "line 1: performing build operations with sufficient output for minimum"
+        )
+        assert (
+            events[1]["content"] == "line 2: continuing build operations with more output content"
+        )
         assert events[2]["event_type"] == "status"
 
         await db.close()
