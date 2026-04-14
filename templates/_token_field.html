@@ -1,0 +1,21 @@
+<div id="token-config">
+    {% if success %}
+    <div class="mb-4 px-5 py-3 text-sm text-olive-400 bg-olive-900/20 rounded-lg border border-olive-800/30">
+        GitHub token saved successfully.
+    </div>
+    {% endif %}
+    <div class="card rounded-xl p-6">
+        <form hx-post="/settings/token" hx-target="#token-config" hx-swap="outerHTML">
+            <div class="mb-4">
+                <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">GitHub Token</label>
+                <input type="password" name="github_token" value="{{ github_token | default('') }}"
+                       class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                       placeholder="ghp_xxxxxxxxxxxx">
+                <p class="text-shell-500 text-xs mt-1">Used for gh CLI operations (PR creation). Set via GITHUB_TOKEN env var or here.</p>
+            </div>
+            <button type="submit" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                Save Token
+            </button>
+        </form>
+    </div>
+</div>

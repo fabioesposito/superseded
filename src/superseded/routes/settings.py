@@ -37,6 +37,7 @@ async def settings_page(request: Request, deps: Deps = Depends(get_deps)):
         {
             "repos": repos,
             "stage_agents": stage_agents,
+            "github_token": deps.config.github_token,
         },
     )
     if "csrf_token" not in request.cookies:
@@ -85,6 +86,21 @@ async def delete_repo(
     save_config(config, Path(config.repo_path))
     _reload_pipeline(request.app, config)
     return get_templates().TemplateResponse(request, "_repos_table.html", {"repos": config.repos})
+
+
+@router.post("/settings/token", response_class=HTMLResponse)
+async def update_token(request: Request, deps: Deps = Depends(get_deps)):
+    form = await _get_form_data(request)
+    token = str(form.get("github_token", "")).strip()
+    config = deps.config
+    config.github_token = token
+    save_config(config, Path(config.repo_path))
+    _reload_pipeline(request.app, config)
+    return get_templates().TemplateResponse(
+        request,
+        "_token_field.html",
+        {"github_token": token, "success": True},
+    )
 
 
 @router.post("/settings/agents", response_class=HTMLResponse)
