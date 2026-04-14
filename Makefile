@@ -30,7 +30,7 @@ run:                ## Start the server
 	uv run superseded
 
 dev:                ## Start the server with auto-reload
-	uv run uvicorn superseded.main:create_app --reload --factory --port 8000
+	uv run uvicorn app:app --reload
 
 e2e:                ## Run Playwright browser tests
 	npx playwright test

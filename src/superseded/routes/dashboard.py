@@ -14,16 +14,23 @@ router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, deps: Deps = Depends(get_deps)):
+async def dashboard(request: Request, stage: str | None = None, deps: Deps = Depends(get_deps)):
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
-    issues = list_issues(issues_dir)
+    all_issues = list_issues(issues_dir)
     stage_names = [s.value for s in Stage]
+    if stage and stage in stage_names:
+        filtered_issues = [i for i in all_issues if i.stage.value == stage]
+    else:
+        filtered_issues = all_issues
+        stage = None
     response = get_templates().TemplateResponse(
         request,
         "dashboard.html",
         {
-            "issues": issues,
+            "issues": filtered_issues,
+            "all_issues": all_issues,
             "stage_names": stage_names,
+            "active_stage": stage,
         },
     )
     if "csrf_token" not in request.cookies:

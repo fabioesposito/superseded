@@ -1,0 +1,64 @@
+<div id="dashboard-table-wrap"
+     hx-trigger="sse:table"
+     hx-swap="outerHTML"
+     class="card rounded-xl overflow-x-auto">
+    <table class="w-full min-w-[640px]">
+        <thead>
+            <tr class="border-b border-shell-700/50">
+                <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">ID</th>
+                <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Title</th>
+                <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Stage</th>
+                <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Status</th>
+                <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Agent</th>
+            </tr>
+        </thead>
+        <tbody id="issues-tbody">
+            {% for issue in issues %}
+            <tr class="border-t border-shell-800/40 hover:bg-shell-900/50 transition-colors group">
+                <td class="px-5 py-3.5">
+                    <a href="/issues/{{ issue.id }}" class="font-mono text-sm text-neon-400 hover:text-neon-300 transition-colors">{{ issue.id }}</a>
+                </td>
+                <td class="px-5 py-3.5">
+                    <a href="/issues/{{ issue.id }}" class="block text-shell-200 group-hover:text-shell-100 transition-colors">{{ issue.title }}</a>
+                </td>
+                <td class="px-5 py-3.5">
+                    <a href="/issues/{{ issue.id }}" class="block">
+                        <span class="px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wide bg-sand-900/60 text-sand-400 border border-sand-800/40">{{ issue.stage.value }}</span>
+                    </a>
+                </td>
+                <td class="px-5 py-3.5">
+                    <a href="/issues/{{ issue.id }}" class="block">
+                        <span class="px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wide inline-flex items-center gap-1.5
+                            {% if issue.status.value == 'done' %}bg-olive-950 text-olive-400 border border-olive-800/40
+                            {% elif issue.status.value == 'failed' %}bg-coral-950 text-coral-400 border border-coral-800/40
+                            {% elif issue.status.value == 'in-progress' %}bg-petal-950 text-petal-400 border border-petal-800/40
+                            {% else %}bg-shell-900 text-shell-400 border border-shell-800/40{% endif %}">
+                            {% if issue.status.value == 'done' %}
+                            <span class="w-1.5 h-1.5 rounded-full bg-olive-400"></span>
+                            {% elif issue.status.value == 'failed' %}
+                            <span class="w-1.5 h-1.5 rounded-full bg-coral-400"></span>
+                            {% elif issue.status.value == 'in-progress' %}
+                            <span class="w-1.5 h-1.5 rounded-full bg-petal-400 animate-pulse"></span>
+                            {% else %}
+                            <span class="w-1.5 h-1.5 rounded-full bg-shell-500"></span>
+                            {% endif %}
+                            {{ issue.status.value }}
+                        </span>
+                    </a>
+                </td>
+                <td class="px-5 py-3.5">
+                    <a href="/issues/{{ issue.id }}" class="block text-shell-500 font-mono text-sm">{{ issue.assignee or "—" }}</a>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not issues %}
+            <tr>
+                <td colspan="5" class="px-5 py-16 text-center">
+                    <div class="text-shell-500 text-sm mb-3">No issues yet</div>
+                    <a href="/issues/new" class="text-neon-400 hover:text-neon-300 text-sm font-medium transition-colors">Create your first issue &rarr;</a>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>

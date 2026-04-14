@@ -9,10 +9,10 @@ class ClaudeCodeAdapter(SubprocessAgentAdapter):
         self.model = model
 
     def _build_command(self, prompt: str) -> list[str]:
-        cmd = ["claude", "--print", "--output-format", "text"]
+        cmd = ["claude", "-p", prompt, "--output-format", "text"]
         if self.model:
             cmd.extend(["--model", self.model])
         return cmd
 
     def _get_stdin_data(self, prompt: str) -> bytes | None:
-        return prompt.encode("utf-8")
+        return None

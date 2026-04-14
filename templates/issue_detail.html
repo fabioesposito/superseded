@@ -34,48 +34,38 @@
         </div>
     </div>
 
-    <div class="mb-8">
-        <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500 mb-3">Pipeline Progress</h2>
-        <div class="flex gap-1.5">
-            {% for stage_name in stage_order %}
-            <div class="flex-1 rounded-lg p-3 text-center text-xs font-semibold uppercase tracking-wider
-                {% if stage_name == issue.stage.value %}bg-neon-600/20 text-neon-400 border border-neon-600/40 glow-active
-                {% elif stage_name in passed_stages %}bg-olive-950 text-olive-400 border border-olive-800/30
-                {% else %}bg-shell-900/50 text-shell-600 border border-shell-800/30{% endif %}">
-                {% if stage_name in passed_stages %}
-                <svg class="w-3.5 h-3.5 mx-auto mb-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                {% endif %}
-                {{ stage_name }}
+    <div id="issue-detail-content">
+        <div class="mb-8">
+            <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500 mb-3">Pipeline Progress</h2>
+            {% include "_progress.html" %}
+        </div>
+
+        {% if issue.repos %}
+        <div class="mb-8">
+            <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500 mb-3">Per-Repository Progress</h2>
+            {% for repo_name in issue.repos %}
+            <div class="card rounded-xl p-4 mb-3">
+                <h3 class="font-semibold text-shell-100 mb-2.5 text-sm font-mono">{{ repo_name }}</h3>
+                <div class="flex gap-1.5">
+                    {% for stage_name in stage_order %}
+                    {% set repo_results = results_by_repo.get(repo_name, []) %}
+                    {% set result = repo_results | selectattr("stage", "equalto", stage_name) | list | last %}
+                    <div class="flex-1 rounded-lg p-2.5 text-center text-xs font-semibold uppercase tracking-wider
+                        {% if result and result.passed %}bg-olive-950 text-olive-400 border border-olive-800/30
+                        {% elif result and not result.passed %}bg-coral-950 text-coral-400 border border-coral-800/30
+                        {% else %}bg-shell-900/50 text-shell-600 border border-shell-800/30{% endif %}">
+                        {% if result and result.passed %}
+                        <svg class="w-3 h-3 mx-auto mb-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                        {% endif %}
+                        {{ stage_name }}
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
             {% endfor %}
         </div>
+        {% endif %}
     </div>
-
-    {% if issue.repos %}
-    <div class="mb-8">
-        <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500 mb-3">Per-Repository Progress</h2>
-        {% for repo_name in issue.repos %}
-        <div class="card rounded-xl p-4 mb-3">
-            <h3 class="font-semibold text-shell-100 mb-2.5 text-sm font-mono">{{ repo_name }}</h3>
-            <div class="flex gap-1.5">
-                {% for stage_name in stage_order %}
-                {% set repo_results = results_by_repo.get(repo_name, []) %}
-                {% set result = repo_results | selectattr("stage", "equalto", stage_name) | list | last %}
-                <div class="flex-1 rounded-lg p-2.5 text-center text-xs font-semibold uppercase tracking-wider
-                    {% if result and result.passed %}bg-olive-950 text-olive-400 border border-olive-800/30
-                    {% elif result and not result.passed %}bg-coral-950 text-coral-400 border border-coral-800/30
-                    {% else %}bg-shell-900/50 text-shell-600 border border-shell-800/30{% endif %}">
-                    {% if result and result.passed %}
-                    <svg class="w-3 h-3 mx-auto mb-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                    {% endif %}
-                    {{ stage_name }}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 card card-accent rounded-xl p-6">
@@ -90,62 +80,15 @@
                     <span class="text-shell-300 font-mono text-xs">{{ issue.created }}</span>
                 </div>
             </div>
+            {% if issue.body %}
+            <div class="mt-4 pt-4 border-t border-shell-800/60">
+                <div class="text-sm text-shell-300 whitespace-pre-wrap leading-relaxed">{{ issue.body }}</div>
+            </div>
+            {% endif %}
         </div>
         <div class="space-y-4">
-            <div class="card rounded-xl p-5">
-                <h3 class="font-semibold text-shell-100 mb-3 text-sm uppercase tracking-wider">Actions</h3>
-                {% if issue.status.value != 'done' %}
-                <form action="/pipeline/issues/{{ issue.id }}/advance" method="post" class="mb-2.5"
-                    hx-post="/pipeline/issues/{{ issue.id }}/advance"
-                    hx-confirm="Run the {{ issue.stage.value }} stage? This will execute the pipeline.">
-                    <button type="submit" class="w-full btn-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold relative">
-                        <span class="htmx-indicator absolute left-3">
-                            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                        </span>
-                        Advance Stage
-                    </button>
-                </form>
-                <form action="/pipeline/issues/{{ issue.id }}/retry" method="post" class="mb-2.5"
-                    hx-post="/pipeline/issues/{{ issue.id }}/retry"
-                    hx-confirm="Retry the {{ issue.stage.value }} stage? This will re-execute the pipeline.">
-                    <button type="submit" class="w-full btn-secondary text-petal-400 hover:text-petal-300 px-4 py-2.5 rounded-lg text-sm font-semibold relative">
-                        <span class="htmx-indicator absolute left-3">
-                            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
-                        </span>
-                        Retry Stage
-                    </button>
-                </form>
-                {% endif %}
-                <a href="/" class="block text-center text-shell-500 hover:text-shell-300 text-xs mt-2 transition-colors">Back to Dashboard</a>
-            </div>
-            {% if stage_results %}
-            <div class="card rounded-xl p-5">
-                <h3 class="font-semibold text-shell-100 mb-3 text-sm uppercase tracking-wider">Stage Results</h3>
-                {% for result in stage_results %}
-                <div class="mb-3 border-l-2 {% if result.passed %}border-olive-500{% else %}border-coral-500{% endif %} pl-3">
-                    <div class="flex items-center gap-2">
-                        <span class="font-medium text-sm text-shell-200">{{ result.stage }}</span>
-                        {% if result.passed %}<span class="text-olive-400 text-xs font-mono font-semibold">PASS</span>{% else %}<span class="text-coral-400 text-xs font-mono font-semibold">FAIL</span>{% endif %}
-                    </div>
-                    {% if result.error %}<p class="text-coral-400/80 text-xs mt-1 font-mono">{{ result.error }}</p>{% endif %}
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-            {% if harness_iterations %}
-            <div class="card rounded-xl p-5">
-                <h3 class="font-semibold text-shell-100 mb-3 text-sm uppercase tracking-wider">Iteration History</h3>
-                {% for iter in harness_iterations %}
-                <div class="mb-2.5 border-l-2 {% if iter.exit_code == 0 %}border-olive-500{% else %}border-coral-500{% endif %} pl-3">
-                    <div class="flex items-center gap-2">
-                        <span class="text-sm font-medium text-shell-200">{{ iter.stage }} <span class="text-shell-500">attempt #{{ iter.attempt }}</span></span>
-                        {% if iter.exit_code == 0 %}<span class="text-olive-400 text-xs font-mono font-semibold">OK</span>{% else %}<span class="text-coral-400 text-xs font-mono font-semibold">FAIL</span>{% endif %}
-                    </div>
-                    {% if iter.error %}<p class="text-coral-400/80 text-xs mt-1 font-mono">{{ iter.error }}</p>{% endif %}
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
+            {% include "_actions.html" %}
+            {% include "_results.html" %}
         </div>
     </div>
 

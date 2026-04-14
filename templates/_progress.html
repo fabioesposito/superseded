@@ -1,0 +1,13 @@
+<div id="pipeline-progress-bar" class="flex gap-1.5">
+    {% for stage_name in stage_order %}
+    <div class="flex-1 rounded-lg p-3 text-center text-xs font-semibold uppercase tracking-wider
+        {% if stage_name == issue.stage.value %}bg-neon-600/20 text-neon-400 border border-neon-600/40 glow-active
+        {% elif stage_name in passed_stages %}bg-olive-950 text-olive-400 border border-olive-800/30
+        {% else %}bg-shell-900/50 text-shell-600 border border-shell-800/30{% endif %}">
+        {% if stage_name in passed_stages %}
+        <svg class="w-3.5 h-3.5 mx-auto mb-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+        {% endif %}
+        {{ stage_name }}
+    </div>
+    {% endfor %}
+</div>

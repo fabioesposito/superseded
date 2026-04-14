@@ -9,10 +9,12 @@ class OpenCodeAdapter(SubprocessAgentAdapter):
         self.model = model
 
     def _build_command(self, prompt: str) -> list[str]:
-        cmd = ["opencode", "--non-interactive"]
+        cmd = ["opencode"]
         if self.model:
-            cmd.extend(["--model", self.model])
+            cmd.extend(["-m", self.model])
+        cmd.append("run")
+        cmd.append(prompt)
         return cmd
 
     def _get_stdin_data(self, prompt: str) -> bytes | None:
-        return prompt.encode("utf-8")
+        return None

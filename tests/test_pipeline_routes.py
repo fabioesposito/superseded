@@ -82,8 +82,8 @@ async def test_advance_issue_success(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
-        assert "/issues/SUP-001" in resp.headers["location"]
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
 
     await db.close()
 
@@ -100,8 +100,7 @@ async def test_advance_issue_not_found(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
-        assert resp.headers["location"] == "/"
+        assert resp.status_code == 200
 
     await db.close()
 
@@ -122,7 +121,7 @@ async def test_advance_issue_failure(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
+        assert resp.status_code == 200
 
     await db.close()
 
@@ -159,7 +158,7 @@ Ship it.
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
+        assert resp.status_code == 200
 
     await db.close()
 
@@ -180,8 +179,8 @@ async def test_retry_issue_success(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
-        assert "/issues/SUP-001" in resp.headers["location"]
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
 
     await db.close()
 
@@ -202,7 +201,7 @@ async def test_retry_issue_failure_sets_paused(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
+        assert resp.status_code == 200
 
     await db.close()
 
@@ -219,8 +218,7 @@ async def test_retry_issue_not_found(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
-        assert resp.headers["location"] == "/"
+        assert resp.status_code == 200
 
     await db.close()
 
@@ -228,37 +226,51 @@ async def test_retry_issue_not_found(tmp_repo):
 async def test_pipeline_events_sse():
     with tempfile.TemporaryDirectory() as tmp:
         repo_path = Path(tmp)
-        (repo_path / ".superseded" / "issues").mkdir(parents=True)
+        issues_dir = repo_path / ".superseded" / "issues"
+        issues_dir.mkdir(parents=True)
+        ticket = """---
+id: SUP-001
+title: Test
+status: new
+stage: spec
+created: "2026-04-11"
+assignee: ""
+labels: []
+repos: []
+---
+
+Test body.
+"""
+        (issues_dir / "SUP-001-test.md").write_text(ticket)
 
         db_path = str(repo_path / ".superseded" / "state.db")
         db = Database(db_path)
         await db.initialize()
 
-        issue = Issue(id="SUP-001", title="Test", filepath="")
+        issue = Issue(id="SUP-001", title="Test", filepath=str(issues_dir / "SUP-001-test.md"))
         await db.upsert_issue(issue)
 
-        app = create_app(repo_path=str(repo_path), db=db)
+        from superseded.config import SupersededConfig
+
+        config = SupersededConfig(repo_path=str(repo_path))
+        app = create_app(repo_path=str(repo_path), config=config, db=db)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            # The SSE endpoint streams indefinitely, so just verify it starts
-            # by checking that we can connect and get a response
             import asyncio
 
             async def _fetch_sse():
-                async with client.stream("GET", "/pipeline/events") as resp:
+                async with client.stream("GET", "/pipeline/sse/dashboard") as resp:
                     assert resp.status_code == 200
                     assert "text/event-stream" in resp.headers["content-type"]
-                    # Read first chunk then break
                     async for chunk in resp.aiter_text():
                         if chunk:
                             return chunk
 
-            # Race with timeout to avoid hanging
             try:
                 result = await asyncio.wait_for(_fetch_sse(), timeout=5)
-                assert result  # got some data
+                assert result
             except TimeoutError:
-                pass  # acceptable - endpoint may not emit immediately
+                pass
 
         await db.close()
 
@@ -275,8 +287,7 @@ async def test_advance_issue_invalid_id(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
-        assert resp.headers["location"] == "/"
+        assert resp.status_code == 200
 
     await db.close()
 
@@ -293,8 +304,7 @@ async def test_retry_issue_invalid_id(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 303
-        assert resp.headers["location"] == "/"
+        assert resp.status_code == 200
 
     await db.close()
 

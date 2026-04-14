@@ -1,0 +1,31 @@
+<div id="stage-counters"
+     hx-trigger="sse:counters"
+     hx-swap="outerHTML"
+     class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+    <a href="/"
+       class="card rounded-lg p-4 text-center group transition-all
+              {% if not active_stage %}border-neon-600/50 ring-1 ring-neon-600/20{% else %}hover:border-sand-600/50{% endif %}">
+        <div class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">All</div>
+        <div class="text-2xl font-bold text-shell-50 {% if not active_stage %}text-neon-400{% else %}group-hover:text-neon-400{% endif %} transition-colors">
+            {{ all_issues | length }}
+        </div>
+    </a>
+    {% for stage in stage_names %}
+    {% set stage_issues = all_issues | selectattr("stage.value", "equalto", stage) | list %}
+    {% set has_active = stage_issues | selectattr("status.value", "equalto", "in-progress") | list | length > 0 %}
+    <a href="/?stage={{ stage }}"
+       class="card rounded-lg p-4 text-center group transition-all
+              {% if active_stage == stage %}border-neon-600/50 ring-1 ring-neon-600/20{% else %}hover:border-sand-600/50{% endif %}
+              {% if has_active %}glow-active{% endif %}">
+        <div class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2 flex items-center justify-center gap-1.5">
+            {% if has_active %}
+            <span class="w-1.5 h-1.5 rounded-full bg-petal-400 animate-pulse"></span>
+            {% endif %}
+            {{ stage }}
+        </div>
+        <div class="text-2xl font-bold text-shell-50 {% if active_stage == stage %}text-neon-400{% else %}group-hover:text-neon-400{% endif %} transition-colors">
+            {{ stage_issues | length }}
+        </div>
+    </a>
+    {% endfor %}
+</div>

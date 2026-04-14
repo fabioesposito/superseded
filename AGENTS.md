@@ -27,7 +27,8 @@ npx playwright test                # Run Playwright browser tests (UI validation
 ## Tool Requirements
 
 - **GitHub interactions**: Always use `gh` CLI for PRs, issues, and repo operations. `gh pr create`, `gh pr merge`, `gh issue list`, etc. Do not use raw git push + manual GitHub URLs.
-- **UI test validation**: Use `npx playwright` to verify HTMX interactions, pipeline progress rendering, and SSE updates in a real browser. Run `npx playwright test` to execute browser-based tests or `npx playwright codegen` to generate test scripts interactively.
+- **UI test validation**: Use `npx playwright` to verify HTMX interactions, pipeline progress rendering, and SSE updates in a real browser. Run `npx playwright test` to execute browser-based tests or `npx playwright codegen` to generate test scripts interactively. Tests target `http://localhost:8000/` — ensure the server is running before executing Playwright tests.
+- **Context7 for planning**: Use the Context7 MCP tools (`context7_resolve-library-id` + `context7_query-docs`) when planning tasks that involve external libraries. Query docs for FastAPI, HTMX, Jinja2, or any dependency before implementing — the code snippets and API references are authoritative and up-to-date.
 
 ## Architecture
 

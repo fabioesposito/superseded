@@ -1,134 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - Superseded{% endblock %}
 {% block content %}
-<div class="animate-fade-in">
+<div class="animate-fade-in" hx-ext="sse" hx-sse="connect:/pipeline/sse/dashboard{% if active_stage %}?stage={{ active_stage }}{% endif %}">
     <div class="flex items-center justify-between mb-8">
-        <h1 class="text-3xl font-bold text-shell-50 tracking-tight">Dashboard</h1>
+        <h1 class="text-3xl font-bold text-shell-50 tracking-tight">
+            Dashboard
+            {% if active_stage %}
+            <span class="text-lg font-normal text-shell-500 ml-2">/ {{ active_stage }}</span>
+            {% endif %}
+        </h1>
         <a href="/issues/new" class="btn-primary text-white px-5 py-2.5 rounded-lg text-sm font-semibold inline-flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
             New Issue
         </a>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-        {% for stage in stage_names %}
-        <div class="card rounded-lg p-4 text-center group hover:border-sand-600/50 transition-all">
-            <div class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-2">{{ stage }}</div>
-            <div class="text-2xl font-bold text-shell-50 group-hover:text-neon-400 transition-colors">
-                {{ issues | selectattr("stage.value", "equalto", stage) | list | length }}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
+    {% include "_stage_counters.html" %}
 
-    <div class="card rounded-xl overflow-x-auto">
-        <table class="w-full min-w-[640px]">
-            <thead>
-                <tr class="border-b border-shell-700/50">
-                    <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">ID</th>
-                    <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Title</th>
-                    <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Stage</th>
-                    <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Status</th>
-                    <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Agent</th>
-                </tr>
-            </thead>
-            <tbody id="issues-tbody">
-                {% for issue in issues %}
-                <tr class="border-t border-shell-800/40 hover:bg-shell-900/50 transition-colors group cursor-pointer"
-                    onclick="window.location='/issues/{{ issue.id }}'">
-                    <td class="px-5 py-3.5">
-                        <a href="/issues/{{ issue.id }}" class="font-mono text-sm text-neon-400 hover:text-neon-300 transition-colors" onclick="event.stopPropagation()">{{ issue.id }}</a>
-                    </td>
-                    <td class="px-5 py-3.5 text-shell-200 group-hover:text-shell-100 transition-colors">{{ issue.title }}</td>
-                    <td class="px-5 py-3.5">
-                        <span class="px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wide bg-sand-900/60 text-sand-400 border border-sand-800/40">{{ issue.stage.value }}</span>
-                    </td>
-                    <td class="px-5 py-3.5">
-                        <span class="px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wide inline-flex items-center gap-1.5
-                            {% if issue.status.value == 'done' %}bg-olive-950 text-olive-400 border border-olive-800/40
-                            {% elif issue.status.value == 'failed' %}bg-coral-950 text-coral-400 border border-coral-800/40
-                            {% elif issue.status.value == 'in-progress' %}bg-petal-950 text-petal-400 border border-petal-800/40
-                            {% else %}bg-shell-900 text-shell-400 border border-shell-800/40{% endif %}">
-                            {% if issue.status.value == 'done' %}
-                            <span class="w-1.5 h-1.5 rounded-full bg-olive-400"></span>
-                            {% elif issue.status.value == 'failed' %}
-                            <span class="w-1.5 h-1.5 rounded-full bg-coral-400"></span>
-                            {% elif issue.status.value == 'in-progress' %}
-                            <span class="w-1.5 h-1.5 rounded-full bg-petal-400 animate-pulse"></span>
-                            {% else %}
-                            <span class="w-1.5 h-1.5 rounded-full bg-shell-500"></span>
-                            {% endif %}
-                            {{ issue.status.value }}
-                        </span>
-                    </td>
-                    <td class="px-5 py-3.5 text-shell-500 font-mono text-sm">{{ issue.assignee or "—" }}</td>
-                </tr>
-                {% endfor %}
-                {% if not issues %}
-                <tr>
-                    <td colspan="5" class="px-5 py-16 text-center">
-                        <div class="text-shell-500 text-sm mb-3">No issues yet</div>
-                        <a href="/issues/new" class="text-neon-400 hover:text-neon-300 text-sm font-medium transition-colors">Create your first issue &rarr;</a>
-                    </td>
-                </tr>
-                {% endif %}
-            </tbody>
-        </table>
+    <div id="dashboard-table-wrap"
+         hx-trigger="sse:table"
+         hx-swap="outerHTML">
+        {% include "_dashboard_table.html" %}
     </div>
 </div>
-
-<div id="sse-status" class="fixed bottom-4 right-4 text-xs font-mono text-shell-600 opacity-0 transition-opacity duration-300"></div>
-
-<script>
-(function() {
-    var es = new EventSource('/pipeline/events');
-    var statusEl = document.getElementById('sse-status');
-
-    es.onopen = function() {
-        statusEl.textContent = '● live';
-        statusEl.className = 'fixed bottom-4 right-4 text-xs font-mono text-olive-600 transition-opacity duration-300';
-    };
-
-    es.addEventListener('update', function(e) {
-        statusEl.textContent = '● updated';
-        statusEl.className = 'fixed bottom-4 right-4 text-xs font-mono text-neon-500 transition-opacity duration-300';
-        setTimeout(function() {
-            statusEl.textContent = '● live';
-            statusEl.className = 'fixed bottom-4 right-4 text-xs font-mono text-olive-600 transition-opacity duration-300';
-        }, 2000);
-
-        var data = JSON.parse(e.data);
-        var tbody = document.getElementById('issues-tbody');
-        if (!tbody || !data.length) return;
-
-        var rows = tbody.querySelectorAll('tr[onclick]');
-        data.forEach(function(issue, i) {
-            if (i < rows.length) {
-                var stageSpan = rows[i].querySelector('td:nth-child(2) span');
-                if (stageSpan && issue.stage) {
-                    stageSpan.textContent = issue.stage;
-                }
-                var statusSpan = rows[i].querySelector('td:nth-child(4) span');
-                if (statusSpan && issue.status) {
-                    var statusText = statusSpan.querySelector('.w-1\\.5');
-                    if (statusText) {
-                        statusSpan.childNodes.forEach(function(n) {
-                            if (n.nodeType === 3 && n.textContent.trim()) {
-                                n.textContent = '\n                            ' + issue.status + '\n                        ';
-                            }
-                        });
-                    }
-                }
-            }
-        });
-    });
-
-    es.onerror = function() {
-        statusEl.textContent = '● disconnected';
-        statusEl.className = 'fixed bottom-4 right-4 text-xs font-mono text-coral-600 transition-opacity duration-300';
-    };
-
-    window.addEventListener('beforeunload', function() { es.close(); });
-})();
-</script>
 {% endblock %}

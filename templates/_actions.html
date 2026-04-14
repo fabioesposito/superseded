@@ -1,0 +1,29 @@
+<div id="issue-actions">
+    {% if issue.status.value != 'done' %}
+    <form action="/pipeline/issues/{{ issue.id }}/advance" method="post" class="mb-2.5"
+        hx-post="/pipeline/issues/{{ issue.id }}/advance"
+        hx-target="#issue-detail-content"
+        hx-swap="innerHTML"
+        hx-confirm="Run the {{ issue.stage.value }} stage? This will execute the pipeline.">
+        <button type="submit" class="w-full btn-primary text-white px-4 py-2.5 rounded-lg text-sm font-semibold relative">
+            <span class="htmx-indicator absolute left-3">
+                <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+            </span>
+            Advance Stage
+        </button>
+    </form>
+    <form action="/pipeline/issues/{{ issue.id }}/retry" method="post" class="mb-2.5"
+        hx-post="/pipeline/issues/{{ issue.id }}/retry"
+        hx-target="#issue-detail-content"
+        hx-swap="innerHTML"
+        hx-confirm="Retry the {{ issue.stage.value }} stage? This will re-execute the pipeline.">
+        <button type="submit" class="w-full btn-secondary text-petal-400 hover:text-petal-300 px-4 py-2.5 rounded-lg text-sm font-semibold relative">
+            <span class="htmx-indicator absolute left-3">
+                <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+            </span>
+            Retry Stage
+        </button>
+    </form>
+    {% endif %}
+    <a href="/" class="block text-center text-shell-500 hover:text-shell-300 text-xs mt-2 transition-colors">Back to Dashboard</a>
+</div>

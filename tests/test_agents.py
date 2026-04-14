@@ -19,17 +19,16 @@ def test_claude_code_adapter_builds_command():
     adapter = ClaudeCodeAdapter()
     cmd_parts = adapter._build_command("Write a plan for this feature.")
     assert "claude" in cmd_parts[0]
-    assert "--print" in cmd_parts
-    # Prompt is now passed via stdin, not CLI args
-    assert "Write a plan for this feature." not in cmd_parts
+    assert "-p" in cmd_parts
+    assert "Write a plan for this feature." in cmd_parts
 
 
 def test_opencode_adapter_builds_command():
     adapter = OpenCodeAdapter()
     cmd_parts = adapter._build_command("Write a plan for this feature.")
     assert "opencode" in cmd_parts[0]
-    # Prompt is now passed via stdin, not CLI args
-    assert "Write a plan for this feature." not in cmd_parts
+    assert "run" in cmd_parts
+    assert "Write a plan for this feature." in cmd_parts
 
 
 def test_adapter_protocol_enforced():
@@ -90,26 +89,26 @@ def test_opencode_uses_worktree_when_set():
     assert adapter._get_cwd(ctx) == "/tmp/repo/.superseded/worktrees/SUP-001"
 
 
-def test_prompt_not_in_argv():
-    """Prompt should be passed via stdin, not as a CLI argument."""
+def test_prompt_passed_as_arg():
+    """Prompt is passed as a CLI argument to the agent command."""
     adapter = ClaudeCodeAdapter()
-    cmd = adapter._build_command("malicious; rm -rf /")
-    assert "malicious; rm -rf /" not in cmd
-    assert adapter._get_stdin_data("malicious; rm -rf /") == b"malicious; rm -rf /"
+    cmd = adapter._build_command("Write a plan.")
+    assert "Write a plan." in cmd
+    assert adapter._get_stdin_data("Write a plan.") is None
 
 
-def test_prompt_not_in_argv_opencode():
-    """Prompt should be passed via stdin for OpenCode too."""
+def test_prompt_passed_as_arg_opencode():
+    """Prompt is passed as a CLI argument to opencode run."""
     adapter = OpenCodeAdapter()
-    cmd = adapter._build_command("malicious; rm -rf /")
-    assert "malicious; rm -rf /" not in cmd
-    assert adapter._get_stdin_data("malicious; rm -rf /") == b"malicious; rm -rf /"
+    cmd = adapter._build_command("Write a plan.")
+    assert "Write a plan." in cmd
+    assert adapter._get_stdin_data("Write a plan.") is None
 
 
 def test_claude_code_no_model():
     adapter = ClaudeCodeAdapter()
     cmd = adapter._build_command("test prompt")
-    assert cmd == ["claude", "--print", "--output-format", "text"]
+    assert cmd == ["claude", "-p", "test prompt", "--output-format", "text"]
 
 
 def test_claude_code_with_model():
@@ -117,7 +116,8 @@ def test_claude_code_with_model():
     cmd = adapter._build_command("test prompt")
     assert cmd == [
         "claude",
-        "--print",
+        "-p",
+        "test prompt",
         "--output-format",
         "text",
         "--model",
@@ -133,25 +133,25 @@ def test_claude_code_with_timeout():
 def test_claude_code_stdin():
     adapter = ClaudeCodeAdapter()
     data = adapter._get_stdin_data("hello")
-    assert data == b"hello"
+    assert data is None
 
 
 def test_opencode_no_model():
     adapter = OpenCodeAdapter()
     cmd = adapter._build_command("test prompt")
-    assert cmd == ["opencode", "--non-interactive"]
+    assert cmd == ["opencode", "run", "test prompt"]
 
 
 def test_opencode_with_model():
     adapter = OpenCodeAdapter(model="gpt-4o")
     cmd = adapter._build_command("test prompt")
-    assert cmd == ["opencode", "--non-interactive", "--model", "gpt-4o"]
+    assert cmd == ["opencode", "-m", "gpt-4o", "run", "test prompt"]
 
 
 def test_opencode_stdin():
     adapter = OpenCodeAdapter()
     data = adapter._get_stdin_data("hello")
-    assert data == b"hello"
+    assert data is None
 
 
 def test_codex_no_model():
