@@ -49,7 +49,7 @@ async def client():
 
 
 async def test_metrics_endpoint_returns_json(client):
-    resp = await client.get("/pipeline/metrics")
+    resp = await client.get("/api/pipeline/metrics")
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_issues"] == 3
@@ -59,7 +59,7 @@ async def test_metrics_endpoint_returns_json(client):
 
 
 async def test_metrics_dashboard_renders(client):
-    resp = await client.get("/pipeline/metrics/dashboard")
+    resp = await client.get("/pipeline/metrics")
     assert resp.status_code == 200
     assert "Pipeline Metrics" in resp.text
 
@@ -94,7 +94,7 @@ async def test_metrics_includes_harness_iterations():
         app = create_app(repo_path=str(repo_path), db=db)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            resp = await ac.get("/pipeline/metrics")
+            resp = await ac.get("/api/pipeline/metrics")
 
         data = resp.json()
         assert data["total_retries"] == 2
@@ -115,7 +115,7 @@ async def test_metrics_empty_db():
         app = create_app(repo_path=str(repo_path), db=db)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            resp = await ac.get("/pipeline/metrics")
+            resp = await ac.get("/api/pipeline/metrics")
 
         data = resp.json()
         assert data["total_issues"] == 0

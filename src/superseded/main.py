@@ -21,6 +21,7 @@ from superseded.routes.csrf import CsrfMiddleware
 from superseded.routes.dashboard import router as dashboard_router
 from superseded.routes.deps import PipelineState
 from superseded.routes.issues import router as issues_router
+from superseded.routes.pipeline import api_router as pipeline_api_router
 from superseded.routes.pipeline import router as pipeline_router
 from superseded.routes.settings import router as settings_router
 
@@ -101,6 +102,7 @@ def create_app(
 
     app.include_router(dashboard_router)
     app.include_router(issues_router)
+    app.include_router(pipeline_api_router)
     app.include_router(pipeline_router)
     app.include_router(settings_router)
 

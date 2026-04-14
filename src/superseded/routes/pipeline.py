@@ -23,6 +23,7 @@ from superseded.validation import InvalidInputError, validate_issue_id
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pipeline")
+api_router = APIRouter(prefix="/api/pipeline")
 
 # Track which issues are currently running a stage
 _running: set[str] = set()
@@ -284,8 +285,12 @@ async def stream_events(request: Request, issue_id: str, deps: Deps = Depends(ge
     return EventSourceResponse(event_generator())
 
 
-@router.get("/metrics")
-async def get_metrics(request: Request, deps: Deps = Depends(get_deps)):
+@api_router.get("/metrics")
+async def get_metrics(deps: Deps = Depends(get_deps)):
+    return await _compute_metrics(deps)
+
+
+async def _compute_metrics(deps: Deps) -> dict:
     issues = await deps.db.list_issues()
     total = len(issues)
     by_status: dict[str, int] = {}
@@ -316,7 +321,7 @@ async def get_metrics(request: Request, deps: Deps = Depends(get_deps)):
     for it in all_iterations:
         retries_by_stage[it["stage"]] = retries_by_stage.get(it["stage"], 0) + 1
 
-    metrics = PipelineMetrics(
+    return PipelineMetrics(
         total_issues=total,
         issues_by_status=by_status,
         stage_success_rates=success_rates,
@@ -324,15 +329,14 @@ async def get_metrics(request: Request, deps: Deps = Depends(get_deps)):
         total_retries=total_retries,
         retries_by_stage=retries_by_stage,
         recent_events=[],
-    )
-    return metrics.model_dump()
+    ).model_dump()
 
 
-@router.get("/metrics/dashboard", response_class=HTMLResponse)
+@router.get("/metrics", response_class=HTMLResponse)
 async def metrics_dashboard(request: Request, deps: Deps = Depends(get_deps)):
-    metrics_resp = await get_metrics(request, deps)
+    metrics_data = await _compute_metrics(deps)
     return get_templates().TemplateResponse(
         request,
         "metrics.html",
-        {"metrics": metrics_resp},
+        {"metrics": metrics_data},
     )
