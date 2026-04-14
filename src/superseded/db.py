@@ -41,6 +41,7 @@ class Database:
                 labels TEXT DEFAULT '[]',
                 filepath TEXT DEFAULT '',
                 created TEXT DEFAULT '',
+                pause_reason TEXT DEFAULT '',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS stage_results (
@@ -91,17 +92,18 @@ class Database:
             );
         """)
         await conn.commit()
-        migrations: list[tuple[str, str]] = [
-            ("stage_results", "repo"),
-            ("harness_iterations", "repo"),
+        migrations: list[tuple[str, str, str]] = [
+            ("stage_results", "repo", "'primary'"),
+            ("harness_iterations", "repo", "'primary'"),
+            ("issues", "pause_reason", "''"),
         ]
-        valid_tables = {"stage_results", "harness_iterations"}
-        for table, column in migrations:
+        valid_tables = {"stage_results", "harness_iterations", "issues"}
+        for table, column, default in migrations:
             if table not in valid_tables:
                 continue
             try:
                 await conn.execute(
-                    f"ALTER TABLE {table} ADD COLUMN {column} TEXT DEFAULT 'primary'"
+                    f"ALTER TABLE {table} ADD COLUMN {column} TEXT DEFAULT {default}"
                 )
                 await conn.commit()
             except aiosqlite.OperationalError:
@@ -119,9 +121,9 @@ class Database:
     async def upsert_issue(self, issue: Issue) -> None:
         conn = self._require_conn()
         await conn.execute(
-            """INSERT INTO issues (id, title, status, stage, assignee, labels, filepath, created)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET title=?, status=?, stage=?, assignee=?, labels=?, filepath=?, updated_at=CURRENT_TIMESTAMP""",
+            """INSERT INTO issues (id, title, status, stage, assignee, labels, filepath, created, pause_reason)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET title=?, status=?, stage=?, assignee=?, labels=?, filepath=?, pause_reason=?, updated_at=CURRENT_TIMESTAMP""",
             (
                 issue.id,
                 issue.title,
@@ -131,12 +133,14 @@ class Database:
                 json.dumps(issue.labels),
                 issue.filepath,
                 str(issue.created),
+                issue.pause_reason,
                 issue.title,
                 issue.status.value,
                 issue.stage.value,
                 issue.assignee,
                 json.dumps(issue.labels),
                 issue.filepath,
+                issue.pause_reason,
             ),
         )
         await conn.commit()
@@ -169,6 +173,14 @@ class Database:
         await conn.execute(
             "UPDATE issues SET status=?, stage=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
             (status.value, stage.value, issue_id),
+        )
+        await conn.commit()
+
+    async def update_pause_reason(self, issue_id: str, reason: str) -> None:
+        conn = self._require_conn()
+        await conn.execute(
+            "UPDATE issues SET pause_reason = ? WHERE id = ?",
+            (reason, issue_id),
         )
         await conn.commit()
 

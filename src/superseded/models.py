@@ -16,6 +16,12 @@ class IssueStatus(StrEnum):
     FAILED = "failed"
 
 
+class PauseReason(StrEnum):
+    RETRIES_EXHAUSTED = "retries-exhausted"
+    AWAITING_INPUT = "awaiting-input"
+    USER_EDIT = "user-edit"
+
+
 class Stage(StrEnum):
     SPEC = "spec"
     PLAN = "plan"
@@ -47,6 +53,7 @@ class Issue(BaseModel):
     repos: list[str] = Field(default_factory=list)
     github_url: str = ""
     body: str = ""
+    pause_reason: str = ""
 
     @classmethod
     def from_frontmatter(cls, content: str, filepath: str = "") -> Issue:
@@ -63,6 +70,7 @@ class Issue(BaseModel):
             repos=post.get("repos") or [],
             github_url=post.get("github_url") or "",
             body=post.content.strip() if post.content else "",
+            pause_reason=post.get("pause_reason") or "",
         )
 
     def next_stage(self) -> Stage | None:
