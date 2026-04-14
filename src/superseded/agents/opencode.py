@@ -12,7 +12,7 @@ class OpenCodeAdapter(SubprocessAgentAdapter):
         cmd = ["opencode"]
         if self.model:
             cmd.extend(["-m", self.model])
-        cmd.append("run")
+        cmd.extend(["run", "--pure"])
         cmd.append(prompt)
         return cmd
 

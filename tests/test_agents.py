@@ -139,13 +139,13 @@ def test_claude_code_stdin():
 def test_opencode_no_model():
     adapter = OpenCodeAdapter()
     cmd = adapter._build_command("test prompt")
-    assert cmd == ["opencode", "run", "test prompt"]
+    assert cmd == ["opencode", "run", "--pure", "test prompt"]
 
 
 def test_opencode_with_model():
     adapter = OpenCodeAdapter(model="gpt-4o")
     cmd = adapter._build_command("test prompt")
-    assert cmd == ["opencode", "-m", "gpt-4o", "run", "test prompt"]
+    assert cmd == ["opencode", "-m", "gpt-4o", "run", "--pure", "test prompt"]
 
 
 def test_opencode_stdin():

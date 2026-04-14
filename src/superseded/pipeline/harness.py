@@ -10,7 +10,6 @@ from superseded.db import Database
 from superseded.models import (
     AgentContext,
     AgentResult,
-    HarnessIteration,
     Issue,
     SessionTurn,
     Stage,
@@ -212,19 +211,6 @@ class HarnessRunner:
 
         passed = exit_code == 0
 
-        await db.save_harness_iteration(
-            issue.id,
-            HarnessIteration(
-                attempt=0,
-                stage=stage,
-                previous_errors=previous_errors or [],
-            ),
-            exit_code=exit_code,
-            output=stdout[:2000],
-            error="" if passed else (stdout if stdout else f"Agent exited with code {exit_code}"),
-            repo=repo or "primary",
-        )
-
         if passed:
             if stage in (Stage.SPEC, Stage.PLAN):
                 artifact_file = Path(artifacts_path) / f"{stage.value}.md"
@@ -238,6 +224,23 @@ class HarnessRunner:
                     passed=False,
                     output=stdout,
                     error="awaiting-input",
+                    artifacts=[],
+                    started_at=datetime.datetime.now(datetime.UTC),
+                    finished_at=datetime.datetime.now(datetime.UTC),
+                )
+
+            # Minimum output check — reject trivially empty runs
+            min_output_chars = 50
+            if len(stdout.strip()) < min_output_chars:
+                return StageResult(
+                    stage=stage,
+                    passed=False,
+                    output=stdout,
+                    error=(
+                        f"Agent produced only {len(stdout.strip())} chars of output "
+                        f"(minimum: {min_output_chars}). The agent may not have "
+                        f"actually performed the stage work."
+                    ),
                     artifacts=[],
                     started_at=datetime.datetime.now(datetime.UTC),
                     finished_at=datetime.datetime.now(datetime.UTC),

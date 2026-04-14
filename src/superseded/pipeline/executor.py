@@ -36,6 +36,10 @@ class StageExecutor:
         Path(artifacts_path).mkdir(parents=True, exist_ok=True)
 
         needs_worktree = stage in (Stage.BUILD, Stage.VERIFY, Stage.REVIEW)
+        # Also create worktrees for PLAN when targeting external repos so the
+        # agent sandbox can access target repo files from within its working dir.
+        if stage == Stage.PLAN and issue.repos:
+            needs_worktree = True
         target_repos = issue.repos if issue.repos else [None]
 
         all_passed = True
@@ -80,12 +84,14 @@ class StageExecutor:
         if stage == Stage.SHIP:
             ok, msg = await self._check_gh_auth(self.runner.agent_factory.github_token)
             if not ok:
-                return StageResult(
+                result = StageResult(
                     stage=stage,
                     passed=False,
                     output="",
                     error=f"gh auth failed: {msg}",
                 )
+                await self.db.save_stage_result(issue.id, result, repo=effective_repo)
+                return result
 
         try:
             if needs_worktree and not self.worktree_manager.exists(issue.id, repo=repo_name):

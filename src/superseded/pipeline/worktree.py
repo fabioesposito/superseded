@@ -85,6 +85,21 @@ class WorktreeManager:
         repo_path = self._get_repo_path(repo)
         worktree_path = self._worktree_path(issue_id, repo)
         branch_name = self._branch_name(issue_id, repo)
+
+        # Prune stale worktrees before creating new ones
+        await self._run_git("worktree", "prune", cwd=str(repo_path))
+
+        # Remove existing worktree/branch from previous crashed runs
+        if worktree_path.exists():
+            await self._run_git(
+                "worktree",
+                "remove",
+                str(worktree_path),
+                "--force",
+                cwd=str(repo_path),
+            )
+        await self._run_git("branch", "-D", branch_name, cwd=str(repo_path))
+
         result = await self._run_git(
             "worktree",
             "add",

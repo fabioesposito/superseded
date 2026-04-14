@@ -58,11 +58,24 @@ class Issue(BaseModel):
     @classmethod
     def from_frontmatter(cls, content: str, filepath: str = "") -> Issue:
         post = frontmatter.loads(content)
+
+        raw_status = post.get("status", "new")
+        try:
+            status = IssueStatus(raw_status)
+        except ValueError:
+            status = IssueStatus.NEW
+
+        raw_stage = post.get("stage", "spec")
+        try:
+            stage = Stage(raw_stage)
+        except ValueError:
+            stage = Stage.SPEC
+
         return cls(
             id=post.get("id", "SUP-000"),
             title=post.get("title") or "Untitled",
-            status=IssueStatus(post.get("status", "new")),
-            stage=Stage(post.get("stage", "spec")),
+            status=status,
+            stage=stage,
             created=post.get("created", datetime.date.today()),
             assignee=post.get("assignee") or "",
             labels=post.get("labels") or [],

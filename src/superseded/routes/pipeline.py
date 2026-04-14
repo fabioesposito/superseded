@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from superseded.models import (
@@ -22,6 +23,9 @@ from superseded.validation import InvalidInputError, validate_issue_id
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pipeline")
+
+# Track which issues are currently running a stage
+_running: set[str] = set()
 
 
 def _get_executor(deps: Deps):
@@ -61,59 +65,136 @@ def _render_issue_detail_oob(
     return HTMLResponse(content=body)
 
 
-async def _run_and_advance(
-    deps: Deps, issue_id: str, stage: Stage, request: Request
-) -> HTMLResponse:
+def _render_running_indicator(request: Request, stage_name: str) -> HTMLResponse:
+    templates = get_templates()
+    return templates.TemplateResponse(request, "_running.html", {"stage_name": stage_name})
+
+
+async def _run_stage_background(deps: Deps, issue_id: str, stage: Stage) -> None:
+    """Run a stage in the background, updating DB on completion."""
+    try:
+        issue = _find_issue(deps, issue_id)
+        if issue is None:
+            return
+
+        executor = _get_executor(deps)
+        result = await executor.run_stage(issue, stage, deps.config)
+
+        if result.passed:
+            next_stage = issue.next_stage()
+            if next_stage is None:
+                await deps.db.update_issue_status(issue_id, IssueStatus.DONE, Stage.SHIP)
+                update_issue_status(issue.filepath, IssueStatus.DONE, Stage.SHIP)
+            else:
+                await deps.db.update_issue_status(issue_id, IssueStatus.IN_PROGRESS, next_stage)
+                update_issue_status(issue.filepath, IssueStatus.IN_PROGRESS, next_stage)
+        else:
+            await deps.db.update_issue_status(issue_id, IssueStatus.PAUSED, issue.stage)
+    except Exception:
+        logger.exception("Background stage run failed for %s", issue_id)
+        with contextlib.suppress(Exception):
+            await deps.db.update_issue_status(issue_id, IssueStatus.PAUSED, stage)
+    finally:
+        _running.discard(issue_id)
+
+
+@router.post("/issues/{issue_id}/advance", response_class=HTMLResponse)
+async def advance_issue(
+    request: Request,
+    issue_id: str,
+    background_tasks: BackgroundTasks,
+    deps: Deps = Depends(get_deps),
+):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return HTMLResponse(content="")
     issue = _find_issue(deps, issue_id)
     if issue is None:
         return HTMLResponse(content="")
 
-    executor = _get_executor(deps)
-    result = await executor.run_stage(issue, stage, deps.config)
+    # If already running, return running indicator
+    if issue_id in _running:
+        return _render_running_indicator(request, issue.stage.value)
 
-    if result.passed:
-        next_stage = issue.next_stage()
-        if next_stage is None:
-            await deps.db.update_issue_status(issue_id, IssueStatus.DONE, Stage.SHIP)
-            update_issue_status(issue.filepath, IssueStatus.DONE, Stage.SHIP)
-        else:
-            await deps.db.update_issue_status(issue_id, IssueStatus.IN_PROGRESS, next_stage)
-            update_issue_status(issue.filepath, IssueStatus.IN_PROGRESS, next_stage)
-    else:
-        await deps.db.update_issue_status(issue_id, IssueStatus.PAUSED, issue.stage)
+    # Mark as running and start background task
+    _running.add(issue_id)
+    background_tasks.add_task(_run_stage_background, deps, issue_id, issue.stage)
 
+    # Return immediately with running indicator + auto-refresh trigger
+    templates = get_templates()
+    running_html = templates.TemplateResponse(
+        request, "_running.html", {"stage_name": issue.stage.value}
+    ).body.decode()
+    # Add HTMX trigger that polls for completion
+    poll_html = (
+        f'<div id="issue-detail-content" hx-get="/pipeline/issues/{issue_id}/status" '
+        f'hx-trigger="every 3s" hx-swap="innerHTML" hx-target="#issue-detail-content">'
+        f"{running_html}</div>"
+    )
+    return HTMLResponse(content=poll_html)
+
+
+@router.post("/issues/{issue_id}/retry", response_class=HTMLResponse)
+async def retry_issue(
+    request: Request,
+    issue_id: str,
+    background_tasks: BackgroundTasks,
+    deps: Deps = Depends(get_deps),
+):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return HTMLResponse(content="")
     issue = _find_issue(deps, issue_id)
+    if issue is None:
+        return HTMLResponse(content="")
+
+    if issue_id in _running:
+        return _render_running_indicator(request, issue.stage.value)
+
+    _running.add(issue_id)
+    background_tasks.add_task(_run_stage_background, deps, issue_id, issue.stage)
+
+    templates = get_templates()
+    running_html = templates.TemplateResponse(
+        request, "_running.html", {"stage_name": issue.stage.value}
+    ).body.decode()
+    poll_html = (
+        f'<div id="issue-detail-content" hx-get="/pipeline/issues/{issue_id}/status" '
+        f'hx-trigger="every 3s" hx-swap="innerHTML" hx-target="#issue-detail-content">'
+        f"{running_html}</div>"
+    )
+    return HTMLResponse(content=poll_html)
+
+
+@router.get("/issues/{issue_id}/status", response_class=HTMLResponse)
+async def issue_pipeline_status(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+    """Poll endpoint — returns full issue-detail-content when stage completes."""
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return HTMLResponse(content="")
+
+    # If still running, keep the running indicator
+    if issue_id in _running:
+        issue = _find_issue(deps, issue_id)
+        if issue:
+            return _render_running_indicator(request, issue.stage.value)
+        return HTMLResponse(content="")
+
+    # Stage completed — return full updated content
+    issue = _find_issue(deps, issue_id)
+    if issue is None:
+        return HTMLResponse(content="")
     stage_results = await deps.db.get_stage_results(issue_id)
     harness_iterations = await deps.db.get_harness_iterations(issue_id)
     passed_stages = [r["stage"] for r in stage_results if r.get("passed")]
 
+    # Return full content WITHOUT poll trigger (stop polling)
     return _render_issue_detail_oob(
         request, issue, stage_results, harness_iterations, passed_stages
     )
-
-
-@router.post("/issues/{issue_id}/advance", response_class=HTMLResponse)
-async def advance_issue(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
-    try:
-        issue_id = validate_issue_id(issue_id)
-    except InvalidInputError:
-        return HTMLResponse(content="")
-    issue = _find_issue(deps, issue_id)
-    if issue is None:
-        return HTMLResponse(content="")
-    return await _run_and_advance(deps, issue_id, issue.stage, request)
-
-
-@router.post("/issues/{issue_id}/retry", response_class=HTMLResponse)
-async def retry_issue(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
-    try:
-        issue_id = validate_issue_id(issue_id)
-    except InvalidInputError:
-        return HTMLResponse(content="")
-    issue = _find_issue(deps, issue_id)
-    if issue is None:
-        return HTMLResponse(content="")
-    return await _run_and_advance(deps, issue_id, issue.stage, request)
 
 
 @router.get("/sse/dashboard")
