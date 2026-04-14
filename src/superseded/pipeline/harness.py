@@ -92,6 +92,10 @@ class HarnessRunner:
             passed = agent_result.exit_code == 0
 
             if passed:
+                if stage in (Stage.SPEC, Stage.PLAN):
+                    artifact_file = Path(artifacts_path) / f"{stage.value}.md"
+                    artifact_file.parent.mkdir(parents=True, exist_ok=True)
+                    artifact_file.write_text(agent_result.stdout, encoding="utf-8")
                 error = ""
                 return StageResult(
                     stage=stage,
