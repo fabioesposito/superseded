@@ -18,3 +18,7 @@ venv/
 .superseded/
 node_modules/
 test-results/
+htmlcov/
+coverage/
+playwright-report/
+.playwright/
