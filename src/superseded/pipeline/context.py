@@ -124,6 +124,13 @@ class ContextAssembler:
             f"Address each error. Do not repeat the same mistakes."
         )
 
+    def _build_answers_layer(self, artifacts_path: str) -> str | None:
+        answers_file = Path(artifacts_path) / "answers.md"
+        if answers_file.exists():
+            content = answers_file.read_text(encoding="utf-8")
+            return f"## Human Answers to Your Questions\n\n{content}"
+        return None
+
     def build(
         self,
         stage: Stage,
@@ -162,6 +169,10 @@ class ContextAssembler:
         artifacts = self._build_artifacts_layer(artifacts_path)
         if artifacts:
             layers.append(artifacts)
+
+        answers = self._build_answers_layer(artifacts_path)
+        if answers:
+            layers.append(answers)
 
         session_history = self._build_session_history_layer(stage, session_turns)
         if session_history:
