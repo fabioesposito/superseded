@@ -42,7 +42,14 @@
                             {% else %}
                             <span class="w-1.5 h-1.5 rounded-full bg-shell-500"></span>
                             {% endif %}
-                            {{ issue.status.value }}
+                            {{ issue.status.value }}{% if issue.status.value == 'paused' and issue.pause_reason %}<span class="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium
+                                {% if issue.pause_reason == 'awaiting-input' %}bg-sand-900/60 text-sand-400
+                                {% elif issue.pause_reason == 'retries-exhausted' %}bg-coral-900/60 text-coral-400
+                                {% else %}bg-shell-800 text-shell-400{% endif %}">
+                                {% if issue.pause_reason == 'awaiting-input' %}Awaiting Input
+                                {% elif issue.pause_reason == 'retries-exhausted' %}Retries Exhausted
+                                {% else %}{{ issue.pause_reason }}{% endif %}
+                            </span>{% endif %}
                         </span>
                     </a>
                 </td>
