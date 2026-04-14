@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from superseded.models import Stage
-from superseded.routes import get_templates
+from superseded.routes import _csrf_token_for_request, get_templates
 from superseded.routes.deps import Deps, get_deps
 from superseded.tickets.reader import list_issues
 
@@ -18,7 +18,7 @@ async def dashboard(request: Request, deps: Deps = Depends(get_deps)):
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     issues = list_issues(issues_dir)
     stage_names = [s.value for s in Stage]
-    return get_templates().TemplateResponse(
+    response = get_templates().TemplateResponse(
         request,
         "dashboard.html",
         {
@@ -26,3 +26,7 @@ async def dashboard(request: Request, deps: Deps = Depends(get_deps)):
             "stage_names": stage_names,
         },
     )
+    if "csrf_token" not in request.cookies:
+        token = _csrf_token_for_request(request)
+        response.set_cookie("csrf_token", token, httponly=False, samesite="lax")
+    return response

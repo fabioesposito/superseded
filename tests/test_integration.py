@@ -53,7 +53,7 @@ async def test_full_ticket_lifecycle():
         issues_dir.mkdir()
 
         config = load_config(repo)
-        assert config.default_agent == "claude-code"
+        assert config.default_agent == "opencode"
 
         filepath = str(issues_dir / "SUP-001-integrate-payment-api.md")
         write_issue(filepath, SAMPLE_TICKET)

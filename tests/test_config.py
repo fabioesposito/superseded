@@ -13,7 +13,7 @@ def write_yaml_config(path: Path, data: dict):
 
 def test_default_config():
     config = SupersededConfig()
-    assert config.default_agent == "claude-code"
+    assert config.default_agent == "opencode"
     assert config.stage_timeout_seconds == 600
     assert config.port == 8000
 
@@ -38,7 +38,7 @@ def test_load_config_from_file():
 def test_load_config_missing_file_uses_defaults():
     with tempfile.TemporaryDirectory() as tmp:
         config = load_config(Path(tmp))
-        assert config.default_agent == "claude-code"
+        assert config.default_agent == "opencode"
 
 
 def test_load_config_partial_override():
@@ -47,7 +47,7 @@ def test_load_config_partial_override():
         write_yaml_config(config_path, {"port": 9000})
         config = load_config(Path(tmp))
         assert config.port == 9000
-        assert config.default_agent == "claude-code"
+        assert config.default_agent == "opencode"
 
 
 def test_config_repos_map():
@@ -87,8 +87,8 @@ def test_load_config_with_repos():
 
 def test_stage_agent_config_defaults():
     cfg = StageAgentConfig()
-    assert cfg.cli == "claude-code"
-    assert cfg.model == ""
+    assert cfg.cli == "opencode"
+    assert cfg.model == "opencode-go/kimi-k2.5"
 
 
 def test_stage_agent_config_custom():
@@ -100,7 +100,7 @@ def test_stage_agent_config_custom():
 def test_superseded_config_stages_default():
     cfg = SupersededConfig()
     assert cfg.stages == {}
-    assert cfg.default_model == ""
+    assert cfg.default_model == "opencode-go/kimi-k2.5"
 
 
 def test_superseded_config_stages_populated():

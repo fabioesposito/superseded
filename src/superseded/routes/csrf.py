@@ -29,10 +29,17 @@ class CsrfMiddleware(BaseHTTPMiddleware):
 
         # Safe methods don't need CSRF
         if request.method in SAFE_METHODS:
+            # Make token available to templates even before cookie is set
+            token = request.cookies.get("csrf_token") or _generate_csrf_token()
+            request.state.csrf_token = token
+
             response = await call_next(request)
-            # Set CSRF cookie on GET requests if not present
-            if request.method == "GET" and "csrf_token" not in request.cookies:
-                token = _generate_csrf_token()
+            # Set CSRF cookie on GET requests if not already set by route handler
+            if (
+                request.method == "GET"
+                and "csrf_token" not in request.cookies
+                and "csrf_token" not in (response.headers.get("set-cookie", ""))
+            ):
                 response.set_cookie(
                     "csrf_token",
                     token,

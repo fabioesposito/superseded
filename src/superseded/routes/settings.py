@@ -6,18 +6,22 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from superseded.config import RepoEntry, StageAgentConfig, SupersededConfig, save_config
-from superseded.routes import get_templates
+from superseded.routes import _csrf_token_for_request, get_templates
 from superseded.routes.deps import Deps, get_deps
 from superseded.validation import InvalidInputError, validate_git_url, validate_repo_path
 
 router = APIRouter()
 
 
-def _get_form_data(request: Request):
+async def _get_form_data(request: Request):
     """Get form data, checking request.state first (set by CSRF middleware)."""
     if hasattr(request.state, "form_data"):
         return request.state.form_data
-    return {}
+    try:
+        form = await request.form()
+        return dict(form)
+    except Exception:
+        return {}
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -27,7 +31,7 @@ async def settings_page(request: Request, deps: Deps = Depends(get_deps)):
     stage_agents = {}
     for stage in stages:
         stage_agents[stage] = deps.config.stages.get(stage, StageAgentConfig())
-    return get_templates().TemplateResponse(
+    response = get_templates().TemplateResponse(
         request,
         "settings.html",
         {
@@ -35,6 +39,10 @@ async def settings_page(request: Request, deps: Deps = Depends(get_deps)):
             "stage_agents": stage_agents,
         },
     )
+    if "csrf_token" not in request.cookies:
+        token = _csrf_token_for_request(request)
+        response.set_cookie("csrf_token", token, httponly=False, samesite="lax")
+    return response
 
 
 @router.post("/settings/repos", response_class=HTMLResponse)
@@ -42,7 +50,7 @@ async def add_repo(
     request: Request,
     deps: Deps = Depends(get_deps),
 ):
-    form = _get_form_data(request)
+    form = await _get_form_data(request)
     name = str(form.get("name", "")).strip()
     git_url = str(form.get("git_url", "")).strip()
     path = str(form.get("path", "")).strip()
@@ -84,7 +92,7 @@ async def update_agents(
     request: Request,
     deps: Deps = Depends(get_deps),
 ):
-    form = _get_form_data(request)
+    form = await _get_form_data(request)
     config = deps.config
     stages_data = {
         "spec": StageAgentConfig(

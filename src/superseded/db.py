@@ -25,6 +25,8 @@ class Database:
         self._id_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
+        if self._conn is not None:
+            return
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         conn = await aiosqlite.connect(self.db_path)
         self._conn = conn

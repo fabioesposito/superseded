@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from superseded.github import fetch_github_issue, format_description
 from superseded.models import Issue, Stage
-from superseded.routes import get_templates
+from superseded.routes import _csrf_token_for_request, get_templates
 from superseded.routes.deps import Deps, get_deps
 from superseded.tickets.reader import list_issues
 from superseded.tickets.writer import write_issue
@@ -18,37 +18,31 @@ from superseded.validation import InvalidInputError, validate_issue_id
 router = APIRouter(prefix="/issues")
 
 
-def _get_form_data(request: Request):
+async def _get_form_data(request: Request):
     """Get form data, checking request.state first (set by CSRF middleware)."""
     if hasattr(request.state, "form_data"):
         return request.state.form_data
-    return {}
+    try:
+        form = await request.form()
+        return dict(form)
+    except Exception:
+        return {}
 
 
 @router.get("/new", response_class=HTMLResponse)
 async def new_issue_form(request: Request, deps: Deps = Depends(get_deps)):
-    from superseded.routes.csrf import _generate_csrf_token
-
-    csrf_token = request.cookies.get("csrf_token", "")
-    if not csrf_token:
-        csrf_token = _generate_csrf_token()
+    csrf_token = _csrf_token_for_request(request)
     response = get_templates().TemplateResponse(
         request, "issue_new.html", {"csrf_token": csrf_token}
     )
     if "csrf_token" not in request.cookies:
-        response.set_cookie(
-            "csrf_token",
-            csrf_token,
-            httponly=False,
-            samesite="lax",
-            secure=request.url.scheme == "https",
-        )
+        response.set_cookie("csrf_token", csrf_token, httponly=False, samesite="lax")
     return response
 
 
 @router.post("/import", response_class=HTMLResponse)
 async def import_github_issue(request: Request, deps: Deps = Depends(get_deps)):
-    form = _get_form_data(request)
+    form = await _get_form_data(request)
     github_url = str(form.get("github_url", "")).strip()
 
     try:
@@ -78,7 +72,7 @@ async def import_github_issue(request: Request, deps: Deps = Depends(get_deps)):
 
 @router.post("/new", response_class=RedirectResponse)
 async def create_issue(request: Request, deps: Deps = Depends(get_deps)):
-    form = _get_form_data(request)
+    form = await _get_form_data(request)
     title = str(form.get("title", "")).strip()
     body = str(form.get("body", "")).strip()
     labels_str = str(form.get("labels", "")).strip()
@@ -171,7 +165,7 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
         repo = r.get("repo", "primary")
         results_by_repo.setdefault(repo, []).append(r)
 
-    return get_templates().TemplateResponse(
+    response = get_templates().TemplateResponse(
         request,
         "issue_detail.html",
         {
@@ -183,6 +177,10 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
             "passed_stages": [r["stage"] for r in stage_results if r.get("passed")],
         },
     )
+    if "csrf_token" not in request.cookies:
+        token = _csrf_token_for_request(request)
+        response.set_cookie("csrf_token", token, httponly=False, samesite="lax")
+    return response
 
 
 @router.get("/{issue_id}/stage/{stage_name}", response_class=HTMLResponse)
@@ -235,7 +233,7 @@ async def stage_detail(
             result = r
             break
 
-    return get_templates().TemplateResponse(
+    response = get_templates().TemplateResponse(
         request,
         "stage_detail.html",
         {
@@ -244,3 +242,7 @@ async def stage_detail(
             "result": result,
         },
     )
+    if "csrf_token" not in request.cookies:
+        token = _csrf_token_for_request(request)
+        response.set_cookie("csrf_token", token, httponly=False, samesite="lax")
+    return response
