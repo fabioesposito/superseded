@@ -117,6 +117,19 @@ class HarnessRunner:
                     artifact_file = Path(artifacts_path) / f"{stage.value}.md"
                     artifact_file.parent.mkdir(parents=True, exist_ok=True)
                     artifact_file.write_text(agent_result.stdout, encoding="utf-8")
+
+                questions_file = Path(artifacts_path) / "questions.md"
+                if questions_file.exists():
+                    return StageResult(
+                        stage=stage,
+                        passed=False,
+                        output=agent_result.stdout,
+                        error="awaiting-input",
+                        artifacts=[],
+                        started_at=started,
+                        finished_at=finished,
+                    )
+
                 error = ""
                 return StageResult(
                     stage=stage,

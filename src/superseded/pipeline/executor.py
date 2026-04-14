@@ -116,6 +116,15 @@ class StageExecutor:
             event_manager=self.runner.event_manager,
         )
 
+        if not result.passed:
+            questions_file = Path(repo_artifacts) / "questions.md"
+            if questions_file.exists():
+                await self.db.update_pause_reason(issue.id, "awaiting-input")
+            else:
+                await self.db.update_pause_reason(issue.id, "retries-exhausted")
+        else:
+            await self.db.update_pause_reason(issue.id, "")
+
         await self.db.save_stage_result(issue.id, result, repo=effective_repo)
 
         attempt_num = await self._count_attempts(issue.id, stage, effective_repo)
