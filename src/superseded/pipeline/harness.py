@@ -9,6 +9,7 @@ from superseded.config import RepoEntry, StageAgentConfig
 from superseded.db import Database
 from superseded.models import (
     AgentContext,
+    AgentEvent,
     AgentResult,
     HarnessIteration,
     Issue,
@@ -57,6 +58,7 @@ class HarnessRunner:
         artifacts_path: str,
         previous_errors: list[str] | None = None,
         repo: str | None = None,
+        event_manager: PipelineEventManager | None = None,
     ) -> StageResult:
         errors: list[str] = previous_errors or []
         effective_max = self.max_retries if stage.value in self.retryable_stages else 1
@@ -85,11 +87,30 @@ class HarnessRunner:
                 previous_errors=errors,
             )
 
+            if event_manager:
+                await event_manager.publish(
+                    issue.id,
+                    AgentEvent(
+                        event_type="progress",
+                        content=f"Running {stage.value} stage (attempt {attempt + 1})...",
+                        stage=stage,
+                    ),
+                )
+
             started = datetime.datetime.now(datetime.UTC)
             agent_result: AgentResult = await self.resolve_agent(stage).run(prompt, context)
             finished = datetime.datetime.now(datetime.UTC)
 
             passed = agent_result.exit_code == 0
+
+            if event_manager:
+                status = "passed" if passed else "failed"
+                await event_manager.publish(
+                    issue.id,
+                    AgentEvent(
+                        event_type="progress", content=f"{stage.value} stage {status}", stage=stage
+                    ),
+                )
 
             if passed:
                 if stage in (Stage.SPEC, Stage.PLAN):

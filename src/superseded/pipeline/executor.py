@@ -113,6 +113,7 @@ class StageExecutor:
             artifacts_path=repo_artifacts,
             previous_errors=repo_previous_errors if repo_previous_errors else None,
             repo=repo_name,
+            event_manager=self.runner.event_manager,
         )
 
         await self.db.save_stage_result(issue.id, result, repo=effective_repo)
