@@ -4,6 +4,8 @@ import re
 from datetime import date
 from pathlib import Path
 
+import frontmatter
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -276,6 +278,45 @@ async def answer_questions(request: Request, issue_id: str, deps: Deps = Depends
     if not matching:
         return HTMLResponse(content="")
     issue = matching[0]
+
+    from superseded.routes.pipeline import _run_and_advance
+
+    return await _run_and_advance(deps, issue_id, issue.stage, request)
+
+
+@router.post("/{issue_id}/update-body", response_class=HTMLResponse)
+async def update_issue_body(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return HTMLResponse(content="")
+
+    form = await _get_form_data(request)
+    new_body = str(form.get("body", "")).strip()
+
+    issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
+    matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
+    if not matching:
+        return HTMLResponse(content="")
+
+    issue = matching[0]
+
+    with open(issue.filepath, "r") as f:
+        post = frontmatter.load(f)
+    post.content = new_body
+    with open(issue.filepath, "w") as f:
+        f.write(frontmatter.dumps(post))
+
+    await deps.db.upsert_issue(
+        Issue(
+            id=issue.id,
+            title=issue.title,
+            filepath=issue.filepath,
+            body=new_body,
+            stage=issue.stage,
+            status=issue.status,
+        )
+    )
 
     from superseded.routes.pipeline import _run_and_advance
 
