@@ -24,7 +24,7 @@ class WorktreeManager:
         if git_url:
             self._git_urls[name] = git_url
 
-    async def _ensure_repo_exists(self, repo: str) -> None:
+    async def _ensure_repo_exists(self, repo: str, github_token: str = "") -> None:
         repo_path = self._get_repo_path(repo)
         if repo_path.exists():
             return
@@ -34,7 +34,14 @@ class WorktreeManager:
                 f"Repo path {repo_path} does not exist and no git_url configured for '{repo}'"
             )
         repo_path.parent.mkdir(parents=True, exist_ok=True)
-        result = await self._run_git("clone", git_url, str(repo_path))
+
+        clone_url = git_url
+        if github_token and "github.com" in git_url:
+            clone_url = git_url.replace(
+                "https://github.com/", f"https://{github_token}@github.com/"
+            )
+
+        result = await self._run_git("clone", clone_url, str(repo_path))
         if result.returncode != 0:
             raise RuntimeError(f"Failed to clone {git_url} to {repo_path}: {result.stderr}")
 

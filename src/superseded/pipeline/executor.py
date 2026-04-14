@@ -90,6 +90,10 @@ class StageExecutor:
 
         try:
             if needs_worktree and not self.worktree_manager.exists(issue.id, repo=repo_name):
+                await self.worktree_manager._ensure_repo_exists(
+                    repo_name,
+                    github_token=self.runner.agent_factory.github_token,
+                )
                 stash_ref = await self.worktree_manager.stash_if_dirty(repo=repo_name)
                 await self.worktree_manager.create(issue.id, repo=repo_name)
                 worktree_created = True
