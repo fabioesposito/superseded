@@ -5,7 +5,6 @@ from datetime import date
 from pathlib import Path
 
 import frontmatter
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -167,6 +166,17 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
         repo = r.get("repo", "primary")
         results_by_repo.setdefault(repo, []).append(r)
 
+    questions_content = ""
+    questions: list[str] = []
+    if issue.pause_reason == "awaiting-input":
+        artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
+        questions_file = Path(artifacts_path) / "questions.md"
+        if questions_file.exists():
+            questions_content = questions_file.read_text(encoding="utf-8")
+            for line in questions_content.split("\n"):
+                if line.strip().startswith("## Q:"):
+                    questions.append(line.strip()[5:].strip())
+
     response = get_templates().TemplateResponse(
         request,
         "issue_detail.html",
@@ -177,6 +187,8 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
             "harness_iterations": harness_iterations,
             "stage_order": [s.value for s in Stage],
             "passed_stages": [r["stage"] for r in stage_results if r.get("passed")],
+            "questions_content": questions_content,
+            "questions": questions,
         },
     )
     if "csrf_token" not in request.cookies:
@@ -301,7 +313,7 @@ async def update_issue_body(request: Request, issue_id: str, deps: Deps = Depend
 
     issue = matching[0]
 
-    with open(issue.filepath, "r") as f:
+    with open(issue.filepath) as f:
         post = frontmatter.load(f)
     post.content = new_body
     with open(issue.filepath, "w") as f:

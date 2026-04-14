@@ -1,0 +1,21 @@
+<div id="edit-ticket-form" class="card rounded-xl p-6 mb-4" x-data="{ show: false }">
+    <button @click="show = !show" class="text-sm text-shell-400 hover:text-shell-200 transition-colors">
+        ✏️ Edit Ticket Body
+    </button>
+    <div x-show="show" x-cloak class="mt-4">
+        <form hx-post="/issues/{{ issue.id }}/update-body"
+              hx-target="#issue-detail-content"
+              hx-swap="innerHTML">
+            <textarea name="body" rows="10"
+                      class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm font-mono focus:outline-none focus:border-neon-500">{{ issue.body }}</textarea>
+            <div class="flex gap-3 mt-3">
+                <button type="submit" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    Save & Resume
+                </button>
+                <button type="button" @click="show = false" class="btn-secondary text-shell-300 px-4 py-2 rounded-lg text-sm">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
