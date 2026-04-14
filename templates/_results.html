@@ -3,13 +3,14 @@
     <div class="card rounded-xl p-5">
         <h3 class="font-semibold text-shell-100 mb-3 text-sm uppercase tracking-wider">Stage Results</h3>
         {% for result in stage_results %}
-        <div class="mb-3 border-l-2 {% if result.passed %}border-olive-500{% else %}border-coral-500{% endif %} pl-3">
+        <a href="/issues/{{ issue.id }}/stage/{{ result.stage }}"
+           class="block mb-3 border-l-2 {% if result.passed %}border-olive-500 hover:border-olive-400{% else %}border-coral-500 hover:border-coral-400{% endif %} pl-3 transition-colors">
             <div class="flex items-center gap-2">
                 <span class="font-medium text-sm text-shell-200">{{ result.stage }}</span>
                 {% if result.passed %}<span class="text-olive-400 text-xs font-mono font-semibold">PASS</span>{% else %}<span class="text-coral-400 text-xs font-mono font-semibold">FAIL</span>{% endif %}
             </div>
             {% if result.error %}<p class="text-coral-400/80 text-xs mt-1 font-mono">{{ result.error }}</p>{% endif %}
-        </div>
+        </a>
         {% endfor %}
     </div>
     {% endif %}

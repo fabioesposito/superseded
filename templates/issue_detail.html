@@ -50,7 +50,8 @@
                     {% for stage_name in stage_order %}
                     {% set repo_results = results_by_repo.get(repo_name, []) %}
                     {% set result = repo_results | selectattr("stage", "equalto", stage_name) | list | last %}
-                    <div class="flex-1 rounded-lg p-2.5 text-center text-xs font-semibold uppercase tracking-wider
+                    <a href="/issues/{{ issue.id }}/stage/{{ stage_name }}"
+                       class="flex-1 rounded-lg p-2.5 text-center text-xs font-semibold uppercase tracking-wider transition-all hover:scale-[1.02]
                         {% if result and result.passed %}bg-olive-950 text-olive-400 border border-olive-800/30
                         {% elif result and not result.passed %}bg-coral-950 text-coral-400 border border-coral-800/30
                         {% else %}bg-shell-900/50 text-shell-600 border border-shell-800/30{% endif %}">
@@ -58,7 +59,7 @@
                         <svg class="w-3 h-3 mx-auto mb-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
                         {% endif %}
                         {{ stage_name }}
-                    </div>
+                    </a>
                     {% endfor %}
                 </div>
             </div>
