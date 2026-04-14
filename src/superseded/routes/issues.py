@@ -246,3 +246,37 @@ async def stage_detail(
         token = _csrf_token_for_request(request)
         response.set_cookie("csrf_token", token, httponly=False, samesite="lax")
     return response
+
+
+@router.post("/{issue_id}/answer-questions", response_class=HTMLResponse)
+async def answer_questions(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return HTMLResponse(content="")
+
+    form = await _get_form_data(request)
+
+    answers_parts = []
+    for key, value in form.items():
+        if key.startswith("q_"):
+            answers_parts.append(f"### {key}\n\n{value}")
+    answers_content = "\n\n".join(answers_parts)
+
+    artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
+    Path(artifacts_path).mkdir(parents=True, exist_ok=True)
+    (Path(artifacts_path) / "answers.md").write_text(answers_content, encoding="utf-8")
+
+    questions_file = Path(artifacts_path) / "questions.md"
+    if questions_file.exists():
+        questions_file.unlink()
+
+    issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
+    matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
+    if not matching:
+        return HTMLResponse(content="")
+    issue = matching[0]
+
+    from superseded.routes.pipeline import _run_and_advance
+
+    return await _run_and_advance(deps, issue_id, issue.stage, request)
