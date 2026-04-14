@@ -15,9 +15,6 @@ venv/
 .mypy_cache/
 *.db
 *.sqlite3
-.superseded/state.db
-.superseded/state.db-*
-.superseded/artifacts/
-.superseded/config.yaml
+.superseded/
 node_modules/
 test-results/
