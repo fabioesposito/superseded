@@ -13,6 +13,7 @@
             <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-4 self-start">Pipeline Health</h3>
             <div id="health-gauge" class="w-full max-w-xs"></div>
             <p id="health-label" class="text-sm font-semibold mt-2"></p>
+            <p id="health-empty" class="text-shell-500 text-sm hidden">No data yet</p>
         </div>
         <div class="lg:col-span-2 grid grid-cols-2 gap-4">
             <div class="card card-accent rounded-xl p-5">
@@ -43,6 +44,7 @@
         <div class="card rounded-xl p-6">
             <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-4">Stage Success Rates</h3>
             <div id="stage-bars"></div>
+            <p id="stage-bars-empty" class="text-shell-500 text-sm hidden">No data yet</p>
         </div>
     </div>
 
@@ -77,38 +79,44 @@
     var stages = ['spec', 'plan', 'build', 'verify', 'review', 'ship'];
 
     // --- Health Gauge ---
-    var rateValues = stages.map(function(s) { return stageRates[s] || 0; });
-    var avgRate = rateValues.reduce(function(a, b) { return a + b; }, 0) / rateValues.length;
-    var avgPct = Math.round(avgRate * 100);
+    if (Object.keys(stageRates).length === 0) {
+        document.getElementById('health-gauge').classList.add('hidden');
+        document.getElementById('health-label').classList.add('hidden');
+        document.getElementById('health-empty').classList.remove('hidden');
+    } else {
+        var rateValues = stages.map(function(s) { return stageRates[s] || 0; });
+        var avgRate = rateValues.reduce(function(a, b) { return a + b; }, 0) / rateValues.length;
+        var avgPct = Math.round(avgRate * 100);
 
-    var gaugeColor;
-    var healthText;
-    if (avgRate >= 0.8) { gaugeColor = COLORS.olive; healthText = 'Healthy'; }
-    else if (avgRate >= 0.5) { gaugeColor = COLORS.petal; healthText = 'Degraded'; }
-    else { gaugeColor = COLORS.coral; healthText = 'Critical'; }
+        var gaugeColor;
+        var healthText;
+        if (avgRate >= 0.8) { gaugeColor = COLORS.olive; healthText = 'Healthy'; }
+        else if (avgRate >= 0.5) { gaugeColor = COLORS.petal; healthText = 'Degraded'; }
+        else { gaugeColor = COLORS.coral; healthText = 'Critical'; }
 
-    document.getElementById('health-label').textContent = healthText;
-    document.getElementById('health-label').style.color = gaugeColor;
+        document.getElementById('health-label').textContent = healthText;
+        document.getElementById('health-label').style.color = gaugeColor;
 
-    new ApexCharts(document.querySelector("#health-gauge"), {
-        series: [avgPct],
-        chart: { height: 220, type: 'radialBar', background: 'transparent', animations: { enabled: true, easing: 'easeinout', speed: 800 } },
-        plotOptions: {
-            radialBar: {
-                hollow: { size: '65%', margin: 0 },
-                track: { background: COLORS.shell800, strokeWidth: '100%' },
-                dataLabels: {
-                    name: { show: false },
-                    value: { fontSize: '2.5rem', fontWeight: 700, fontFamily: 'Outfit', color: gaugeColor, offsetY: 8, formatter: function(v) { return v + '%'; } }
-                },
-                startAngle: -135, endAngle: 135
-            }
-        },
-        colors: [gaugeColor],
-        stroke: { lineCap: 'round' },
-        labels: ['Health'],
-        theme: { mode: 'dark' }
-    }).render();
+        new ApexCharts(document.querySelector("#health-gauge"), {
+            series: [avgPct],
+            chart: { height: 220, type: 'radialBar', background: 'transparent', animations: { enabled: true, easing: 'easeinout', speed: 800 } },
+            plotOptions: {
+                radialBar: {
+                    hollow: { size: '65%', margin: 0 },
+                    track: { background: COLORS.shell800, strokeWidth: '100%' },
+                    dataLabels: {
+                        name: { show: false },
+                        value: { fontSize: '2.5rem', fontWeight: 700, fontFamily: 'Outfit', color: gaugeColor, offsetY: 8, formatter: function(v) { return v + '%'; } }
+                    },
+                    startAngle: -135, endAngle: 135
+                }
+            },
+            colors: [gaugeColor],
+            stroke: { lineCap: 'round' },
+            labels: ['Health'],
+            theme: { mode: 'dark' }
+        }).render();
+    }
 
     // --- Best/Worst Stage ---
     var best = { name: '', rate: -1 };
@@ -149,26 +157,31 @@
     }
 
     // --- Stage Success Bars ---
-    var barValues = stages.map(function(s) { return Math.round((stageRates[s] || 0) * 100); });
-    var barColors = barValues.map(function(v) {
-        if (v >= 80) return COLORS.olive;
-        if (v >= 50) return COLORS.petal;
-        return COLORS.coral;
-    });
+    if (Object.keys(stageRates).length === 0) {
+        document.getElementById('stage-bars').classList.add('hidden');
+        document.getElementById('stage-bars-empty').classList.remove('hidden');
+    } else {
+        var barValues = stages.map(function(s) { return Math.round((stageRates[s] || 0) * 100); });
+        var barColors = barValues.map(function(v) {
+            if (v >= 80) return COLORS.olive;
+            if (v >= 50) return COLORS.petal;
+            return COLORS.coral;
+        });
 
-    new ApexCharts(document.querySelector("#stage-bars"), {
-        series: [{ name: 'Success Rate', data: barValues }],
-        chart: { type: 'bar', height: 280, background: 'transparent', toolbar: { show: false }, animations: { enabled: true, easing: 'easeinout', speed: 600 } },
-        plotOptions: { bar: { horizontal: true, barHeight: '60%', borderRadius: 4, distributed: true, dataLabels: { position: 'right' } } },
-        colors: barColors,
-        dataLabels: { enabled: true, formatter: function(v) { return v + '%'; }, style: { fontSize: '0.8rem', fontFamily: 'JetBrains Mono', fontWeight: 600, colors: ['#fff'] }, offsetX: 10 },
-        xaxis: { categories: stages.map(function(s) { return s.toUpperCase(); }), max: 100, labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
-        yaxis: { labels: { style: { colors: COLORS.shell400, fontFamily: 'JetBrains Mono', fontSize: '0.7rem', fontWeight: 500 } } },
-        grid: { show: false },
-        legend: { show: false },
-        tooltip: { theme: 'dark', y: { formatter: function(v) { return v + '% success'; } } },
-        theme: { mode: 'dark' }
-    }).render();
+        new ApexCharts(document.querySelector("#stage-bars"), {
+            series: [{ name: 'Success Rate', data: barValues }],
+            chart: { type: 'bar', height: 280, background: 'transparent', toolbar: { show: false }, animations: { enabled: true, easing: 'easeinout', speed: 600 } },
+            plotOptions: { bar: { horizontal: true, barHeight: '60%', borderRadius: 4, distributed: true, dataLabels: { position: 'right' } } },
+            colors: barColors,
+            dataLabels: { enabled: true, formatter: function(v) { return v + '%'; }, style: { fontSize: '0.8rem', fontFamily: 'JetBrains Mono', fontWeight: 600, colors: ['#fff'] }, offsetX: 10 },
+            xaxis: { categories: stages.map(function(s) { return s.toUpperCase(); }), max: 100, labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false } },
+            yaxis: { labels: { style: { colors: COLORS.shell400, fontFamily: 'JetBrains Mono', fontSize: '0.7rem', fontWeight: 500 } } },
+            grid: { show: false },
+            legend: { show: false },
+            tooltip: { theme: 'dark', y: { formatter: function(v) { return v + '% success'; } } },
+            theme: { mode: 'dark' }
+        }).render();
+    }
 
     // --- Retries Bars ---
     var retryStages = Object.keys(retriesByStage);
