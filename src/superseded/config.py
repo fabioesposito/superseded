@@ -32,6 +32,7 @@ class SupersededConfig(BaseModel):
     max_retries: int = 3
     retryable_stages: list[str] = Field(default_factory=lambda: ["build", "verify", "review"])
     api_key: str = ""
+    github_token: str = ""
     default_model: str = "opencode-go/kimi-k2.5"
     stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
 
@@ -46,6 +47,9 @@ def load_config(repo_path: Path) -> SupersededConfig:
     env_api_key = os.environ.get("SUPERSEDED_API_KEY", "")
     if env_api_key:
         overrides["api_key"] = env_api_key
+    env_token = os.environ.get("GITHUB_TOKEN", "")
+    if env_token:
+        overrides["github_token"] = env_token
     return SupersededConfig(**overrides)
 
 
