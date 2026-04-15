@@ -17,14 +17,14 @@ from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.executor import StageExecutor
 from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.worktree import WorktreeManager
+from superseded.routes.api.pipeline import api_router as pipeline_api_router
 from superseded.routes.auth import AuthMiddleware
 from superseded.routes.csrf import CsrfMiddleware
-from superseded.routes.dashboard import router as dashboard_router
 from superseded.routes.deps import PipelineState
-from superseded.routes.issues import router as issues_router
-from superseded.routes.pipeline import api_router as pipeline_api_router
-from superseded.routes.pipeline import router as pipeline_router
-from superseded.routes.settings import router as settings_router
+from superseded.routes.web.dashboard import router as dashboard_router
+from superseded.routes.web.issues import router as issues_router
+from superseded.routes.web.pipeline import router as pipeline_router
+from superseded.routes.web.settings import router as settings_router
 
 logger = logging.getLogger(__name__)
 

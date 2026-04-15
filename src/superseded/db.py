@@ -31,7 +31,9 @@ class Database:
         self._id_lock = asyncio.Lock()
 
     def _run_migrations_sync(self) -> None:
-        migrations_dir = str(Path(__file__).resolve().parent.parent.parent / "migrations")
+        src_based = Path(__file__).resolve().parent.parent.parent / "migrations"
+        cwd_based = Path.cwd() / "migrations"
+        migrations_dir = str(src_based if src_based.is_dir() else cwd_based)
         db_path_resolved = str(Path(self.db_path).resolve())
         alembic_cfg = Config()
         alembic_cfg.set_main_option("script_location", migrations_dir)
@@ -63,10 +65,14 @@ class Database:
             return
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         conn = await aiosqlite.connect(self.db_path)
+        try:
+            await conn.execute("PRAGMA journal_mode=WAL")
+            await conn.commit()
+            await asyncio.get_running_loop().run_in_executor(None, self._run_migrations_sync)
+        except Exception:
+            await conn.close()
+            raise
         self._conn = conn
-        await conn.execute("PRAGMA journal_mode=WAL")
-        await conn.commit()
-        await asyncio.get_event_loop().run_in_executor(None, self._run_migrations_sync)
 
     def _require_conn(self) -> aiosqlite.Connection:
         if self._conn is None:

@@ -233,7 +233,7 @@ async def test_import_github_issue_returns_form_partial(tmp_repo):
         url="https://github.com/owner/repo/issues/42",
     )
 
-    with patch("superseded.routes.issues.fetch_github_issue", return_value=mock_issue):
+    with patch("superseded.routes.web.issues.fetch_github_issue", return_value=mock_issue):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             token = await _get_csrf(client)
             resp = await client.post(

@@ -6,13 +6,13 @@ from datetime import date
 from pathlib import Path
 
 import frontmatter
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from superseded.github import fetch_github_issue, format_description
 from superseded.models import Issue, Stage
 from superseded.routes import _csrf_token_for_request, get_templates
-from superseded.routes.deps import Deps, get_deps
+from superseded.routes.deps import Deps, _run_and_advance, get_deps
 from superseded.tickets.reader import list_issues
 from superseded.tickets.writer import write_issue
 from superseded.validation import InvalidInputError, validate_issue_id
@@ -21,7 +21,6 @@ router = APIRouter(prefix="/issues")
 
 
 async def _get_form_data(request: Request):
-    """Get form data, checking request.state first (set by CSRF middleware)."""
     if hasattr(request.state, "form_data"):
         return request.state.form_data
     try:
@@ -292,7 +291,12 @@ async def stage_detail(
 
 
 @router.post("/{issue_id}/answer-questions", response_class=HTMLResponse)
-async def answer_questions(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+async def answer_questions(
+    request: Request,
+    issue_id: str,
+    background_tasks: BackgroundTasks,
+    deps: Deps = Depends(get_deps),
+):
     try:
         issue_id = validate_issue_id(issue_id)
     except InvalidInputError:
@@ -320,13 +324,16 @@ async def answer_questions(request: Request, issue_id: str, deps: Deps = Depends
         return HTMLResponse(content="")
     issue = matching[0]
 
-    from superseded.routes.pipeline import _run_and_advance
-
-    return await _run_and_advance(deps, issue_id, issue.stage, request)
+    return await _run_and_advance(deps, issue_id, issue.stage, request, background_tasks)
 
 
 @router.post("/{issue_id}/update-body", response_class=HTMLResponse)
-async def update_issue_body(request: Request, issue_id: str, deps: Deps = Depends(get_deps)):
+async def update_issue_body(
+    request: Request,
+    issue_id: str,
+    background_tasks: BackgroundTasks,
+    deps: Deps = Depends(get_deps),
+):
     try:
         issue_id = validate_issue_id(issue_id)
     except InvalidInputError:
@@ -359,6 +366,4 @@ async def update_issue_body(request: Request, issue_id: str, deps: Deps = Depend
         )
     )
 
-    from superseded.routes.pipeline import _run_and_advance
-
-    return await _run_and_advance(deps, issue_id, issue.stage, request)
+    return await _run_and_advance(deps, issue_id, issue.stage, request, background_tasks)

@@ -19,7 +19,6 @@ router = APIRouter()
 
 
 async def _get_form_data(request: Request):
-    """Get form data, checking request.state first (set by CSRF middleware)."""
     if hasattr(request.state, "form_data"):
         return request.state.form_data
     try:
