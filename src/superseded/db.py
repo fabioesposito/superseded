@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 import aiosqlite
+from alembic import command
+from alembic.config import Config
 
 from superseded.models import (
     AgentEvent,
@@ -17,12 +21,42 @@ from superseded.models import (
     StageResult,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class Database:
     def __init__(self, db_path: str) -> None:
         self.db_path = db_path
         self._conn: aiosqlite.Connection | None = None
         self._id_lock = asyncio.Lock()
+
+    def _run_migrations_sync(self) -> None:
+        migrations_dir = str(Path(__file__).resolve().parent.parent.parent / "migrations")
+        db_path_resolved = str(Path(self.db_path).resolve())
+        alembic_cfg = Config()
+        alembic_cfg.set_main_option("script_location", migrations_dir)
+        alembic_cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path_resolved}")
+
+        conn = sqlite3.connect(db_path_resolved)
+        try:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='alembic_version'"
+            )
+            has_alembic_version = cursor.fetchone() is not None
+
+            if not has_alembic_version:
+                cursor = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='issues'"
+                )
+                has_issues = cursor.fetchone() is not None
+
+                if has_issues:
+                    command.stamp(alembic_cfg, "head")
+                    logger.info("Stamped existing database at head revision")
+        finally:
+            conn.close()
+
+        command.upgrade(alembic_cfg, "head")
 
     async def initialize(self) -> None:
         if self._conn is not None:
@@ -31,85 +65,8 @@ class Database:
         conn = await aiosqlite.connect(self.db_path)
         self._conn = conn
         await conn.execute("PRAGMA journal_mode=WAL")
-        await conn.executescript("""
-            CREATE TABLE IF NOT EXISTS issues (
-                id TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'new',
-                stage TEXT NOT NULL DEFAULT 'spec',
-                assignee TEXT DEFAULT '',
-                labels TEXT DEFAULT '[]',
-                filepath TEXT DEFAULT '',
-                created TEXT DEFAULT '',
-                pause_reason TEXT DEFAULT '',
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS stage_results (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                issue_id TEXT NOT NULL,
-                repo TEXT DEFAULT 'primary',
-                stage TEXT NOT NULL,
-                passed INTEGER NOT NULL,
-                output TEXT DEFAULT '',
-                error TEXT DEFAULT '',
-                artifacts TEXT DEFAULT '[]',
-                started_at TEXT,
-                finished_at TEXT,
-                FOREIGN KEY (issue_id) REFERENCES issues(id)
-            );
-            CREATE TABLE IF NOT EXISTS harness_iterations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                issue_id TEXT NOT NULL,
-                attempt INTEGER NOT NULL,
-                stage TEXT NOT NULL,
-                exit_code INTEGER NOT NULL,
-                output TEXT DEFAULT '',
-                error TEXT DEFAULT '',
-                previous_errors TEXT DEFAULT '[]',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (issue_id) REFERENCES issues(id)
-            );
-            CREATE TABLE IF NOT EXISTS session_turns (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                issue_id TEXT NOT NULL,
-                stage TEXT NOT NULL,
-                attempt INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                metadata TEXT DEFAULT '{}',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (issue_id) REFERENCES issues(id)
-            );
-            CREATE TABLE IF NOT EXISTS agent_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                issue_id TEXT NOT NULL,
-                stage TEXT NOT NULL,
-                event_type TEXT NOT NULL,
-                content TEXT DEFAULT '',
-                metadata TEXT DEFAULT '{}',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (issue_id) REFERENCES issues(id)
-            );
-        """)
         await conn.commit()
-        migrations: list[tuple[str, str, str]] = [
-            ("stage_results", "repo", "'primary'"),
-            ("harness_iterations", "repo", "'primary'"),
-            ("issues", "pause_reason", "''"),
-            ("stage_results", "started_at", "NULL"),
-            ("stage_results", "finished_at", "NULL"),
-        ]
-        valid_tables = {"stage_results", "harness_iterations", "issues"}
-        for table, column, default in migrations:
-            if table not in valid_tables:
-                continue
-            try:
-                await conn.execute(
-                    f"ALTER TABLE {table} ADD COLUMN {column} TEXT DEFAULT {default}"
-                )
-                await conn.commit()
-            except aiosqlite.OperationalError:
-                pass
+        await asyncio.get_event_loop().run_in_executor(None, self._run_migrations_sync)
 
     def _require_conn(self) -> aiosqlite.Connection:
         if self._conn is None:
