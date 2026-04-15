@@ -135,27 +135,27 @@ async def update_agents(
     stages_data = {
         "spec": StageAgentConfig(
             cli=str(form.get("spec_cli", "opencode")),
-            model=str(form.get("spec_model", "opencode-go/kimi-k2.5")),
+            model=str(form.get("spec_model", "")),
         ),
         "plan": StageAgentConfig(
             cli=str(form.get("plan_cli", "opencode")),
-            model=str(form.get("plan_model", "opencode-go/kimi-k2.5")),
+            model=str(form.get("plan_model", "")),
         ),
         "build": StageAgentConfig(
             cli=str(form.get("build_cli", "opencode")),
-            model=str(form.get("build_model", "opencode-go/kimi-k2.5")),
+            model=str(form.get("build_model", "")),
         ),
         "verify": StageAgentConfig(
             cli=str(form.get("verify_cli", "opencode")),
-            model=str(form.get("verify_model", "opencode-go/kimi-k2.5")),
+            model=str(form.get("verify_model", "")),
         ),
         "review": StageAgentConfig(
             cli=str(form.get("review_cli", "opencode")),
-            model=str(form.get("review_model", "opencode-go/kimi-k2.5")),
+            model=str(form.get("review_model", "")),
         ),
         "ship": StageAgentConfig(
             cli=str(form.get("ship_cli", "opencode")),
-            model=str(form.get("ship_model", "opencode-go/kimi-k2.5")),
+            model=str(form.get("ship_model", "")),
         ),
     }
     config.stages = stages_data

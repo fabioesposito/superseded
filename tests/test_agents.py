@@ -108,7 +108,15 @@ def test_prompt_passed_as_arg_opencode():
 def test_claude_code_no_model():
     adapter = ClaudeCodeAdapter()
     cmd = adapter._build_command("test prompt")
-    assert cmd == ["claude", "-p", "test prompt", "--output-format", "text"]
+    assert cmd == [
+        "claude",
+        "-p",
+        "test prompt",
+        "--output-format",
+        "text",
+        "--model",
+        "claude-sonnet-4-20250514",
+    ]
 
 
 def test_claude_code_with_model():
@@ -157,7 +165,7 @@ def test_opencode_stdin():
 def test_codex_no_model():
     adapter = CodexAdapter()
     cmd = adapter._build_command("test prompt")
-    assert cmd == ["codex", "--quiet"]
+    assert cmd == ["codex", "--quiet", "--model", "o4-mini"]
 
 
 def test_codex_with_model():

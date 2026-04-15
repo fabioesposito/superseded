@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 class StageAgentConfig(BaseModel):
     cli: str = "opencode"
-    model: str = "opencode-go/kimi-k2.5"
+    model: str = ""
 
 
 class RepoEntry(BaseModel):
@@ -42,7 +42,7 @@ class SupersededConfig(BaseModel):
     anthropic_api_key: str = ""
     opencode_api_key: str = ""
     source_code_root: str = ""
-    default_model: str = "opencode-go/kimi-k2.5"
+    default_model: str = ""
     stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
 

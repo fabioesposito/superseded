@@ -6,6 +6,8 @@ from superseded.agents.base import SubprocessAgentAdapter
 
 @register_agent("codex")
 class CodexAdapter(SubprocessAgentAdapter):
+    DEFAULT_MODEL = "o4-mini"
+
     def __init__(
         self, model: str = "", timeout: int = 600, github_token: str = "", api_key: str = ""
     ) -> None:
@@ -20,9 +22,7 @@ class CodexAdapter(SubprocessAgentAdapter):
         return env
 
     def _build_command(self, prompt: str) -> list[str]:
-        cmd = ["codex", "--quiet"]
-        if self.model:
-            cmd.extend(["--model", self.model])
+        cmd = ["codex", "--quiet", "--model", self.model or self.DEFAULT_MODEL]
         return cmd
 
     def _get_stdin_data(self, prompt: str) -> bytes | None:

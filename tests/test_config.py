@@ -93,7 +93,7 @@ def test_load_config_with_repos():
 def test_stage_agent_config_defaults():
     cfg = StageAgentConfig()
     assert cfg.cli == "opencode"
-    assert cfg.model == "opencode-go/kimi-k2.5"
+    assert cfg.model == ""
 
 
 def test_stage_agent_config_custom():
@@ -105,7 +105,7 @@ def test_stage_agent_config_custom():
 def test_superseded_config_stages_default():
     cfg = SupersededConfig()
     assert cfg.stages == {}
-    assert cfg.default_model == "opencode-go/kimi-k2.5"
+    assert cfg.default_model == ""
 
 
 def test_superseded_config_stages_populated():
