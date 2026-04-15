@@ -55,6 +55,13 @@
         <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-4">Retries by Stage</h3>
         <div id="retries-bars"></div>
     </div>
+
+    <!-- Duration chart -->
+    <div class="card rounded-xl p-6 mb-8">
+        <h3 class="text-xs font-semibold uppercase tracking-widest text-sand-500 mb-4">Avg Duration by Stage</h3>
+        <div id="duration-bars"></div>
+        <p id="duration-bars-empty" class="text-shell-500 text-sm hidden">No duration data yet</p>
+    </div>
 </div>
 
 <script>
@@ -205,6 +212,35 @@
             grid: { show: false },
             legend: { show: false },
             tooltip: { theme: 'dark' },
+            theme: { mode: 'dark' }
+        }).render();
+    }
+
+    // --- Avg Duration Bars ---
+    var avgDurations = {{ metrics.avg_stage_duration_ms | tojson }};
+    if (Object.keys(avgDurations).length === 0) {
+        document.getElementById('duration-bars').classList.add('hidden');
+        document.getElementById('duration-bars-empty').classList.remove('hidden');
+    } else {
+        var durStages = Object.keys(avgDurations);
+        var durValues = durStages.map(function(s) { return Math.round(avgDurations[s] / 1000); });
+        var durColors = durValues.map(function(v) {
+            if (v >= 300) return COLORS.coral;
+            if (v >= 120) return COLORS.petal;
+            return COLORS.olive;
+        });
+
+        new ApexCharts(document.querySelector("#duration-bars"), {
+            series: [{ name: 'Duration (s)', data: durValues }],
+            chart: { type: 'bar', height: 200, background: 'transparent', toolbar: { show: false }, animations: { enabled: true, easing: 'easeinout', speed: 600 } },
+            plotOptions: { bar: { columnWidth: '50%', borderRadius: 4, distributed: true, dataLabels: { position: 'top' } } },
+            colors: durColors,
+            dataLabels: { enabled: true, style: { fontSize: '0.85rem', fontFamily: 'JetBrains Mono', fontWeight: 600, colors: [COLORS.oliveLight] }, offsetY: -20 },
+            xaxis: { categories: durStages.map(function(s) { return s.toUpperCase(); }), labels: { style: { colors: COLORS.shell400, fontFamily: 'JetBrains Mono', fontSize: '0.7rem' } }, axisBorder: { show: false }, axisTicks: { show: false } },
+            yaxis: { show: false },
+            grid: { show: false },
+            legend: { show: false },
+            tooltip: { theme: 'dark', y: { formatter: function(v) { return v + ' seconds'; } } },
             theme: { mode: 'dark' }
         }).render();
     }

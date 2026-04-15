@@ -82,6 +82,12 @@
     </div>
     {% include "_source_root_field.html" %}
 
+    <div class="mt-10 mb-3">
+        <h2 class="text-lg font-semibold text-shell-100">Notifications</h2>
+        <p class="text-shell-500 text-sm mt-1">Push notifications via ntfy.sh for stage events</p>
+    </div>
+    {% include "_notifications_field.html" %}
+
     {% if stage_agents is defined %}
     <div class="mt-10 mb-3">
         <h2 class="text-lg font-semibold text-shell-100">Pipeline Agents</h2>

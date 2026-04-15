@@ -3,7 +3,12 @@ from pathlib import Path
 
 import yaml
 
-from superseded.config import RepoEntry, StageAgentConfig, SupersededConfig, load_config
+from superseded.config import (
+    RepoEntry,
+    StageAgentConfig,
+    SupersededConfig,
+    load_config,
+)
 
 
 def write_yaml_config(path: Path, data: dict):
@@ -155,3 +160,26 @@ def test_config_source_code_root_from_file():
         write_yaml_config(config_path, {"source_code_root": "/opt/repos"})
         config = load_config(Path(tmp))
         assert config.source_code_root == "/opt/repos"
+
+
+def test_notifications_config_defaults():
+    cfg = SupersededConfig()
+    assert cfg.notifications.enabled is False
+    assert cfg.notifications.ntfy_topic == ""
+
+
+def test_notifications_config_from_file():
+    with tempfile.TemporaryDirectory() as tmp:
+        config_path = Path(tmp) / ".superseded" / "config.yaml"
+        write_yaml_config(
+            config_path,
+            {
+                "notifications": {
+                    "enabled": True,
+                    "ntfy_topic": "my-project",
+                },
+            },
+        )
+        config = load_config(Path(tmp))
+        assert config.notifications.enabled is True
+        assert config.notifications.ntfy_topic == "my-project"

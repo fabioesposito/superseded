@@ -146,6 +146,22 @@ async def test_executor_ship_stage_cleans_up_worktree(executor_setup):
     assert result.passed is True
 
 
+async def test_executor_records_timestamps(executor_setup):
+    executor, db, config, mock_runner, _, _, ticket_path = executor_setup
+
+    mock_runner.run_stage_streaming.return_value = StageResult(
+        stage=Stage.SPEC, passed=True, output="spec done"
+    )
+
+    issue = Issue(id="SUP-001", title="Test", filepath=ticket_path)
+    await db.upsert_issue(issue)
+
+    result = await executor.run_stage(issue, Stage.SPEC, config)
+    assert result.started_at is not None
+    assert result.finished_at is not None
+    assert result.finished_at >= result.started_at
+
+
 async def test_executor_multi_repo_partial_failure(executor_setup):
     executor, db, config, mock_runner, _, _, ticket_path = executor_setup
 

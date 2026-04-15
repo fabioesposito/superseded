@@ -1,0 +1,34 @@
+<div id="notifications-field" class="card rounded-xl p-5">
+    <form hx-post="/settings/notifications"
+          hx-target="#notifications-field"
+          hx-swap="outerHTML"
+          class="space-y-4">
+        <div class="flex items-center gap-3">
+            <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" name="enabled" value="1"
+                       {% if notifications.enabled %}checked{% endif %}
+                       class="sr-only peer">
+                <div class="w-9 h-5 bg-shell-700 peer-focus:outline-none rounded-full peer peer-checked:bg-neon-600
+                     after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full
+                     after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+            </label>
+            <span class="text-sm text-shell-300">Enable push notifications</span>
+        </div>
+        {% if success %}<p class="text-olive-400 text-xs font-mono">Saved!</p>{% endif %}
+        <div>
+            <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">ntfy.sh Topic</label>
+            <input type="text" name="ntfy_topic" value="{{ notifications.ntfy_topic }}"
+                   class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors font-mono"
+                   placeholder="superseded-myproject">
+        </div>
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold">Save Notifications</button>
+            {% if notifications.ntfy_topic and notifications.enabled %}
+            <span class="text-olive-400 text-xs font-mono">Active</span>
+            {% else %}
+            <span class="text-shell-600 text-xs font-mono">Inactive</span>
+            {% endif %}
+        </div>
+        <p class="text-shell-600 text-xs">Pushes to ntfy.sh — no account needed. Install the ntfy app or visit <a href="https://ntfy.sh" class="text-neon-500 hover:text-neon-400">ntfy.sh</a>.</p>
+    </form>
+</div>

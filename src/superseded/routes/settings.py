@@ -47,6 +47,7 @@ async def settings_page(request: Request, deps: Deps = Depends(get_deps)):
             "anthropic_api_key": deps.config.anthropic_api_key,
             "opencode_api_key": deps.config.opencode_api_key,
             "source_code_root": deps.config.source_code_root,
+            "notifications": deps.config.notifications,
         },
     )
     if "csrf_token" not in request.cookies:
@@ -217,6 +218,23 @@ async def update_source_root(request: Request, deps: Deps = Depends(get_deps)):
         request,
         "_source_root_field.html",
         {"source_code_root": validated, "success": True},
+    )
+
+
+@router.post("/settings/notifications", response_class=HTMLResponse)
+async def update_notifications(request: Request, deps: Deps = Depends(get_deps)):
+    form = await _get_form_data(request)
+    config = deps.config
+    enabled = bool(form.get("enabled"))
+    ntfy_topic = str(form.get("ntfy_topic", "")).strip()
+    config.notifications.enabled = enabled
+    config.notifications.ntfy_topic = ntfy_topic
+    save_config(config, Path(config.repo_path))
+    _reload_pipeline(request.app, config)
+    return get_templates().TemplateResponse(
+        request,
+        "_notifications_field.html",
+        {"notifications": config.notifications, "success": True},
     )
 
 

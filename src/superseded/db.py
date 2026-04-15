@@ -96,6 +96,8 @@ class Database:
             ("stage_results", "repo", "'primary'"),
             ("harness_iterations", "repo", "'primary'"),
             ("issues", "pause_reason", "''"),
+            ("stage_results", "started_at", "NULL"),
+            ("stage_results", "finished_at", "NULL"),
         ]
         valid_tables = {"stage_results", "harness_iterations", "issues"}
         for table, column, default in migrations:

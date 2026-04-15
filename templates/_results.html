@@ -8,6 +8,9 @@
             <div class="flex items-center gap-2">
                 <span class="font-medium text-sm text-shell-200">{{ result.stage }}</span>
                 {% if result.passed %}<span class="text-olive-400 text-xs font-mono font-semibold">PASS</span>{% else %}<span class="text-coral-400 text-xs font-mono font-semibold">FAIL</span>{% endif %}
+                {% if durations.get(result.stage) %}
+                <span class="text-shell-500 text-xs font-mono ml-2">{{ durations[result.stage] }}</span>
+                {% endif %}
             </div>
             {% if result.error %}<p class="text-coral-400/80 text-xs mt-1 font-mono">{{ result.error }}</p>{% endif %}
         </a>

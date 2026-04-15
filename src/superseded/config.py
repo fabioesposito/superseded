@@ -18,6 +18,11 @@ class RepoEntry(BaseModel):
     branch: str = ""
 
 
+class NotificationsConfig(BaseModel):
+    enabled: bool = False
+    ntfy_topic: str = ""
+
+
 class SupersededConfig(BaseModel):
     default_agent: str = "opencode"
     stage_timeout_seconds: int = 600
@@ -39,6 +44,7 @@ class SupersededConfig(BaseModel):
     source_code_root: str = ""
     default_model: str = "opencode-go/kimi-k2.5"
     stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
+    notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
 
 
 def load_config(repo_path: Path) -> SupersededConfig:

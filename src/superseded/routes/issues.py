@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import re
 from datetime import date
 from pathlib import Path
@@ -166,6 +167,19 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
         repo = r.get("repo", "primary")
         results_by_repo.setdefault(repo, []).append(r)
 
+    durations: dict[str, str] = {}
+    for r in stage_results:
+        sa = r.get("started_at")
+        fa = r.get("finished_at")
+        if sa and fa:
+            started = datetime.datetime.fromisoformat(str(sa)) if isinstance(sa, str) else sa
+            finished = datetime.datetime.fromisoformat(str(fa)) if isinstance(fa, str) else fa
+            dur = (finished - started).total_seconds()
+            if dur >= 60:
+                durations[r["stage"]] = f"{int(dur // 60)}m {int(dur % 60)}s"
+            else:
+                durations[r["stage"]] = f"{int(dur)}s"
+
     questions_content = ""
     questions: list[str] = []
     if issue.pause_reason == "awaiting-input":
@@ -187,6 +201,7 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
             "harness_iterations": harness_iterations,
             "stage_order": [s.value for s in Stage],
             "passed_stages": [r["stage"] for r in stage_results if r.get("passed")],
+            "durations": durations,
             "questions_content": questions_content,
             "questions": questions,
         },
@@ -247,6 +262,19 @@ async def stage_detail(
             result = r
             break
 
+    durations: dict[str, str] = {}
+    if result:
+        sa = result.get("started_at")
+        fa = result.get("finished_at")
+        if sa and fa:
+            started = datetime.datetime.fromisoformat(str(sa)) if isinstance(sa, str) else sa
+            finished = datetime.datetime.fromisoformat(str(fa)) if isinstance(fa, str) else fa
+            dur = (finished - started).total_seconds()
+            if dur >= 60:
+                durations[result["stage"]] = f"{int(dur // 60)}m {int(dur % 60)}s"
+            else:
+                durations[result["stage"]] = f"{int(dur)}s"
+
     response = get_templates().TemplateResponse(
         request,
         "stage_detail.html",
@@ -254,6 +282,7 @@ async def stage_detail(
             "issue": issue,
             "stage": stage,
             "result": result,
+            "durations": durations,
         },
     )
     if "csrf_token" not in request.cookies:

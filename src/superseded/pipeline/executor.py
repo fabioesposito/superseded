@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import logging
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ from superseded.models import (
     Stage,
     StageResult,
 )
+from superseded.notifications import NotificationService
 from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.worktree import WorktreeManager
 from superseded.tickets.writer import update_issue_status
@@ -26,10 +28,12 @@ class StageExecutor:
         runner: HarnessRunner,
         db: Database,
         worktree_manager: WorktreeManager,
+        notification_service: NotificationService | None = None,
     ) -> None:
         self.runner = runner
         self.db = db
         self.worktree_manager = worktree_manager
+        self.notification_service = notification_service
 
     async def run_stage(self, issue: Issue, stage: Stage, config: SupersededConfig) -> StageResult:
         artifacts_path = str(Path(config.repo_path) / config.artifacts_dir / issue.id)
@@ -42,6 +46,7 @@ class StageExecutor:
             needs_worktree = True
         target_repos = issue.repos if issue.repos else [None]
 
+        started_at = datetime.datetime.now(datetime.UTC)
         all_passed = True
         combined_output: list[str] = []
 
@@ -58,7 +63,38 @@ class StageExecutor:
             passed=all_passed,
             output="\n".join(combined_output),
             error="" if all_passed else "One or more repos failed",
+            started_at=started_at,
+            finished_at=datetime.datetime.now(datetime.UTC),
         )
+
+        if (
+            self.notification_service
+            and self.notification_service.enabled
+            and self.notification_service.topic
+        ):
+            duration = ""
+            if aggregate.started_at and aggregate.finished_at:
+                dur = (aggregate.finished_at - aggregate.started_at).total_seconds()
+                if dur >= 60:
+                    duration = f" ({int(dur // 60)}m {int(dur % 60)}s)"
+                else:
+                    duration = f" ({int(dur)}s)"
+            if aggregate.passed:
+                await self.notification_service.notify(
+                    title=f"{issue.id}: {stage.value.upper()} completed",
+                    message=f"Stage {stage.value} passed{duration}",
+                    priority="default",
+                    tags=["white_check_mark"],
+                    click_url=f"http://localhost:8000/issues/{issue.id}",
+                )
+            else:
+                await self.notification_service.notify(
+                    title=f"{issue.id}: {stage.value.upper()} failed",
+                    message=f"Stage {stage.value} failed: {aggregate.error[:200]}",
+                    priority="high",
+                    tags=["x"],
+                    click_url=f"http://localhost:8000/issues/{issue.id}",
+                )
 
         if all_passed:
             await self.db.update_issue_status(issue.id, IssueStatus.IN_PROGRESS, stage)

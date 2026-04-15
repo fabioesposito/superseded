@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import tempfile
 from pathlib import Path
 
@@ -103,7 +104,41 @@ async def test_metrics_includes_harness_iterations():
         await db.close()
 
 
-async def test_metrics_empty_db():
+async def test_metrics_avg_stage_duration_ms():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo_path = Path(tmp)
+        (repo_path / ".superseded" / "issues").mkdir(parents=True)
+        (repo_path / ".superseded" / "artifacts").mkdir(parents=True)
+
+        db_path = str(repo_path / ".superseded" / "state.db")
+        db = Database(db_path)
+        await db.initialize()
+
+        issue = Issue(id="SUP-042", title="Duration Test", filepath="")
+        await db.upsert_issue(issue)
+
+        started = datetime.datetime(2026, 1, 1, 12, 0, 0)
+        finished = datetime.datetime(2026, 1, 1, 12, 0, 5)
+        result = StageResult(
+            stage=Stage.BUILD,
+            passed=True,
+            output="ok",
+            started_at=started,
+            finished_at=finished,
+        )
+        await db.save_stage_result("SUP-042", result)
+
+        app = create_app(repo_path=str(repo_path), db=db)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            resp = await ac.get("/api/pipeline/metrics")
+
+        data = resp.json()
+        assert "avg_stage_duration_ms" in data
+        assert "build" in data["avg_stage_duration_ms"]
+        assert data["avg_stage_duration_ms"]["build"] > 0
+
+        await db.close()
     with tempfile.TemporaryDirectory() as tmp:
         repo_path = Path(tmp)
         (repo_path / ".superseded" / "issues").mkdir(parents=True)

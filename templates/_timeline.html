@@ -1,0 +1,38 @@
+<div id="pipeline-timeline" class="mt-6">
+    <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500 mb-3">Timeline</h2>
+    <div class="relative flex items-stretch gap-0 h-16">
+        {% for stage_name in stage_order %}
+        {% set results_for_stage = stage_results | selectattr("stage", "equalto", stage_name) | list %}
+        {% set latest_result = results_for_stage | last if results_for_stage else none %}
+        {% set is_current = stage_name == issue.stage.value and issue.status.value == 'in-progress' %}
+        {% set duration = durations.get(stage_name, "") %}
+
+        <div class="flex-1 relative group {% if not results_for_stage and not is_current %}opacity-40{% endif %}">
+            <div class="h-full rounded-lg border-2 flex flex-col items-center justify-center text-xs font-semibold uppercase tracking-wider transition-all
+                {% if latest_result and latest_result.passed %}bg-olive-950 border-olive-700/50 text-olive-400
+                {% elif latest_result and not latest_result.passed %}bg-coral-950 border-coral-700/50 text-coral-400
+                {% elif is_current %}bg-neon-950 border-neon-700/50 text-neon-400 glow-active
+                {% else %}bg-shell-900/50 border-shell-800/30 text-shell-600{% endif %}">
+                {{ stage_name }}
+                {% if duration %}<span class="text-[10px] font-mono mt-0.5">{{ duration }}</span>{% endif %}
+                {% if is_current and not latest_result %}
+                <span class="w-1.5 h-1.5 rounded-full bg-neon-400 animate-pulse mt-0.5"></span>
+                {% endif %}
+            </div>
+            {% if latest_result and latest_result.started_at %}
+            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10 w-40 text-xs">
+                <div class="bg-shell-800 rounded-md p-2 shadow-lg border border-shell-700">
+                    {% if latest_result.passed %}<span class="text-olive-400 font-semibold">PASS</span>{% else %}<span class="text-coral-400 font-semibold">FAIL</span>{% endif %}
+                    {% if duration %}<span class="text-shell-400 ml-1">{{ duration }}</span>{% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% if harness_iterations | length > 0 %}
+    <div class="mt-3 flex gap-4 text-xs text-shell-500">
+        <span>{{ harness_iterations | length }} iteration{{ 's' if harness_iterations | length != 1 }}</span>
+    </div>
+    {% endif %}
+</div>

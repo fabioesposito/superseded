@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from superseded.agents.factory import AgentFactory
 from superseded.config import SupersededConfig, load_config
 from superseded.db import Database
+from superseded.notifications import NotificationService
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.executor import StageExecutor
 from superseded.pipeline.harness import HarnessRunner
@@ -60,10 +61,15 @@ def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
         runner.configure_repos(config.repos)
         for name, entry in config.repos.items():
             worktree_manager.register_repo(name, entry.path, entry.git_url)
+    notification_service = NotificationService(
+        topic=config.notifications.ntfy_topic,
+        enabled=config.notifications.enabled,
+    )
     executor = StageExecutor(
         runner=runner,
-        db=None,  # set after db is initialized
+        db=None,
         worktree_manager=worktree_manager,
+        notification_service=notification_service,
     )
     return PipelineState(executor=executor, event_manager=event_manager)
 

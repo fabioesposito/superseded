@@ -1,3 +1,4 @@
+import datetime
 import tempfile
 from pathlib import Path
 
@@ -157,5 +158,63 @@ async def test_stage_result_repo_defaults_to_primary():
 
         results = await db.get_stage_results("SUP-031")
         assert results[0]["repo"] == "primary"
+
+        await db.close()
+
+
+async def test_save_stage_result_with_timestamps():
+    """started_at and finished_at timestamps are preserved on round-trip."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / ".superseded" / "state.db"
+        db = Database(str(db_path))
+        await db.initialize()
+
+        issue = Issue(
+            id="SUP-040",
+            title="Timestamp test",
+            filepath=".superseded/issues/SUP-040-test.md",
+        )
+        await db.upsert_issue(issue)
+
+        started = datetime.datetime(2025, 1, 15, 10, 30, 0)
+        finished = datetime.datetime(2025, 1, 15, 11, 45, 0)
+        result = StageResult(
+            stage=Stage.BUILD,
+            passed=True,
+            output="done",
+            started_at=started,
+            finished_at=finished,
+        )
+        await db.save_stage_result("SUP-040", result)
+
+        results = await db.get_stage_results("SUP-040")
+        assert len(results) == 1
+        assert results[0]["started_at"] == str(started)
+        assert results[0]["finished_at"] == str(finished)
+
+        await db.close()
+
+
+async def test_save_stage_result_without_timestamps():
+    """started_at and finished_at default to NULL when not provided."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = Path(tmp) / ".superseded" / "state.db"
+        db = Database(str(db_path))
+        await db.initialize()
+
+        issue = Issue(
+            id="SUP-041",
+            title="No timestamps test",
+            filepath=".superseded/issues/SUP-041-test.md",
+        )
+        await db.upsert_issue(issue)
+
+        result = StageResult(stage=Stage.BUILD, passed=True)
+        await db.save_stage_result("SUP-041", result)
+
+        results = await db.get_stage_results("SUP-041")
+        assert len(results) == 1
+        assert results[0]["started_at"] is None
+        assert results[0]["finished_at"] is None
 
         await db.close()
