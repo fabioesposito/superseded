@@ -33,6 +33,10 @@ class SupersededConfig(BaseModel):
     retryable_stages: list[str] = Field(default_factory=lambda: ["build", "verify", "review"])
     api_key: str = ""
     github_token: str = ""
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    opencode_api_key: str = ""
+    source_code_root: str = ""
     default_model: str = "opencode-go/kimi-k2.5"
     stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
 
@@ -44,12 +48,16 @@ def load_config(repo_path: Path) -> SupersededConfig:
         with open(config_file) as f:
             overrides = yaml.safe_load(f) or {}
     overrides.setdefault("repo_path", str(repo_path))
-    env_api_key = os.environ.get("SUPERSEDED_API_KEY", "")
-    if env_api_key:
-        overrides["api_key"] = env_api_key
-    env_token = os.environ.get("GITHUB_TOKEN", "")
-    if env_token:
-        overrides["github_token"] = env_token
+    for env_key, config_key in [
+        ("SUPERSEDED_API_KEY", "api_key"),
+        ("GITHUB_TOKEN", "github_token"),
+        ("OPENAI_API_KEY", "openai_api_key"),
+        ("ANTHROPIC_API_KEY", "anthropic_api_key"),
+        ("OPENCODE_API_KEY", "opencode_api_key"),
+    ]:
+        val = os.environ.get(env_key, "")
+        if val:
+            overrides[config_key] = val
     return SupersededConfig(**overrides)
 
 

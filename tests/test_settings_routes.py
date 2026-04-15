@@ -124,3 +124,48 @@ async def test_settings_page_loads(tmp_repo):
     async with client:
         response = await client.get("/settings")
         assert response.status_code == 200
+        assert "API Keys" in response.text
+        assert "Source Root" in response.text
+
+
+async def test_save_api_keys(tmp_repo):
+    client, _ = await _make_client(tmp_repo)
+    async with client:
+        token = await _get_csrf(client)
+        response = await client.post(
+            "/settings/api-keys",
+            data={
+                "openai_api_key": "sk-test-openai",
+                "anthropic_api_key": "sk-ant-test",
+                "opencode_api_key": "oc-test",
+            },
+            headers={"X-CSRF-Token": token},
+        )
+        assert response.status_code == 200
+        assert "successfully" in response.text
+
+
+async def test_save_source_root(tmp_repo):
+    client, _ = await _make_client(tmp_repo)
+    async with client:
+        token = await _get_csrf(client)
+        response = await client.post(
+            "/settings/source-root",
+            data={"source_code_root": "/tmp/repos"},
+            headers={"X-CSRF-Token": token},
+        )
+        assert response.status_code == 200
+        assert "successfully" in response.text
+
+
+async def test_save_source_root_invalid_path(tmp_repo):
+    client, _ = await _make_client(tmp_repo)
+    async with client:
+        token = await _get_csrf(client)
+        response = await client.post(
+            "/settings/source-root",
+            data={"source_code_root": "relative/path"},
+            headers={"X-CSRF-Token": token},
+        )
+        assert response.status_code == 400
+        assert "absolute" in response.text

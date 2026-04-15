@@ -115,6 +115,27 @@ def test_worktree_unknown_repo_raises():
         wm._get_repo_path("nonexistent")
 
 
+def test_worktree_source_code_root_fallback():
+    """When a registered repo has empty path, source_code_root is used."""
+    wm = WorktreeManager("/tmp/primary", source_code_root="/opt/repos")
+    wm.register_repo("frontend", "")
+    assert wm._get_repo_path("frontend") == Path("/opt/repos/frontend")
+
+
+def test_worktree_source_code_root_not_set_empty_path():
+    """When source_code_root is not set and path is empty, returns empty Path."""
+    wm = WorktreeManager("/tmp/primary")
+    wm.register_repo("frontend", "")
+    assert wm._get_repo_path("frontend") == Path("")
+
+
+def test_worktree_source_code_root_ignored_when_path_set():
+    """When a repo has an explicit path, source_code_root is not used."""
+    wm = WorktreeManager("/tmp/primary", source_code_root="/opt/repos")
+    wm.register_repo("frontend", "/tmp/frontend")
+    assert wm._get_repo_path("frontend") == Path("/tmp/frontend")
+
+
 async def test_worktree_stash_if_dirty():
     """stash_if_dirty stashes uncommitted changes."""
     with tempfile.TemporaryDirectory() as tmp:

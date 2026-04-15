@@ -8,7 +8,12 @@ from fastapi.responses import HTMLResponse
 from superseded.config import RepoEntry, StageAgentConfig, SupersededConfig, save_config
 from superseded.routes import _csrf_token_for_request, get_templates
 from superseded.routes.deps import Deps, get_deps
-from superseded.validation import InvalidInputError, validate_git_url, validate_repo_path
+from superseded.validation import (
+    InvalidInputError,
+    validate_directory_path,
+    validate_git_url,
+    validate_repo_path,
+)
 
 router = APIRouter()
 
@@ -38,6 +43,10 @@ async def settings_page(request: Request, deps: Deps = Depends(get_deps)):
             "repos": repos,
             "stage_agents": stage_agents,
             "github_token": deps.config.github_token,
+            "openai_api_key": deps.config.openai_api_key,
+            "anthropic_api_key": deps.config.anthropic_api_key,
+            "opencode_api_key": deps.config.opencode_api_key,
+            "source_code_root": deps.config.source_code_root,
         },
     )
     if "csrf_token" not in request.cookies:
@@ -58,6 +67,18 @@ async def add_repo(
     branch = str(form.get("branch", "")).strip()
 
     config = deps.config
+    if not path and config.source_code_root:
+        path = f"{config.source_code_root.rstrip('/')}/{name}"
+    if not path:
+        return get_templates().TemplateResponse(
+            request,
+            "_repos_table.html",
+            {
+                "repos": config.repos,
+                "error": "Local path is required (or set a source root in Settings)",
+            },
+            status_code=400,
+        )
     try:
         if git_url.strip():
             git_url = validate_git_url(git_url)
@@ -145,6 +166,57 @@ async def update_agents(
         request,
         "_agents_table.html",
         {"stage_agents": stage_agents},
+    )
+
+
+def _mask_key(key: str) -> str:
+    if not key or len(key) < 8:
+        return "*" * len(key) if key else ""
+    return key[:4] + "*" * (len(key) - 4)
+
+
+@router.post("/settings/api-keys", response_class=HTMLResponse)
+async def update_api_keys(request: Request, deps: Deps = Depends(get_deps)):
+    form = await _get_form_data(request)
+    config = deps.config
+    config.openai_api_key = str(form.get("openai_api_key", "")).strip()
+    config.anthropic_api_key = str(form.get("anthropic_api_key", "")).strip()
+    config.opencode_api_key = str(form.get("opencode_api_key", "")).strip()
+    save_config(config, Path(config.repo_path))
+    _reload_pipeline(request.app, config)
+    return get_templates().TemplateResponse(
+        request,
+        "_api_keys_field.html",
+        {
+            "openai_api_key": config.openai_api_key,
+            "anthropic_api_key": config.anthropic_api_key,
+            "opencode_api_key": config.opencode_api_key,
+            "success": True,
+        },
+    )
+
+
+@router.post("/settings/source-root", response_class=HTMLResponse)
+async def update_source_root(request: Request, deps: Deps = Depends(get_deps)):
+    form = await _get_form_data(request)
+    raw_path = str(form.get("source_code_root", "")).strip()
+    config = deps.config
+    try:
+        validated = validate_directory_path(raw_path) if raw_path else ""
+    except InvalidInputError as e:
+        return get_templates().TemplateResponse(
+            request,
+            "_source_root_field.html",
+            {"source_code_root": config.source_code_root, "error": str(e)},
+            status_code=400,
+        )
+    config.source_code_root = validated
+    save_config(config, Path(config.repo_path))
+    _reload_pipeline(request.app, config)
+    return get_templates().TemplateResponse(
+        request,
+        "_source_root_field.html",
+        {"source_code_root": validated, "success": True},
     )
 
 

@@ -41,6 +41,20 @@ def validate_repo_path(value: str) -> str:
     return str(resolved)
 
 
+def validate_directory_path(value: str) -> str:
+    from pathlib import Path
+
+    if not value:
+        return ""
+    p = Path(value)
+    if not p.is_absolute():
+        raise InvalidInputError(f"Path must be absolute: {value!r}")
+    resolved = p.resolve()
+    if ".." in value and str(resolved) != value:
+        raise InvalidInputError(f"Path traversal detected: {value!r}")
+    return str(resolved)
+
+
 MAX_PROMPT_LENGTH = 100_000
 
 

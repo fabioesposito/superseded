@@ -1,0 +1,26 @@
+<div id="source-root-config">
+    {% if success %}
+    <div class="mb-4 px-5 py-3 text-sm text-olive-400 bg-olive-900/20 rounded-lg border border-olive-800/30">
+        Source root saved successfully.
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="mb-4 px-5 py-3 text-sm text-red-400 bg-red-900/20 rounded-lg border border-red-800/30">
+        {{ error }}
+    </div>
+    {% endif %}
+    <div class="card rounded-xl p-6">
+        <form hx-post="/settings/source-root" hx-target="#source-root-config" hx-swap="outerHTML">
+            <div class="mb-4">
+                <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Source Code Root</label>
+                <input type="text" name="source_code_root" value="{{ source_code_root | default('') }}"
+                       class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                       placeholder="/home/user/repos">
+                <p class="text-shell-500 text-xs mt-1">Base directory for cloning repos. Repos will be cloned to source_root/repo-name/. Leave empty to require explicit paths.</p>
+            </div>
+            <button type="submit" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                Save Source Root
+            </button>
+        </form>
+    </div>
+</div>

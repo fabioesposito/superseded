@@ -13,8 +13,9 @@ class GitResult:
 
 
 class WorktreeManager:
-    def __init__(self, repo_path: str) -> None:
+    def __init__(self, repo_path: str, source_code_root: str = "") -> None:
         self.repo_path = Path(repo_path)
+        self.source_code_root = Path(source_code_root) if source_code_root else None
         self._worktrees_dir = self.repo_path / ".superseded" / "worktrees"
         self._repo_registry: dict[str, Path] = {}
         self._git_urls: dict[str, str] = {}
@@ -33,7 +34,10 @@ class WorktreeManager:
             raise ValueError(
                 f"Repo path {repo_path} does not exist and no git_url configured for '{repo}'"
             )
-        repo_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.source_code_root:
+            self.source_code_root.mkdir(parents=True, exist_ok=True)
+        else:
+            repo_path.parent.mkdir(parents=True, exist_ok=True)
 
         clone_url = git_url
         if github_token and "github.com" in git_url:
@@ -51,7 +55,10 @@ class WorktreeManager:
                 raise ValueError(
                     f"Unknown repo: {repo}. Registered: {list(self._repo_registry.keys())}"
                 )
-            return self._repo_registry[repo]
+            path = self._repo_registry[repo]
+            if (not str(path) or str(path) == ".") and self.source_code_root:
+                return self.source_code_root / repo
+            return path
         return self.repo_path
 
     def _worktree_path(self, issue_id: str, repo: str | None = None) -> Path:

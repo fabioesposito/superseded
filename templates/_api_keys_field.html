@@ -1,0 +1,35 @@
+<div id="api-keys-config">
+    {% if success %}
+    <div class="mb-4 px-5 py-3 text-sm text-olive-400 bg-olive-900/20 rounded-lg border border-olive-800/30">
+        API keys saved successfully.
+    </div>
+    {% endif %}
+    <div class="card rounded-xl p-6">
+        <form hx-post="/settings/api-keys" hx-target="#api-keys-config" hx-swap="outerHTML">
+            <div class="mb-4">
+                <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">OpenAI API Key</label>
+                <input type="password" name="openai_api_key" value="{{ openai_api_key | default('') }}"
+                       class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                       placeholder="sk-...">
+                <p class="text-shell-500 text-xs mt-1">Used by Codex agent. Env var: OPENAI_API_KEY</p>
+            </div>
+            <div class="mb-4">
+                <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Anthropic API Key</label>
+                <input type="password" name="anthropic_api_key" value="{{ anthropic_api_key | default('') }}"
+                       class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                       placeholder="sk-ant-...">
+                <p class="text-shell-500 text-xs mt-1">Used by Claude Code agent. Env var: ANTHROPIC_API_KEY</p>
+            </div>
+            <div class="mb-4">
+                <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">OpenCode API Key</label>
+                <input type="password" name="opencode_api_key" value="{{ opencode_api_key | default('') }}"
+                       class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                       placeholder="oc-...">
+                <p class="text-shell-500 text-xs mt-1">Used by OpenCode agent. Env var: OPENCODE_API_KEY</p>
+            </div>
+            <button type="submit" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                Save API Keys
+            </button>
+        </form>
+    </div>
+</div>

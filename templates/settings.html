@@ -37,9 +37,9 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Local Path</label>
-                    <input type="text" name="path" x-model="path" required
+                    <input type="text" name="path" x-model="path"
                            class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
-                           placeholder="/path/to/repo">
+                           placeholder="/path/to/repo (optional if source root is set)">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Branch</label>
@@ -69,6 +69,18 @@
         <p class="text-shell-500 text-sm mt-1">Authentication for PR creation</p>
     </div>
     {% include "_token_field.html" %}
+
+    <div class="mt-10 mb-3">
+        <h2 class="text-lg font-semibold text-shell-100">API Keys</h2>
+        <p class="text-shell-500 text-sm mt-1">Agent authentication — each key is injected only into its matching CLI subprocess</p>
+    </div>
+    {% include "_api_keys_field.html" %}
+
+    <div class="mt-10 mb-3">
+        <h2 class="text-lg font-semibold text-shell-100">Source Root</h2>
+        <p class="text-shell-500 text-sm mt-1">Base directory for repo cloning</p>
+    </div>
+    {% include "_source_root_field.html" %}
 
     {% if stage_agents is defined %}
     <div class="mt-10 mb-3">

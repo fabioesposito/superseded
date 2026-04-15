@@ -26,11 +26,10 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
         self.timeout = timeout
         self.github_token = github_token
 
-    def _build_env(self) -> dict[str, str] | None:
-        if not self.github_token:
-            return None
+    def _build_env(self) -> dict[str, str]:
         env = os.environ.copy()
-        env["GITHUB_TOKEN"] = self.github_token
+        if self.github_token:
+            env["GITHUB_TOKEN"] = self.github_token
         return env
 
     @abstractmethod

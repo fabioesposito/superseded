@@ -43,6 +43,9 @@ def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
         default_model=config.default_model,
         timeout=config.stage_timeout_seconds,
         github_token=config.github_token,
+        openai_api_key=config.openai_api_key,
+        anthropic_api_key=config.anthropic_api_key,
+        opencode_api_key=config.opencode_api_key,
     )
     runner = HarnessRunner(
         agent_factory=factory,
@@ -52,7 +55,7 @@ def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
         event_manager=event_manager,
         stage_configs=config.stages,
     )
-    worktree_manager = WorktreeManager(config.repo_path)
+    worktree_manager = WorktreeManager(config.repo_path, source_code_root=config.source_code_root)
     if config.repos:
         runner.configure_repos(config.repos)
         for name, entry in config.repos.items():

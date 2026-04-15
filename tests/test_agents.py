@@ -222,3 +222,54 @@ def test_factory_unknown_cli():
     factory = AgentFactory()
     with pytest.raises(ValueError, match="Unknown agent CLI: bad"):
         factory.create(cli="bad")
+
+
+def test_claude_code_injects_anthropic_key():
+    adapter = ClaudeCodeAdapter(api_key="sk-ant-test")
+    env = adapter._build_env()
+    assert env["ANTHROPIC_API_KEY"] == "sk-ant-test"
+    assert "OPENAI_API_KEY" not in env
+
+
+def test_opencode_injects_opencode_key():
+    adapter = OpenCodeAdapter(api_key="oc-test")
+    env = adapter._build_env()
+    assert env["OPENCODE_API_KEY"] == "oc-test"
+    assert "OPENAI_API_KEY" not in env
+
+
+def test_codex_injects_openai_key():
+    adapter = CodexAdapter(api_key="sk-openai-test")
+    env = adapter._build_env()
+    assert env["OPENAI_API_KEY"] == "sk-openai-test"
+    assert "ANTHROPIC_API_KEY" not in env
+
+
+def test_adapter_env_no_extra_keys_leak():
+    adapter = CodexAdapter(api_key="sk-test", github_token="gh-test")
+    env = adapter._build_env()
+    assert env["GITHUB_TOKEN"] == "gh-test"
+    assert env["OPENAI_API_KEY"] == "sk-test"
+    assert "ANTHROPIC_API_KEY" not in env
+    assert "OPENCODE_API_KEY" not in env
+
+
+def test_factory_passes_api_keys():
+    factory = AgentFactory(
+        openai_api_key="sk-oai",
+        anthropic_api_key="sk-ant",
+        opencode_api_key="oc",
+    )
+    claude = factory.create(cli="claude-code")
+    opencode = factory.create(cli="opencode")
+    codex = factory.create(cli="codex")
+    assert claude._api_key == "sk-ant"
+    assert opencode._api_key == "oc"
+    assert codex._api_key == "sk-oai"
+
+
+def test_adapter_env_empty_when_no_keys():
+    adapter = ClaudeCodeAdapter()
+    env = adapter._build_env()
+    assert "ANTHROPIC_API_KEY" not in env
+    assert "GITHUB_TOKEN" not in env

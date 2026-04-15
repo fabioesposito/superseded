@@ -111,3 +111,47 @@ def test_superseded_config_stages_populated():
     )
     assert cfg.stages["build"].cli == "opencode"
     assert cfg.stages["build"].model == "gpt-4o"
+
+
+def test_config_api_keys_default_empty():
+    cfg = SupersededConfig()
+    assert cfg.openai_api_key == ""
+    assert cfg.anthropic_api_key == ""
+    assert cfg.opencode_api_key == ""
+    assert cfg.source_code_root == ""
+
+
+def test_config_api_keys_from_file():
+    with tempfile.TemporaryDirectory() as tmp:
+        config_path = Path(tmp) / ".superseded" / "config.yaml"
+        write_yaml_config(
+            config_path,
+            {
+                "openai_api_key": "sk-test-123",
+                "anthropic_api_key": "sk-ant-test-456",
+                "opencode_api_key": "oc-test-789",
+            },
+        )
+        config = load_config(Path(tmp))
+        assert config.openai_api_key == "sk-test-123"
+        assert config.anthropic_api_key == "sk-ant-test-456"
+        assert config.opencode_api_key == "oc-test-789"
+
+
+def test_config_env_var_overrides(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        monkeypatch.setenv("OPENAI_API_KEY", "env-openai")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "env-anthropic")
+        monkeypatch.setenv("OPENCODE_API_KEY", "env-opencode")
+        config = load_config(Path(tmp))
+        assert config.openai_api_key == "env-openai"
+        assert config.anthropic_api_key == "env-anthropic"
+        assert config.opencode_api_key == "env-opencode"
+
+
+def test_config_source_code_root_from_file():
+    with tempfile.TemporaryDirectory() as tmp:
+        config_path = Path(tmp) / ".superseded" / "config.yaml"
+        write_yaml_config(config_path, {"source_code_root": "/opt/repos"})
+        config = load_config(Path(tmp))
+        assert config.source_code_root == "/opt/repos"
