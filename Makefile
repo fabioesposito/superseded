@@ -32,7 +32,10 @@ run:                ## Start the server
 dev:                ## Start the server with auto-reload
 	uv run uvicorn app:app --reload
 
-e2e:                ## Run Playwright browser tests
+e2e:                ## Run Playwright browser tests (requires server running)
 	npx playwright test
 
-all: check test     ## Run check then test (full CI suite)
+e2e-install:        ## Install Playwright browsers
+	npx playwright install
+
+all: check test e2e  ## Run check + test + e2e (full CI suite)

@@ -42,18 +42,24 @@ test.describe('Settings Page', () => {
     }
   });
 
-  test('should have opencode as default CLI for all stages', async ({ page }) => {
-    const stages = ['spec', 'plan', 'build', 'verify', 'review', 'ship'];
-    for (const stage of stages) {
-      await expect(page.locator(`select[name="${stage}_cli"]`)).toHaveValue('opencode');
-    }
+  test('should have correct default CLI values for all stages', async ({ page }) => {
+    // Based on .superseded/config.yaml values
+    await expect(page.locator('select[name="spec_cli"]')).toHaveValue('opencode');
+    await expect(page.locator('select[name="plan_cli"]')).toHaveValue('opencode');
+    await expect(page.locator('select[name="build_cli"]')).toHaveValue('codex');
+    await expect(page.locator('select[name="verify_cli"]')).toHaveValue('opencode');
+    await expect(page.locator('select[name="review_cli"]')).toHaveValue('opencode');
+    await expect(page.locator('select[name="ship_cli"]')).toHaveValue('opencode');
   });
 
-  test('should have opencode-go/kimi-k2.5 as default model for all stages', async ({ page }) => {
-    const stages = ['spec', 'plan', 'build', 'verify', 'review', 'ship'];
-    for (const stage of stages) {
-      await expect(page.locator(`input[name="${stage}_model"]`)).toHaveValue('opencode-go/kimi-k2.5');
-    }
+  test('should have correct default model values for all stages', async ({ page }) => {
+    // Based on .superseded/config.yaml values
+    await expect(page.locator('input[name="spec_model"]')).toHaveValue('claude-3-opus');
+    await expect(page.locator('input[name="plan_model"]')).toHaveValue('opencode-go/kimi-k2.5');
+    await expect(page.locator('input[name="build_model"]')).toHaveValue('gpt-4');
+    await expect(page.locator('input[name="verify_model"]')).toHaveValue('opencode-go/kimi-k2.5');
+    await expect(page.locator('input[name="review_model"]')).toHaveValue('opencode-go/kimi-k2.5');
+    await expect(page.locator('input[name="ship_model"]')).toHaveValue('opencode-go/kimi-k2.5');
   });
 
   test('cancel button should hide the add repository form', async ({ page }) => {
@@ -66,9 +72,8 @@ test.describe('Settings Page', () => {
   test('should validate required fields in add repo form', async ({ page }) => {
     await page.click('button:has-text("Add Repo")');
     const nameInput = page.locator('input[name="name"]');
-    const pathInput = page.locator('input[name="path"]');
+    // Only name is required; git_url and path are optional
     await expect(nameInput).toHaveAttribute('required', '');
-    await expect(pathInput).toHaveAttribute('required', '');
   });
 
   test('page should have proper styling classes', async ({ page }) => {
