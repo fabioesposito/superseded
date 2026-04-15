@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from superseded.agents import register_agent
 from superseded.agents.base import SubprocessAgentAdapter
 
 
+@register_agent("opencode")
 class OpenCodeAdapter(SubprocessAgentAdapter):
     def __init__(
         self, model: str = "", timeout: int = 600, github_token: str = "", api_key: str = ""

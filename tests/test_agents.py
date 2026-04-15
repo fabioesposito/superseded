@@ -220,8 +220,26 @@ def test_factory_unknown_cli():
     import pytest
 
     factory = AgentFactory()
-    with pytest.raises(ValueError, match="Unknown agent CLI: bad"):
+    with pytest.raises(ValueError, match="Unknown agent: bad"):
         factory.create(cli="bad")
+
+
+def test_registry_contains_all_agents():
+    from superseded.agents import get_registry
+
+    registry = get_registry()
+    assert "claude-code" in registry
+    assert "opencode" in registry
+    assert "codex" in registry
+
+
+def test_registry_creates_correct_types():
+    from superseded.agents import get_registry
+
+    registry = get_registry()
+    assert registry["claude-code"] is ClaudeCodeAdapter
+    assert registry["opencode"] is OpenCodeAdapter
+    assert registry["codex"] is CodexAdapter
 
 
 def test_claude_code_injects_anthropic_key():

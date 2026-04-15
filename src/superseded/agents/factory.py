@@ -1,9 +1,7 @@
 from __future__ import annotations
 
+from superseded.agents import get_registry
 from superseded.agents.base import AgentAdapter
-from superseded.agents.claude_code import ClaudeCodeAdapter
-from superseded.agents.codex import CodexAdapter
-from superseded.agents.opencode import OpenCodeAdapter
 
 
 class AgentFactory:
@@ -28,25 +26,17 @@ class AgentFactory:
     def create(self, cli: str | None = None, model: str | None = None) -> AgentAdapter:
         cli = cli or self.default_agent
         model = model or self.default_model
-        if cli == "claude-code":
-            return ClaudeCodeAdapter(
-                model=model,
-                timeout=self.timeout,
-                github_token=self.github_token,
-                api_key=self.anthropic_api_key,
-            )
-        elif cli == "opencode":
-            return OpenCodeAdapter(
-                model=model,
-                timeout=self.timeout,
-                github_token=self.github_token,
-                api_key=self.opencode_api_key,
-            )
-        elif cli == "codex":
-            return CodexAdapter(
-                model=model,
-                timeout=self.timeout,
-                github_token=self.github_token,
-                api_key=self.openai_api_key,
-            )
-        raise ValueError(f"Unknown agent CLI: {cli}")
+        registry = get_registry()
+        if cli not in registry:
+            raise ValueError(f"Unknown agent: {cli}")
+        api_key_map = {
+            "claude-code": self.anthropic_api_key,
+            "opencode": self.opencode_api_key,
+            "codex": self.openai_api_key,
+        }
+        return registry[cli](
+            model=model,
+            timeout=self.timeout,
+            github_token=self.github_token,
+            api_key=api_key_map.get(cli, ""),
+        )
