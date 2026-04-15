@@ -858,7 +858,7 @@
     <p class="hero-sub">
       Write a ticket. <strong>Superseded</strong> delegates implementation, testing, review,
       and release to AI agents — running locally in isolated worktrees with
-      full feedback loops.
+      full feedback loops. Monitor everything from the web dashboard.
     </p>
     <div class="hero-actions">
       <a href="#demo" class="btn-primary">See it in action ↓</a>
@@ -965,6 +965,30 @@
         <p>Tickets can target multiple repositories. SPEC/PLAN run once. BUILD/VERIFY/REVIEW fan out per repo. Ship creates a PR per repo.</p>
         <span class="feature-tag">Scale</span>
       </div>
+      <div class="feature-card">
+        <span class="feature-icon">◎</span>
+        <h3>Notifications</h3>
+        <p>Push alerts on pipeline completion, failure, or stage transitions via ntfy.sh. Configure per-channel priority. Never miss a ship or a failure.</p>
+        <span class="feature-tag">Awareness</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">⇥</span>
+        <h3>Await Input</h3>
+        <p>The Spec stage can pause and ask you questions. Answer in the web UI, and the pipeline resumes automatically. Agents clarify — they don't guess.</p>
+        <span class="feature-tag">Collaboration</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">◧</span>
+        <h3>Metrics Dashboard</h3>
+        <p>Track success rates, retry counts, and stage durations across all pipelines. Spot bottlenecks. Available as a web dashboard or JSON API.</p>
+        <span class="feature-tag">Visibility</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">▦</span>
+        <h3>Web Dashboard</h3>
+        <p>Full UI to create tickets, advance stages, review agent output, configure agents, and manage repos — all from the browser. Real-time SSE updates.</p>
+        <span class="feature-tag">Control</span>
+      </div>
     </div>
   </div>
 </section>
@@ -995,6 +1019,10 @@
         <div><span class="term-output">  ✓ VERIFY   </span><span class="term-success">done</span><span class="term-output">  — 24/24 tests pass</span></div>
         <div><span class="term-output">  ⟳ REVIEW   </span><span class="term-success">done</span><span class="term-output">  — no critical findings</span></div>
         <div><span class="term-output">  ▷ SHIP     </span><span class="term-success">done</span><span class="term-output">  — </span><span class="term-tag">PR #43 created</span></div>
+        <br>
+        <div><span class="term-comment"># Or pause for human input:</span></div>
+        <div><span class="term-output">  ◉ SPEC     </span><span class="term-warn">await</span><span class="term-output">  — agent has 2 questions…</span></div>
+        <div><span class="term-output">  </span><span class="term-success">✓ answers received — resuming</span></div>
         <br>
         <div><span class="term-success">✓ Pipeline complete — 1m 47s</span></div>
         <div><span class="term-prompt">$ </span><span class="typing-cursor"></span></div>
