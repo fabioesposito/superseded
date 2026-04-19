@@ -151,6 +151,53 @@ def test_context_assembler_no_target_repo(tmp_path):
     assert "Frontend guide" not in context
 
 
+def test_context_assembler_categorized_docs_index(tmp_path):
+    """Docs index groups files by category from frontmatter."""
+    docs_dir = tmp_path / "docs"
+    arch_dir = docs_dir / "architecture"
+    guides_dir = docs_dir / "guides"
+    arch_dir.mkdir(parents=True)
+    guides_dir.mkdir(parents=True)
+
+    (arch_dir / "pipeline.md").write_text(
+        "---\ntitle: Pipeline\ncategory: architecture\nsummary: Pipeline design\n---\n# Pipeline"
+    )
+    (guides_dir / "setup.md").write_text(
+        "---\ntitle: Setup Guide\ncategory: guides\nsummary: How to set up\n---\n# Setup"
+    )
+
+    assembler = ContextAssembler(repo_path=str(tmp_path))
+    prompt = assembler.build(
+        stage=Stage.PLAN,
+        issue=_make_issue(),
+        artifacts_path=str(tmp_path / ".superseded" / "artifacts" / "SUP-001"),
+    )
+
+    assert "### Architecture" in prompt
+    assert "### Guides" in prompt
+    assert "pipeline.md" in prompt
+    assert "Pipeline design" in prompt
+    assert "setup.md" in prompt
+    assert "How to set up" in prompt
+
+
+def test_context_assembler_docs_fallback_no_frontmatter(tmp_path):
+    """Docs without frontmatter fall back to first-line extraction."""
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "legacy.md").write_text("# Legacy Doc\nOld style content.")
+
+    assembler = ContextAssembler(repo_path=str(tmp_path))
+    prompt = assembler.build(
+        stage=Stage.PLAN,
+        issue=_make_issue(),
+        artifacts_path=str(tmp_path / ".superseded" / "artifacts" / "SUP-001"),
+    )
+
+    assert "legacy.md" in prompt
+    assert "Legacy Doc" in prompt
+
+
 def test_context_skill_layer_includes_repo_info(tmp_path):
     """Skill layer includes repo-specific instructions when target_repo is set."""
     primary = tmp_path / "primary"

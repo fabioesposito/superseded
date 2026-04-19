@@ -60,15 +60,45 @@ class ContextAssembler:
         docs_dir = repo_path / "docs"
         if not docs_dir.exists():
             return None
-        entries: list[str] = []
+
+        categories: dict[str, list[tuple[str, str]]] = {}
+        uncategorized: list[tuple[str, str]] = []
+
         for md_file in sorted(docs_dir.glob("**/*.md")):
-            rel = md_file.relative_to(repo_path)
-            first_line = md_file.read_text(encoding="utf-8").split("\n")[0].strip("# ").strip()
-            entries.append(f"- {rel}: {first_line}")
-        if not entries:
+            rel = md_file.relative_to(docs_dir)
+            content = md_file.read_text(encoding="utf-8")
+            meta, _ = parse_frontmatter(content)
+
+            summary = meta.get("summary", "").strip()
+            if not summary:
+                summary = content.split("\n")[0].strip("# ").strip()
+
+            category = meta.get("category", "").strip()
+            if category and category in ("architecture", "guides", "adrs", "operations"):
+                categories.setdefault(category, []).append((str(rel), summary))
+            else:
+                uncategorized.append((str(rel), summary))
+
+        if not categories and not uncategorized:
             return None
+
         label = f"{repo} repo" if repo else "Documentation"
-        return f"## {label} Documentation Index\n\n" + "\n".join(entries)
+        sections: list[str] = [f"## {label} Index\n"]
+
+        category_order = ["architecture", "guides", "adrs", "operations"]
+        for cat in category_order:
+            if cat in categories:
+                sections.append(f"### {cat.title()}")
+                for rel, summary in categories[cat]:
+                    sections.append(f"- {rel}: {summary}")
+                sections.append("")
+
+        if uncategorized:
+            sections.append("### Other")
+            for rel, summary in uncategorized:
+                sections.append(f"- {rel}: {summary}")
+
+        return "\n".join(sections)
 
     def _build_issue_layer(self, issue: Issue) -> str:
         ticket_path = self.repo_path / issue.filepath
