@@ -1,3 +1,11 @@
+---
+title: Ticket Format
+category: guides
+summary: Markdown + YAML frontmatter format for pipeline tickets
+tags: [tickets, format, frontmatter]
+date: 2026-04-11
+---
+
 # Ticket Format
 
 Tickets are markdown files with YAML frontmatter. They live in `.superseded/issues/` and are the single source of truth for the pipeline.

@@ -1,3 +1,11 @@
+---
+title: User Guide
+category: guides
+summary: Complete guide from first ticket to multi-repo pipelines
+tags: [guide, getting-started]
+date: 2026-04-11
+---
+
 # Superseded User Guide
 
 Complete guide to using Superseded — from creating your first ticket to configuring multi-repo pipelines.

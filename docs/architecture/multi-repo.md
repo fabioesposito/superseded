@@ -1,3 +1,11 @@
+---
+title: Multi-Repo Support
+category: architecture
+summary: How Superseded fans out pipeline stages across multiple repositories
+tags: [multi-repo, pipeline, config]
+date: 2026-04-11
+---
+
 # Multi-Repo Support
 
 Superseded supports tickets that span multiple repositories. A single issue can drive work across a frontend, backend, and any other configured repos.
