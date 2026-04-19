@@ -2,9 +2,31 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 from superseded.models import Issue, Stage
 from superseded.pipeline.prompts import get_prompt_for_stage
 from superseded.validation import sanitize_agent_prompt
+
+
+def parse_frontmatter(content: str) -> tuple[dict, str]:
+    """Parse YAML frontmatter from markdown content.
+
+    Returns (metadata dict, body text). If no frontmatter is found,
+    returns ({}, original content).
+    """
+    if not content.startswith("---"):
+        return {}, content
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return {}, content
+    try:
+        meta = yaml.safe_load(parts[1]) or {}
+        if not isinstance(meta, dict):
+            return {}, content
+        return meta, parts[2].lstrip("\n")
+    except yaml.YAMLError:
+        return {}, content
 
 
 class ContextAssembler:
