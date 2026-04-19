@@ -1,3 +1,11 @@
+---
+title: Architecture Improvements Implementation Plan
+category: adrs
+summary: Architecture Improvements Implementation Plan
+tags: []
+date: 2026-04-15
+---
+
 # Architecture Improvements Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

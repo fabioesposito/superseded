@@ -1,3 +1,11 @@
+---
+title: Pipeline Pulse — Design
+category: adrs
+summary: Pipeline Pulse — Design
+tags: []
+date: 2026-04-15
+---
+
 # Pipeline Pulse — Design
 
 Three tightly composed features: stage duration metrics, pipeline timeline visualization, and ntfy.sh push notifications. Each makes the others more valuable.

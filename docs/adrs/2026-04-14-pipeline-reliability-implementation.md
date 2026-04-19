@@ -1,3 +1,11 @@
+---
+title: Pipeline Reliability Improvements Implementation Plan
+category: adrs
+summary: Pipeline Reliability Improvements Implementation Plan
+tags: []
+date: 2026-04-14
+---
+
 # Pipeline Reliability Improvements Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

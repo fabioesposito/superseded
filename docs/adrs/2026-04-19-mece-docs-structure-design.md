@@ -1,6 +1,6 @@
 ---
 title: MECE Docs Structure
-category: architecture
+category: adrs
 summary: Restructure docs/ into MECE categories with YAML frontmatter and categorized ContextAssembler output
 tags: [docs, context-assembly, mece]
 date: 2026-04-19

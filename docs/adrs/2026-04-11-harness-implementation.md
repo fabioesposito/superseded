@@ -1,3 +1,11 @@
+---
+title: Harness Implementation Plan
+category: adrs
+summary: Harness Implementation Plan
+tags: []
+date: 2026-04-11
+---
+
 # Harness Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

@@ -1,3 +1,11 @@
+---
+title: Observability & Stateful Sessions Design
+category: adrs
+summary: Observability & Stateful Sessions Design
+tags: []
+date: 2026-04-11
+---
+
 # Observability & Stateful Sessions Design
 
 ## Problem

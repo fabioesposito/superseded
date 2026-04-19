@@ -1,3 +1,11 @@
+---
+title: Superseded Implementation Plan
+category: adrs
+summary: Superseded Implementation Plan
+tags: []
+date: 2026-04-11
+---
+
 # Superseded Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

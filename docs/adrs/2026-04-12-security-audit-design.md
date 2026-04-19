@@ -1,3 +1,11 @@
+---
+title: Security Audit Design
+category: adrs
+summary: Security Audit Design
+tags: []
+date: 2026-04-12
+---
+
 # Security Audit Design
 
 ## Context

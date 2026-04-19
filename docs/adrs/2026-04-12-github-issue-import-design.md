@@ -1,3 +1,11 @@
+---
+title: GitHub Issue Import for Tickets
+category: adrs
+summary: GitHub Issue Import for Tickets
+tags: []
+date: 2026-04-12
+---
+
 # GitHub Issue Import for Tickets
 
 ## Problem

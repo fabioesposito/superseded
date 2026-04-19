@@ -1,3 +1,11 @@
+---
+title: Superseded Harness Design
+category: adrs
+summary: Superseded Harness Design
+tags: []
+date: 2026-04-11
+---
+
 # Superseded Harness Design
 
 > Close the five critical gaps between Superseded's current pipeline and the OpenAI Codex harness pattern: feedback loops, execution plans, progressive context, worktree isolation, and quality enforcement.

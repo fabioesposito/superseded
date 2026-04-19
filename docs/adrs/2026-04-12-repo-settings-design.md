@@ -1,3 +1,11 @@
+---
+title: Repo Settings Page — Design
+category: adrs
+summary: Repo Settings Page — Design
+tags: []
+date: 2026-04-12
+---
+
 # Repo Settings Page — Design
 
 ## Overview

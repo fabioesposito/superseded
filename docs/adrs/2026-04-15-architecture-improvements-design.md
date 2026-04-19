@@ -1,3 +1,11 @@
+---
+title: Architecture Improvements Design
+category: adrs
+summary: Architecture Improvements Design
+tags: []
+date: 2026-04-15
+---
+
 # Architecture Improvements Design
 
 Date: 2026-04-15

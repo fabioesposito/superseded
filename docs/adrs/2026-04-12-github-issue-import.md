@@ -1,3 +1,11 @@
+---
+title: GitHub Issue Import Implementation Plan
+category: adrs
+summary: GitHub Issue Import Implementation Plan
+tags: []
+date: 2026-04-12
+---
+
 # GitHub Issue Import Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

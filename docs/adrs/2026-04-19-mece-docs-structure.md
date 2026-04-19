@@ -1,3 +1,11 @@
+---
+title: MECE Docs Structure Implementation Plan
+category: adrs
+summary: MECE Docs Structure Implementation Plan
+tags: []
+date: 2026-04-19
+---
+
 # MECE Docs Structure Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

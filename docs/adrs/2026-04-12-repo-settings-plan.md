@@ -1,3 +1,11 @@
+---
+title: Repo Settings Page Implementation Plan
+category: adrs
+summary: Repo Settings Page Implementation Plan
+tags: []
+date: 2026-04-12
+---
+
 # Repo Settings Page Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

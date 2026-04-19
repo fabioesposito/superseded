@@ -1,3 +1,11 @@
+---
+title: Pipeline Reliability Improvements — Design
+category: adrs
+summary: Pipeline Reliability Improvements — Design
+tags: []
+date: 2026-04-14
+---
+
 # Pipeline Reliability Improvements — Design
 
 ## Problem

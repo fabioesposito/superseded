@@ -1,3 +1,11 @@
+---
+title: Per-Stage Agent + Model Selection Implementation Plan
+category: adrs
+summary: Per-Stage Agent + Model Selection Implementation Plan
+tags: []
+date: 2026-04-12
+---
+
 # Per-Stage Agent + Model Selection Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

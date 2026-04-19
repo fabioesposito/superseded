@@ -1,3 +1,11 @@
+---
+title: Pipeline Recovery Paths Implementation Plan
+category: adrs
+summary: Pipeline Recovery Paths Implementation Plan
+tags: []
+date: 2026-04-14
+---
+
 # Pipeline Recovery Paths Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

@@ -1,3 +1,11 @@
+---
+title: Multi-Repo Support Implementation Plan
+category: adrs
+summary: Multi-Repo Support Implementation Plan
+tags: []
+date: 2026-04-11
+---
+
 # Multi-Repo Support Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.

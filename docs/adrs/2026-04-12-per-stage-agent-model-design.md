@@ -1,3 +1,11 @@
+---
+title: Per-Stage CLI + Model Selection
+category: adrs
+summary: Per-Stage CLI + Model Selection
+tags: []
+date: 2026-04-12
+---
+
 # Per-Stage CLI + Model Selection
 
 ## Overview

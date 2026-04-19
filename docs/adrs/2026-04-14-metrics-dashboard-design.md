@@ -1,3 +1,11 @@
+---
+title: Metrics Dashboard Visual Upgrade — Design
+category: adrs
+summary: Metrics Dashboard Visual Upgrade — Design
+tags: []
+date: 2026-04-14
+---
+
 # Metrics Dashboard Visual Upgrade — Design
 
 ## Context

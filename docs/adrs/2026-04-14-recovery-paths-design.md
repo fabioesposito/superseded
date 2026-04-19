@@ -1,3 +1,11 @@
+---
+title: Pipeline Recovery Paths — Design
+category: adrs
+summary: Pipeline Recovery Paths — Design
+tags: []
+date: 2026-04-14
+---
+
 # Pipeline Recovery Paths — Design
 
 ## Problem

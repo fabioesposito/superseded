@@ -1,3 +1,11 @@
+---
+title: Superseded Design Document
+category: adrs
+summary: Superseded Design Document
+tags: []
+date: 2026-04-11
+---
+
 # Superseded Design Document
 
 ## Goal

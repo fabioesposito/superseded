@@ -1,3 +1,11 @@
+---
+title: Observability & Stateful Sessions Implementation Plan
+category: adrs
+summary: Observability & Stateful Sessions Implementation Plan
+tags: []
+date: 2026-04-11
+---
+
 # Observability & Stateful Sessions Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
