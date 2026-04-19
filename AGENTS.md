@@ -101,13 +101,17 @@ Superseded is now an agent harness, not just a linear pipeline:
 - **Worktree isolation**: BUILD/VERIFY/REVIEW stages run in isolated git worktrees. Changes merge on success, discard on failure.
 - **Quality enforcement**: Review findings that are critical/important loop back to BUILD. `.superseded/rules.md` is injected into every prompt.
 - **Iteration history**: Every harness attempt is tracked in the database and shown in the UI.
-- **Multi-repo support**: Tickets can target multiple repositories. Set `repos: [frontend, backend]` in ticket frontmatter. Available repos are defined in `.superseded/config.yaml` under the `repos` key. SPEC/PLAN run once (primary repo). BUILD/VERIFY/REVIEW fan out per target repo. SHIP creates a PR per repo. See `docs/multi-repo.md`.
+- **Multi-repo support**: Tickets can target multiple repositories. Set `repos: [frontend, backend]` in ticket frontmatter. Available repos are defined in `.superseded/config.yaml` under the `repos` key. SPEC/PLAN run once (primary repo). BUILD/VERIFY/REVIEW fan out per target repo. SHIP creates a PR per repo. See `docs/architecture/multi-repo.md`.
 
 ## Key Files for Agents
 
-- `.superseded/issues/` — Tickets (markdown + YAML frontmatter), single source of truth. See `docs/tickets.md` for format.
+- `.superseded/issues/` — Tickets (markdown + YAML frontmatter), single source of truth. See `docs/guides/tickets.md` for format.
 - `.superseded/artifacts/{id}/` — Stage outputs (spec.md, plan.md, etc.)
 - `.superseded/rules.md` — Non-negotiable project rules injected into every prompt
 - `.superseded/config.yaml` — Harness configuration
 - `.superseded/state.db` — Pipeline state cache (markdown is canonical)
-- `docs/` — Structured project documentation (indexed by ContextAssembler)
+- `docs/` — Structured project documentation (indexed by ContextAssembler):
+  - `docs/architecture/` — System design, component diagrams, data flow
+  - `docs/guides/` — How-to docs (user guide, ticket format)
+  - `docs/adrs/` — Architectural Decision Records (dated design/plan docs)
+  - `docs/operations/` — Runbooks, setup, troubleshooting
