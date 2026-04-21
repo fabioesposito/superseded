@@ -38,7 +38,9 @@ class HarnessRunner:
     def resolve_agent(self, stage: Stage) -> AgentAdapter:
         config = self.stage_configs.get(stage.value)
         if config:
-            return self.agent_factory.create(cli=config.cli, model=config.model, sandbox=config.sandbox)
+            return self.agent_factory.create(
+                cli=config.cli, model=config.model, sandbox=config.sandbox
+            )
         return self.agent_factory.create()
 
     async def run_stage(

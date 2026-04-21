@@ -5,7 +5,6 @@ import re
 from datetime import date
 from pathlib import Path
 
-import frontmatter
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -342,7 +341,7 @@ async def answer_questions(
     issue = matching[0]
 
     artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
-    for repo_name in (issue.repos if issue.repos else [None]):
+    for repo_name in issue.repos if issue.repos else [None]:
         effective_repo = repo_name or "primary"
         approval_file = Path(artifacts_path) / effective_repo / "approval.md"
         if approval_file.exists():
@@ -394,7 +393,7 @@ async def reject_issue(
         )
     issue = matching[0]
 
-    for repo_name in (issue.repos if issue.repos else [None]):
+    for repo_name in issue.repos if issue.repos else [None]:
         effective_repo = repo_name or "primary"
         result = StageResult(
             stage=issue.stage,
