@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -10,6 +11,8 @@ from pydantic import BaseModel, Field
 class StageAgentConfig(BaseModel):
     cli: str = "opencode"
     model: str = ""
+    sandbox: Literal["host", "docker"] = "host"
+    require_approval: bool = False
 
 
 class RepoEntry(BaseModel):

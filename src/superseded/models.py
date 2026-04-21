@@ -20,6 +20,7 @@ class PauseReason(StrEnum):
     RETRIES_EXHAUSTED = "retries-exhausted"
     AWAITING_INPUT = "awaiting-input"
     USER_EDIT = "user-edit"
+    APPROVAL_REQUIRED = "approval-required"
 
 
 class Stage(StrEnum):
