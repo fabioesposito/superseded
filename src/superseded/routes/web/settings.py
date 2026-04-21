@@ -128,26 +128,38 @@ async def update_agents(
         "spec": StageAgentConfig(
             cli=str(form.get("spec_cli", "opencode")),
             model=str(form.get("spec_model", "")),
+            sandbox=str(form.get("spec_sandbox", "host")),
+            require_approval=bool(form.get("spec_approval")),
         ),
         "plan": StageAgentConfig(
             cli=str(form.get("plan_cli", "opencode")),
             model=str(form.get("plan_model", "")),
+            sandbox=str(form.get("plan_sandbox", "host")),
+            require_approval=bool(form.get("plan_approval")),
         ),
         "build": StageAgentConfig(
             cli=str(form.get("build_cli", "opencode")),
             model=str(form.get("build_model", "")),
+            sandbox=str(form.get("build_sandbox", "host")),
+            require_approval=bool(form.get("build_approval")),
         ),
         "verify": StageAgentConfig(
             cli=str(form.get("verify_cli", "opencode")),
             model=str(form.get("verify_model", "")),
+            sandbox=str(form.get("verify_sandbox", "host")),
+            require_approval=bool(form.get("verify_approval")),
         ),
         "review": StageAgentConfig(
             cli=str(form.get("review_cli", "opencode")),
             model=str(form.get("review_model", "")),
+            sandbox=str(form.get("review_sandbox", "host")),
+            require_approval=bool(form.get("review_approval")),
         ),
         "ship": StageAgentConfig(
             cli=str(form.get("ship_cli", "opencode")),
             model=str(form.get("ship_model", "")),
+            sandbox=str(form.get("ship_sandbox", "host")),
+            require_approval=bool(form.get("ship_approval")),
         ),
     }
     config.stages = stages_data

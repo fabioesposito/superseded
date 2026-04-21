@@ -299,8 +299,23 @@ async def test_approve_issue(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()
 
+    issues_dir = Path(tmp_repo) / ".superseded" / "issues"
+    issues_dir.mkdir(parents=True, exist_ok=True)
+    issue_file = issues_dir / "SUP-001-test.md"
+    issue_file.write_text("""---
+id: SUP-001
+title: Test
+status: paused
+stage: plan
+created: "2026-04-21"
+repos: []
+---
+
+Test issue.
+""")
+
     issue = Issue(
-        id="SUP-001", title="Test", filepath="", pause_reason="awaiting-input", stage=Stage.PLAN
+        id="SUP-001", title="Test", filepath=str(issue_file), pause_reason="awaiting-input", stage=Stage.PLAN
     )
     await app.state.db.upsert_issue(issue)
 

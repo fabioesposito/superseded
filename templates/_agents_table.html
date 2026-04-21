@@ -15,6 +15,8 @@
                         <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Stage</th>
                         <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">CLI</th>
                         <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Model</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Sandbox</th>
+                        <th class="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-widest text-sand-500">Approval</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -34,6 +36,18 @@
                             <input type="text" name="{{ stage }}_model" value="{{ stage_agents[stage].model | default('') }}"
                                    class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-1.5 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
                                    placeholder="e.g. opencode-go/kimi-k2.5" />
+                        </td>
+                        <td class="px-5 py-3.5">
+                            <select name="{{ stage }}_sandbox"
+                                    class="bg-shell-900 border border-shell-700 rounded-lg px-3 py-1.5 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors">
+                                <option value="host" {% if stage_agents[stage].sandbox == 'host' %}selected{% endif %}>Host</option>
+                                <option value="docker" {% if stage_agents[stage].sandbox == 'docker' %}selected{% endif %}>Docker</option>
+                            </select>
+                        </td>
+                        <td class="px-5 py-3.5">
+                            <input type="checkbox" name="{{ stage }}_approval" value="1"
+                                   {% if stage_agents[stage].require_approval %}checked{% endif %}
+                                   class="w-4 h-4 accent-neon-500 cursor-pointer" />
                         </td>
                     </tr>
                     {% endfor %}

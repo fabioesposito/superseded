@@ -49,7 +49,7 @@ class DockerAgentAdapter(SubprocessAgentAdapter):
             cmd.extend(["-u", f"{os.getuid()}:{os.getgid()}"])
 
         env = self._build_env()
-        env.setdefault("HOME", "/tmp")
+        env = {**env, "HOME": env.get("HOME", "/tmp")}
         for k, v in env.items():
             cmd.extend(["-e", f"{k}={v}"])
 
