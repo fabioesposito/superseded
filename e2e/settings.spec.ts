@@ -55,11 +55,11 @@ test.describe('Settings Page', () => {
   test('should have correct default model values for all stages', async ({ page }) => {
     // Based on .superseded/config.yaml values
     await expect(page.locator('input[name="spec_model"]')).toHaveValue('claude-3-opus');
-    await expect(page.locator('input[name="plan_model"]')).toHaveValue('opencode-go/kimi-k2.5');
+    await expect(page.locator('input[name="plan_model"]')).toHaveValue('');
     await expect(page.locator('input[name="build_model"]')).toHaveValue('gpt-4');
-    await expect(page.locator('input[name="verify_model"]')).toHaveValue('opencode-go/kimi-k2.5');
-    await expect(page.locator('input[name="review_model"]')).toHaveValue('opencode-go/kimi-k2.5');
-    await expect(page.locator('input[name="ship_model"]')).toHaveValue('opencode-go/kimi-k2.5');
+    await expect(page.locator('input[name="verify_model"]')).toHaveValue('');
+    await expect(page.locator('input[name="review_model"]')).toHaveValue('');
+    await expect(page.locator('input[name="ship_model"]')).toHaveValue('');
   });
 
   test('cancel button should hide the add repository form', async ({ page }) => {
