@@ -948,6 +948,18 @@
         <span class="feature-tag">Safety</span>
       </div>
       <div class="feature-card">
+        <span class="feature-icon">⌁</span>
+        <h3>Docker Sandboxing</h3>
+        <p>Run agents in isolated containers. Same environment every time — no host contamination, no dependency conflicts. Full workspace mount with your UID.</p>
+        <span class="feature-tag">Isolation</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">⊛</span>
+        <h3>Human Checkpoints</h3>
+        <p>Pause before critical stages. Review a diff summary, then approve or reject from the web UI. Agents don't guess — you decide what ships.</p>
+        <span class="feature-tag">Control</span>
+      </div>
+      <div class="feature-card">
         <span class="feature-icon">◫</span>
         <h3>Progressive Context</h3>
         <p>Agents receive context in layers: AGENTS.md → docs → ticket → artifacts → rules → skill prompt → error context. Just enough, never too much.</p>
@@ -1020,9 +1032,9 @@
         <div><span class="term-output">  ⟳ REVIEW   </span><span class="term-success">done</span><span class="term-output">  — no critical findings</span></div>
         <div><span class="term-output">  ▷ SHIP     </span><span class="term-success">done</span><span class="term-output">  — </span><span class="term-tag">PR #43 created</span></div>
         <br>
-        <div><span class="term-comment"># Or pause for human input:</span></div>
-        <div><span class="term-output">  ◉ SPEC     </span><span class="term-warn">await</span><span class="term-output">  — agent has 2 questions…</span></div>
-        <div><span class="term-output">  </span><span class="term-success">✓ answers received — resuming</span></div>
+        <div><span class="term-comment"># Or pause for human approval:</span></div>
+        <div><span class="term-output">  ⊛ HITL     </span><span class="term-warn">await</span><span class="term-output">  — 3 files changed, approve?…</span></div>
+        <div><span class="term-output">  </span><span class="term-success">✓ approved — continuing</span></div>
         <br>
         <div><span class="term-success">✓ Pipeline complete — 1m 47s</span></div>
         <div><span class="term-prompt">$ </span><span class="typing-cursor"></span></div>
@@ -1108,8 +1120,17 @@
         <!-- Arrow: Pipeline → Worktree -->
         <line x1="385" y1="195" x2="445" y2="130" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-cyan)" stroke-dasharray="4 3"/>
 
-        <!-- Arrow: Pipeline → Agents -->
-        <line x1="385" y1="245" x2="445" y2="310" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-amber)" stroke-dasharray="4 3"/>
+        <!-- Arrow: Pipeline → Docker -->
+        <line x1="385" y1="245" x2="445" y2="260" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-amber)" stroke-dasharray="4 3"/>
+
+        <!-- Docker Sandboxing -->
+        <g class="arch-node" transform="translate(450, 225)">
+          <rect width="130" height="70" rx="2" fill="#0d0d18" stroke="#00e5cc" stroke-width="1.5" opacity="0.9"/>
+          <text x="65" y="20" text-anchor="middle" fill="#00e5cc" font-family="JetBrains Mono, monospace" font-size="10" font-weight="600">DOCKER SANDBOX</text>
+          <text x="65" y="38" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">python:3.12-slim</text>
+          <text x="65" y="52" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">node:20-slim</text>
+          <text x="65" y="66" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">uvx opencode | npx claude</text>
+        </g>
 
         <!-- Worktree Isolation -->
         <g class="arch-node" transform="translate(450, 60)">
@@ -1125,7 +1146,7 @@
         </g>
 
         <!-- Agents -->
-        <g class="arch-node" transform="translate(450, 260)">
+        <g class="arch-node" transform="translate(450, 305)">
           <rect width="150" height="100" rx="2" fill="#0d0d18" stroke="#ffab40" stroke-width="1.5" opacity="0.9"/>
           <text x="75" y="26" text-anchor="middle" fill="#ffab40" font-family="JetBrains Mono, monospace" font-size="11" font-weight="600" filter="url(#glow-amber)">AGENTS</text>
           <text x="75" y="44" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="8">CLI subprocess adapters</text>
@@ -1138,7 +1159,7 @@
         <line x1="600" y1="110" x2="670" y2="110" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-cyan)" stroke-dasharray="4 3"/>
 
         <!-- Arrow: Agents → PR -->
-        <line x1="600" y1="310" x2="670" y2="310" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-amber)" stroke-dasharray="4 3"/>
+        <line x1="600" y1="355" x2="670" y2="310" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-amber)" stroke-dasharray="4 3"/>
 
         <!-- PR Output -->
         <g class="arch-node" transform="translate(675, 180)">
@@ -1150,7 +1171,7 @@
 
         <!-- Curved arrows from Worktree/Agents to PR -->
         <path d="M 600 90 Q 640 70 675 90 Q 700 100 710 160" stroke="#00e5cc" stroke-width="1" fill="none" opacity="0.4"/>
-        <path d="M 600 340 Q 640 360 675 350 Q 700 340 710 280" stroke="#ffab40" stroke-width="1" fill="none" opacity="0.4"/>
+        <path d="M 600 405 Q 640 430 675 390 Q 700 360 710 280" stroke="#ffab40" stroke-width="1" fill="none" opacity="0.4"/>
 
         <!-- Context Layer box -->
         <g class="arch-node" transform="translate(225, 340)">
@@ -1183,6 +1204,13 @@
         </g>
 
         <line x1="740" y1="260" x2="740" y2="310" stroke="#1a1a35" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
+
+        <!-- HITL Approval badge -->
+        <g transform="translate(675, 400)">
+          <rect width="130" height="50" rx="2" fill="#0d0d18" stroke="#00e5cc" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="65" y="22" text-anchor="middle" fill="#00e5cc" font-family="JetBrains Mono, monospace" font-size="9" font-weight="500">HITL CHECKPOINT</text>
+          <text x="65" y="38" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">approve | reject</text>
+        </g>
       </svg>
     </div>
     <div class="arch-details reveal" style="margin-top: 3rem;">
