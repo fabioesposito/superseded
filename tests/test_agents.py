@@ -17,7 +17,8 @@ def _make_context(tmp: str) -> AgentContext:
 
 def test_claude_code_adapter_builds_command():
     adapter = ClaudeCodeAdapter()
-    cmd_parts = adapter._build_command("Write a plan for this feature.")
+    ctx = _make_context("/tmp")
+    cmd_parts = adapter._build_command("Write a plan for this feature.", ctx)
     assert "claude" in cmd_parts[0]
     assert "-p" in cmd_parts
     assert "Write a plan for this feature." in cmd_parts
@@ -25,7 +26,8 @@ def test_claude_code_adapter_builds_command():
 
 def test_opencode_adapter_builds_command():
     adapter = OpenCodeAdapter()
-    cmd_parts = adapter._build_command("Write a plan for this feature.")
+    ctx = _make_context("/tmp")
+    cmd_parts = adapter._build_command("Write a plan for this feature.", ctx)
     assert "opencode" in cmd_parts[0]
     assert "run" in cmd_parts
     assert "Write a plan for this feature." in cmd_parts
@@ -92,7 +94,8 @@ def test_opencode_uses_worktree_when_set():
 def test_prompt_passed_as_arg():
     """Prompt is passed as a CLI argument to the agent command."""
     adapter = ClaudeCodeAdapter()
-    cmd = adapter._build_command("Write a plan.")
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("Write a plan.", ctx)
     assert "Write a plan." in cmd
     assert adapter._get_stdin_data("Write a plan.") is None
 
@@ -100,14 +103,16 @@ def test_prompt_passed_as_arg():
 def test_prompt_passed_as_arg_opencode():
     """Prompt is passed as a CLI argument to opencode run."""
     adapter = OpenCodeAdapter()
-    cmd = adapter._build_command("Write a plan.")
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("Write a plan.", ctx)
     assert "Write a plan." in cmd
     assert adapter._get_stdin_data("Write a plan.") is None
 
 
 def test_claude_code_no_model():
     adapter = ClaudeCodeAdapter()
-    cmd = adapter._build_command("test prompt")
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("test prompt", ctx)
     assert cmd == [
         "claude",
         "-p",
@@ -121,7 +126,8 @@ def test_claude_code_no_model():
 
 def test_claude_code_with_model():
     adapter = ClaudeCodeAdapter(model="claude-sonnet-4-20250514")
-    cmd = adapter._build_command("test prompt")
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("test prompt", ctx)
     assert cmd == [
         "claude",
         "-p",
@@ -146,13 +152,15 @@ def test_claude_code_stdin():
 
 def test_opencode_no_model():
     adapter = OpenCodeAdapter()
-    cmd = adapter._build_command("test prompt")
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("test prompt", ctx)
     assert cmd == ["opencode", "run", "--pure", "test prompt"]
 
 
 def test_opencode_with_model():
     adapter = OpenCodeAdapter(model="gpt-4o")
-    cmd = adapter._build_command("test prompt")
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("test prompt", ctx)
     assert cmd == ["opencode", "-m", "gpt-4o", "run", "--pure", "test prompt"]
 
 
@@ -164,13 +172,15 @@ def test_opencode_stdin():
 
 def test_codex_no_model():
     adapter = CodexAdapter()
-    cmd = adapter._build_command("test prompt")
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("test prompt", ctx)
     assert cmd == ["codex", "--quiet", "--model", "o4-mini"]
 
 
 def test_codex_with_model():
     adapter = CodexAdapter(model="o4-mini")
-    cmd = adapter._build_command("test prompt")
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("test prompt", ctx)
     assert cmd == ["codex", "--quiet", "--model", "o4-mini"]
 
 
@@ -299,3 +309,53 @@ def test_adapter_env_empty_when_no_keys():
     env = adapter._build_env()
     assert "ANTHROPIC_API_KEY" not in env
     assert "GITHUB_TOKEN" not in env
+
+
+def test_docker_adapter_claude():
+    from superseded.agents.docker import DockerAgentAdapter
+
+    adapter = DockerAgentAdapter(cli="claude-code", model="claude-sonnet-4-20250514")
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("Write a plan.", ctx)
+    assert cmd[0:3] == ["docker", "run", "--rm"]
+    assert "-v" in cmd
+    assert "/tmp:/workspace" in cmd
+    assert "node:20-slim" in cmd
+    assert "npx" in cmd
+    assert "@anthropic-ai/claude-code" in cmd
+    assert "--model" in cmd
+    assert "claude-sonnet-4-20250514" in cmd
+
+
+def test_docker_adapter_opencode():
+    from superseded.agents.docker import DockerAgentAdapter
+
+    adapter = DockerAgentAdapter(cli="opencode", model="gpt-4o")
+    ctx = _make_context("/tmp/repo/.superseded/worktrees/SUP-001")
+    cmd = adapter._build_command("Write a plan.", ctx)
+    assert cmd[0:3] == ["docker", "run", "--rm"]
+    assert "-v" in cmd
+    assert "/tmp/repo/.superseded/worktrees/SUP-001:/workspace" in cmd
+    assert "python:3.12-slim" in cmd
+    assert "sh" in cmd
+    assert "-c" in cmd
+
+    # Check inner command and positional arguments
+    sh_idx = cmd.index("sh")
+    assert cmd[sh_idx + 1] == "-c"
+    inner_cmd = cmd[sh_idx + 2]
+    assert "pip install --user uv && ~/.local/bin/uvx opencode" in inner_cmd
+    assert "-m gpt-4o" in inner_cmd
+    assert 'run --pure "$1"' in inner_cmd
+
+    assert cmd[sh_idx + 3] == "--"
+    assert cmd[sh_idx + 4] == "Write a plan."
+
+
+def test_factory_sandbox_docker():
+    factory = AgentFactory()
+    agent = factory.create(cli="opencode", sandbox="docker")
+    from superseded.agents.docker import DockerAgentAdapter
+
+    assert isinstance(agent, DockerAgentAdapter)
+    assert agent.cli == "opencode"

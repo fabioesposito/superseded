@@ -4,7 +4,7 @@ from pathlib import Path
 from superseded.agents.base import SubprocessAgentAdapter
 from superseded.agents.factory import AgentFactory
 from superseded.db import Database
-from superseded.models import Issue, Stage
+from superseded.models import AgentContext, Issue, Stage
 from superseded.pipeline.context import ContextAssembler
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.harness import HarnessRunner
@@ -17,7 +17,7 @@ def _agent_factory(agent):
 
 
 class EchoAdapter(SubprocessAgentAdapter):
-    def _build_command(self, prompt: str) -> list[str]:
+    def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
         return ["echo", prompt]
 
 
@@ -39,7 +39,7 @@ async def test_full_streaming_pipeline():
         event_manager = PipelineEventManager()
         runner = HarnessRunner(
             agent_factory=_agent_factory(agent),
-            repo_path="/tmp/testrepo",
+            repo_path=tmp,
             event_manager=event_manager,
         )
 
@@ -110,14 +110,14 @@ async def test_streaming_records_single_attempt():
         await db.upsert_issue(issue)
 
         class FailAdapter(SubprocessAgentAdapter):
-            def _build_command(self, prompt: str) -> list[str]:
+            def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
                 return ["sh", "-c", "echo fail; exit 1"]
 
         agent = FailAdapter()
         event_manager = PipelineEventManager()
         runner = HarnessRunner(
             agent_factory=_agent_factory(agent),
-            repo_path="/tmp/testrepo",
+            repo_path=tmp,
             event_manager=event_manager,
         )
 

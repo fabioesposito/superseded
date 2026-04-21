@@ -94,12 +94,23 @@ class HarnessRunner:
                 artifact_file.write_text(agent_result.stdout, encoding="utf-8")
 
             questions_file = Path(artifacts_path) / "questions.md"
+            approval_file = Path(artifacts_path) / "approval.md"
             if questions_file.exists():
                 return StageResult(
                     stage=stage,
                     passed=False,
                     output=agent_result.stdout,
                     error="awaiting-input",
+                    artifacts=[],
+                    started_at=started,
+                    finished_at=finished,
+                )
+            if approval_file.exists():
+                return StageResult(
+                    stage=stage,
+                    passed=False,
+                    output=agent_result.stdout,
+                    error="approval-required",
                     artifacts=[],
                     started_at=started,
                     finished_at=finished,
@@ -218,12 +229,23 @@ class HarnessRunner:
                 artifact_file.write_text(stdout, encoding="utf-8")
 
             questions_file = Path(artifacts_path) / "questions.md"
+            approval_file = Path(artifacts_path) / "approval.md"
             if questions_file.exists():
                 return StageResult(
                     stage=stage,
                     passed=False,
                     output=stdout,
                     error="awaiting-input",
+                    artifacts=[],
+                    started_at=datetime.datetime.now(datetime.UTC),
+                    finished_at=datetime.datetime.now(datetime.UTC),
+                )
+            if approval_file.exists():
+                return StageResult(
+                    stage=stage,
+                    passed=False,
+                    output=stdout,
+                    error="approval-required",
                     artifacts=[],
                     started_at=datetime.datetime.now(datetime.UTC),
                     finished_at=datetime.datetime.now(datetime.UTC),

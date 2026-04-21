@@ -131,6 +131,7 @@ async def test_notification_service_called_on_stage_pass():
         await db.initialize()
 
         mock_runner = AsyncMock()
+        mock_runner.stage_configs = {}
         mock_runner.run_stage_streaming.return_value = StageResult(
             stage=Stage.SPEC, passed=True, output="spec done"
         )

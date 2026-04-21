@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from superseded.github import fetch_github_issue, format_description
-from superseded.models import Issue, Stage
+from superseded.models import Issue, Stage, StageResult
 from superseded.routes import _csrf_token_for_request, get_templates
 from superseded.routes.deps import Deps, _run_and_advance, get_deps
 from superseded.tickets.reader import list_issues
@@ -190,6 +190,17 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
                 if line.strip().startswith("## Q:"):
                     questions.append(line.strip()[5:].strip())
 
+    approval_content = ""
+    if issue.pause_reason == "approval-required":
+        artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
+        repos = issue.repos if issue.repos else [None]
+        for repo_name in repos:
+            effective_repo = repo_name or "primary"
+            approval_file = Path(artifacts_path) / effective_repo / "approval.md"
+            if approval_file.exists():
+                approval_content = approval_file.read_text(encoding="utf-8")
+                break
+
     response = get_templates().TemplateResponse(
         request,
         "issue_detail.html",
@@ -203,6 +214,7 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
             "durations": durations,
             "questions_content": questions_content,
             "questions": questions,
+            "approval_content": approval_content,
         },
     )
     if "csrf_token" not in request.cookies:
@@ -366,4 +378,76 @@ async def update_issue_body(
         )
     )
 
+    return await _run_and_advance(deps, issue_id, issue.stage, request, background_tasks)
+
+
+@router.post("/{issue_id}/approve", response_class=HTMLResponse)
+async def approve_issue(
+    request: Request,
+    issue_id: str,
+    background_tasks: BackgroundTasks,
+    deps: Deps = Depends(get_deps),
+):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return HTMLResponse(content="")
+
+    issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
+    matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
+    if not matching:
+        return HTMLResponse(content="")
+    issue = matching[0]
+
+    artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
+    repos = issue.repos if issue.repos else [None]
+
+    for repo_name in repos:
+        effective_repo = repo_name or "primary"
+        approval_file = Path(artifacts_path) / effective_repo / "approval.md"
+        if approval_file.exists():
+            approval_file.unlink()
+
+    await deps.db.update_pause_reason(issue_id, "")
+
+    return await _run_and_advance(deps, issue_id, issue.stage, request, background_tasks)
+
+
+@router.post("/{issue_id}/reject", response_class=HTMLResponse)
+async def reject_issue(
+    request: Request,
+    issue_id: str,
+    background_tasks: BackgroundTasks,
+    deps: Deps = Depends(get_deps),
+):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return HTMLResponse(content="")
+
+    form = await _get_form_data(request)
+    feedback = str(form.get("feedback", "")).strip()
+
+    issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
+    matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
+    if not matching:
+        return HTMLResponse(content="")
+    issue = matching[0]
+
+    for repo_name in (issue.repos if issue.repos else [None]):
+        effective_repo = repo_name or "primary"
+        result = StageResult(
+            stage=issue.stage,
+            passed=False,
+            output="",
+            error=f"User rejected with feedback: {feedback}",
+        )
+        await deps.db.save_stage_result(issue_id, result, repo=effective_repo)
+
+        artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
+        approval_file = Path(artifacts_path) / effective_repo / "approval.md"
+        if approval_file.exists():
+            approval_file.unlink()
+
+    await deps.db.update_pause_reason(issue_id, "")
     return await _run_and_advance(deps, issue_id, issue.stage, request, background_tasks)

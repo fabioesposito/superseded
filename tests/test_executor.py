@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from superseded.config import SupersededConfig
+from superseded.config import StageAgentConfig, SupersededConfig
 from superseded.db import Database
 from superseded.models import Issue, Stage, StageResult
 from superseded.pipeline.executor import StageExecutor
@@ -42,6 +42,7 @@ async def executor_setup():
 
         config = SupersededConfig(repo_path=str(repo_path))
         mock_runner = AsyncMock()
+        mock_runner.stage_configs = {}
         worktree_manager = WorktreeManager(str(repo_path))
 
         executor = StageExecutor(
@@ -184,6 +185,58 @@ async def test_executor_multi_repo_partial_failure(executor_setup):
     assert "frontend ok" in result.output
     assert "backend failed" in result.output
     assert call_count == 2
+
+
+async def test_executor_approval_required_updates_status(executor_setup):
+    executor, db, config, mock_runner, _, _, ticket_path = executor_setup
+
+    async def side_effect(**kwargs):
+        artifacts_path = kwargs.get("artifacts_path")
+        if artifacts_path:
+            (Path(artifacts_path) / "approval.md").write_text("approve me")
+        return StageResult(stage=Stage.SPEC, passed=True, output="please approve")
+
+    mock_runner.run_stage_streaming.side_effect = side_effect
+
+    issue = Issue(id="SUP-001", title="Test", filepath=ticket_path)
+    await db.upsert_issue(issue)
+
+    result = await executor.run_stage(issue, Stage.SPEC, config)
+    assert result.passed is False
+
+    db_issue = await db.get_issue("SUP-001")
+    assert db_issue["pause_reason"] == "approval-required"
+
+
+async def test_executor_upfront_approval_generation(executor_setup):
+    executor, db, config, mock_runner, _, _repo_path, ticket_path = executor_setup
+
+    # Mock require_approval to be True
+    mock_runner.stage_configs = {
+        "spec": StageAgentConfig(cli="claude-code", model="", require_approval=True)
+    }
+
+    issue = Issue(id="SUP-001", title="Test", filepath=ticket_path)
+    await db.upsert_issue(issue)
+
+    result = await executor.run_stage(issue, Stage.SPEC, config)
+
+    assert result.passed is False
+    assert "approval-required" in result.output
+
+    # Ensure agent was not called
+    mock_runner.run_stage_streaming.assert_not_called()
+
+    # Ensure file was created
+    approval_file = (
+        Path(config.repo_path) / config.artifacts_dir / issue.id / "primary" / "approval.md"
+    )
+    assert approval_file.exists()
+    assert "requires manual approval" in approval_file.read_text()
+
+    # Check DB status
+    db_issue = await db.get_issue("SUP-001")
+    assert db_issue["pause_reason"] == "approval-required"
 
 
 def subprocess_run(args: list[str], cwd: str):

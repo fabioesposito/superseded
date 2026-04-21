@@ -126,6 +126,7 @@ async def test_run_stage_multi_repo_fans_out(tmp_multi_repo):
 
     mock_result = StageResult(stage=Stage.SPEC, passed=True, output="ok")
     mock_runner = AsyncMock()
+    mock_runner.stage_configs = {}
     mock_runner.run_stage_streaming.return_value = mock_result
 
     worktree_manager = WorktreeManager(tmp_multi_repo)
@@ -182,6 +183,7 @@ Single repo body.
 
     mock_result = StageResult(stage=Stage.SPEC, passed=True, output="ok")
     mock_runner = AsyncMock()
+    mock_runner.stage_configs = {}
     mock_runner.run_stage_streaming.return_value = mock_result
 
     worktree_manager = WorktreeManager(tmp_multi_repo)

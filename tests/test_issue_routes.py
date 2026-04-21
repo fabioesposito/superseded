@@ -293,3 +293,65 @@ async def test_create_issue_saves_github_url(tmp_repo):
 
     content = md_files[0].read_text()
     assert 'github_url: "https://github.com/owner/repo/issues/42"' in content
+
+
+async def test_approve_issue(tmp_repo):
+    app = create_app(repo_path=tmp_repo)
+    await app.state.db.initialize()
+
+    issue = Issue(id="SUP-001", title="Test", filepath="", pause_reason="awaiting-input", stage=Stage.PLAN)
+    await app.state.db.upsert_issue(issue)
+
+    artifacts_dir = Path(tmp_repo) / ".superseded" / "artifacts" / "SUP-001" / "primary"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    (artifacts_dir / "approval.md").write_text("Needs approval")
+
+    with patch("superseded.routes.web.issues._run_and_advance") as mock_run:
+        from fastapi.responses import HTMLResponse
+        mock_run.return_value = HTMLResponse(content="advanced")
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            token = await _get_csrf(client)
+            resp = await client.post(
+                "/issues/SUP-001/approve",
+                headers={"X-CSRF-Token": token},
+            )
+
+    assert resp.status_code == 200
+    assert not (artifacts_dir / "approval.md").exists()
+    db_issue = await app.state.db.get_issue("SUP-001")
+    assert db_issue["pause_reason"] == ""
+    mock_run.assert_called_once()
+
+
+async def test_reject_issue(tmp_repo):
+    app = create_app(repo_path=tmp_repo)
+    await app.state.db.initialize()
+
+    issue = Issue(id="SUP-001", title="Test", filepath="", pause_reason="awaiting-input", stage=Stage.PLAN)
+    await app.state.db.upsert_issue(issue)
+
+    artifacts_dir = Path(tmp_repo) / ".superseded" / "artifacts" / "SUP-001" / "primary"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    (artifacts_dir / "approval.md").write_text("Needs approval")
+
+    with patch("superseded.routes.web.issues._run_and_advance") as mock_run:
+        from fastapi.responses import HTMLResponse
+        mock_run.return_value = HTMLResponse(content="advanced")
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            token = await _get_csrf(client)
+            resp = await client.post(
+                "/issues/SUP-001/reject",
+                data={"feedback": "I don't like it"},
+                headers={"X-CSRF-Token": token},
+            )
+
+    assert resp.status_code == 200
+    assert not (artifacts_dir / "approval.md").exists()
+    db_issue = await app.state.db.get_issue("SUP-001")
+    assert db_issue["pause_reason"] == ""
+
+    results = await app.state.db.get_stage_results("SUP-001")
+    assert len(results) == 1
+    assert "I don't like it" in results[0]["error"]
+
+    mock_run.assert_called_once()
