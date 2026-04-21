@@ -12,22 +12,18 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from superseded.github import fetch_github_issue, format_description
 from superseded.models import Issue, Stage, StageResult
 from superseded.routes import _csrf_token_for_request, get_templates
-from superseded.routes.deps import Deps, _run_and_advance, get_deps
+from superseded.routes.service import (
+    Deps,
+    format_durations,
+    get_deps,
+    get_form_data,
+    run_and_advance,
+)
 from superseded.tickets.reader import list_issues
 from superseded.tickets.writer import write_issue
 from superseded.validation import InvalidInputError, validate_issue_id
 
 router = APIRouter(prefix="/issues")
-
-
-async def _get_form_data(request: Request):
-    if hasattr(request.state, "form_data"):
-        return request.state.form_data
-    try:
-        form = await request.form()
-        return dict(form)
-    except Exception:
-        return {}
 
 
 @router.get("/new", response_class=HTMLResponse)
@@ -43,7 +39,7 @@ async def new_issue_form(request: Request, deps: Deps = Depends(get_deps)):
 
 @router.post("/import", response_class=HTMLResponse)
 async def import_github_issue(request: Request, deps: Deps = Depends(get_deps)):
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     github_url = str(form.get("github_url", "")).strip()
 
     try:
@@ -73,7 +69,7 @@ async def import_github_issue(request: Request, deps: Deps = Depends(get_deps)):
 
 @router.post("/new", response_class=RedirectResponse)
 async def create_issue(request: Request, deps: Deps = Depends(get_deps)):
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     title = str(form.get("title", "")).strip()
     body = str(form.get("body", "")).strip()
     labels_str = str(form.get("labels", "")).strip()
@@ -166,18 +162,7 @@ async def issue_detail(request: Request, issue_id: str, deps: Deps = Depends(get
         repo = r.get("repo", "primary")
         results_by_repo.setdefault(repo, []).append(r)
 
-    durations: dict[str, str] = {}
-    for r in stage_results:
-        sa = r.get("started_at")
-        fa = r.get("finished_at")
-        if sa and fa:
-            started = datetime.datetime.fromisoformat(str(sa)) if isinstance(sa, str) else sa
-            finished = datetime.datetime.fromisoformat(str(fa)) if isinstance(fa, str) else fa
-            dur = (finished - started).total_seconds()
-            if dur >= 60:
-                durations[r["stage"]] = f"{int(dur // 60)}m {int(dur % 60)}s"
-            else:
-                durations[r["stage"]] = f"{int(dur)}s"
+    durations = format_durations(stage_results)
 
     questions_content = ""
     questions: list[str] = []
@@ -312,9 +297,19 @@ async def answer_questions(
     try:
         issue_id = validate_issue_id(issue_id)
     except InvalidInputError:
-        return HTMLResponse(content="")
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Invalid issue ID",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=400,
+        )
 
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
 
     answers_parts = []
     for key, value in form.items():
@@ -333,10 +328,19 @@ async def answer_questions(
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
     if not matching:
-        return HTMLResponse(content="")
-    issue = matching[0]
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Issue not found",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=404,
+        )
 
-    return await _run_and_advance(deps, issue_id, issue.stage, request, background_tasks)
+    return await run_and_advance(deps, issue_id, request, background_tasks)
 
 
 @router.post("/{issue_id}/update-body", response_class=HTMLResponse)
@@ -349,15 +353,35 @@ async def update_issue_body(
     try:
         issue_id = validate_issue_id(issue_id)
     except InvalidInputError:
-        return HTMLResponse(content="")
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Invalid issue ID",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=400,
+        )
 
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     new_body = str(form.get("body", "")).strip()
 
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
     if not matching:
-        return HTMLResponse(content="")
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Issue not found",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=404,
+        )
 
     issue = matching[0]
 
@@ -378,7 +402,7 @@ async def update_issue_body(
         )
     )
 
-    return await _run_and_advance(deps, issue_id, issue.stage, request, background_tasks)
+    return await run_and_advance(deps, issue_id, request, background_tasks)
 
 
 @router.post("/{issue_id}/approve", response_class=HTMLResponse)
@@ -391,26 +415,34 @@ async def approve_issue(
     try:
         issue_id = validate_issue_id(issue_id)
     except InvalidInputError:
-        return HTMLResponse(content="")
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Invalid issue ID",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=400,
+        )
 
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
     if not matching:
-        return HTMLResponse(content="")
-    issue = matching[0]
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Issue not found",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=404,
+        )
 
-    artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
-    repos = issue.repos if issue.repos else [None]
-
-    for repo_name in repos:
-        effective_repo = repo_name or "primary"
-        approval_file = Path(artifacts_path) / effective_repo / "approval.md"
-        if approval_file.exists():
-            approval_file.unlink()
-
-    await deps.db.update_pause_reason(issue_id, "")
-
-    return await _run_and_advance(deps, issue_id, issue.stage, request, background_tasks)
+    return await run_and_advance(deps, issue_id, request, background_tasks)
 
 
 @router.post("/{issue_id}/reject", response_class=HTMLResponse)
@@ -423,15 +455,35 @@ async def reject_issue(
     try:
         issue_id = validate_issue_id(issue_id)
     except InvalidInputError:
-        return HTMLResponse(content="")
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Invalid issue ID",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=400,
+        )
 
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     feedback = str(form.get("feedback", "")).strip()
 
     issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
     matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
     if not matching:
-        return HTMLResponse(content="")
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Issue not found",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=404,
+        )
     issue = matching[0]
 
     for repo_name in (issue.repos if issue.repos else [None]):
@@ -450,4 +502,4 @@ async def reject_issue(
             approval_file.unlink()
 
     await deps.db.update_pause_reason(issue_id, "")
-    return await _run_and_advance(deps, issue_id, issue.stage, request, background_tasks)
+    return await run_and_advance(deps, issue_id, request, background_tasks)

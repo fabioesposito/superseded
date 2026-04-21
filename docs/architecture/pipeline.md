@@ -17,7 +17,7 @@ Each stage runs as an isolated agent subprocess. The agent receives progressive 
 
 ## Retry Logic
 
-Failed stages retry up to `max_retries` (configurable in `.superseded/config.yaml`).
+Failed stages pause the pipeline. You can retry manually from the web UI.
 Error context from previous attempts is injected into the re-prompt.
 
 ## Worktree Isolation

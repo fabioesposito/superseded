@@ -9,15 +9,14 @@ from fastapi.responses import HTMLResponse
 
 from superseded.models import Stage
 from superseded.routes import get_templates
-from superseded.routes.deps import (
+from superseded.routes.service import (
     Deps,
     _find_issue,
     _get_event_manager,
     _render_issue_detail_oob,
     _render_running_indicator,
-    _run_stage_background,
-    _running,
     get_deps,
+    run_and_advance,
 )
 from superseded.tickets.reader import list_issues
 from superseded.validation import InvalidInputError, validate_issue_id
@@ -32,30 +31,7 @@ async def advance_issue(
     background_tasks: BackgroundTasks,
     deps: Deps = Depends(get_deps),
 ):
-    try:
-        issue_id = validate_issue_id(issue_id)
-    except InvalidInputError:
-        return HTMLResponse(content="")
-    issue = _find_issue(deps, issue_id)
-    if issue is None:
-        return HTMLResponse(content="")
-
-    if issue_id in _running:
-        return _render_running_indicator(request, issue.stage.value)
-
-    _running.add(issue_id)
-    background_tasks.add_task(_run_stage_background, deps, issue_id, issue.stage)
-
-    templates = get_templates()
-    running_html = templates.TemplateResponse(
-        request, "_running.html", {"stage_name": issue.stage.value}
-    ).body.decode()
-    poll_html = (
-        f'<div id="issue-detail-content" hx-get="/pipeline/issues/{issue_id}/status" '
-        f'hx-trigger="every 3s" hx-swap="innerHTML" hx-target="#issue-detail-content">'
-        f"{running_html}</div>"
-    )
-    return HTMLResponse(content=poll_html)
+    return await run_and_advance(deps, issue_id, request, background_tasks)
 
 
 @router.post("/issues/{issue_id}/retry", response_class=HTMLResponse)
@@ -65,30 +41,7 @@ async def retry_issue(
     background_tasks: BackgroundTasks,
     deps: Deps = Depends(get_deps),
 ):
-    try:
-        issue_id = validate_issue_id(issue_id)
-    except InvalidInputError:
-        return HTMLResponse(content="")
-    issue = _find_issue(deps, issue_id)
-    if issue is None:
-        return HTMLResponse(content="")
-
-    if issue_id in _running:
-        return _render_running_indicator(request, issue.stage.value)
-
-    _running.add(issue_id)
-    background_tasks.add_task(_run_stage_background, deps, issue_id, issue.stage)
-
-    templates = get_templates()
-    running_html = templates.TemplateResponse(
-        request, "_running.html", {"stage_name": issue.stage.value}
-    ).body.decode()
-    poll_html = (
-        f'<div id="issue-detail-content" hx-get="/pipeline/issues/{issue_id}/status" '
-        f'hx-trigger="every 3s" hx-swap="innerHTML" hx-target="#issue-detail-content">'
-        f"{running_html}</div>"
-    )
-    return HTMLResponse(content=poll_html)
+    return await run_and_advance(deps, issue_id, request, background_tasks)
 
 
 @router.get("/issues/{issue_id}/status", response_class=HTMLResponse)
@@ -98,11 +51,12 @@ async def issue_pipeline_status(request: Request, issue_id: str, deps: Deps = De
     except InvalidInputError:
         return HTMLResponse(content="")
 
-    if issue_id in _running:
-        issue = _find_issue(deps, issue_id)
-        if issue:
-            return _render_running_indicator(request, issue.stage.value)
-        return HTMLResponse(content="")
+    async with deps.pipeline.running_lock:
+        if issue_id in deps.pipeline.running_issues:
+            issue = _find_issue(deps, issue_id)
+            if issue:
+                return _render_running_indicator(request, issue.stage.value)
+            return HTMLResponse(content="")
 
     issue = _find_issue(deps, issue_id)
     if issue is None:

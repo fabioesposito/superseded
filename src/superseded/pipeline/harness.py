@@ -26,19 +26,11 @@ class HarnessRunner:
         repo_path: str,
         agent_factory: AgentFactory | None = None,
         stage_configs: dict[str, StageAgentConfig] | None = None,
-        max_retries: int = 3,
-        retryable_stages: list[str] | None = None,
         event_manager: PipelineEventManager | None = None,
     ) -> None:
         self.agent_factory = agent_factory or AgentFactory()
         self.stage_configs = stage_configs or {}
         self.repo_path = repo_path
-        self.max_retries = max_retries
-        self.retryable_stages = retryable_stages or [
-            "build",
-            "verify",
-            "review",
-        ]
         self.context_assembler = ContextAssembler(repo_path)
         self.event_manager = event_manager or PipelineEventManager()
         self.worktree_manager = WorktreeManager(repo_path)
@@ -57,7 +49,7 @@ class HarnessRunner:
         previous_errors: list[str] | None = None,
         repo: str | None = None,
     ) -> StageResult:
-        """Run a stage once (no retries). User decides when to retry."""
+        """Run a stage once."""
         worktree_path = ""
         if repo and self.worktree_manager.exists(issue.id, repo=repo):
             worktree_path = str(self.worktree_manager.get_path(issue.id, repo=repo))
@@ -151,7 +143,7 @@ class HarnessRunner:
         previous_errors: list[str] | None = None,
         repo: str | None = None,
     ) -> StageResult:
-        """Run a stage once with streaming, saving all events to DB. User decides when to retry."""
+        """Run a stage once with streaming, saving all events to DB."""
         em = event_manager or self.event_manager
         worktree_path = ""
         if repo and self.worktree_manager.exists(issue.id, repo=repo):

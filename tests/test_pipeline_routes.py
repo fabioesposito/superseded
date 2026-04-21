@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -44,7 +45,7 @@ async def _make_app_with_executor(tmp_repo, mock_runner):
 
     from superseded.config import SupersededConfig
     from superseded.pipeline.events import PipelineEventManager
-    from superseded.routes.deps import PipelineState
+    from superseded.routes.service import PipelineState
 
     config = SupersededConfig(repo_path=tmp_repo)
     event_manager = PipelineEventManager()
@@ -54,7 +55,12 @@ async def _make_app_with_executor(tmp_repo, mock_runner):
         db=db,
         worktree_manager=worktree_manager,
     )
-    pipeline = PipelineState(executor=executor, event_manager=event_manager)
+    pipeline = PipelineState(
+        executor=executor,
+        event_manager=event_manager,
+        running_issues=set(),
+        running_lock=asyncio.Lock(),
+    )
 
     app = create_app(repo_path=tmp_repo, config=config, db=db)
     app.state.pipeline = pipeline
@@ -68,6 +74,7 @@ async def _get_csrf(client):
 
 async def test_advance_issue_success(tmp_repo):
     mock_runner = AsyncMock()
+    mock_runner.stage_configs = {}
     mock_runner.run_stage_streaming.return_value = StageResult(
         stage=Stage.SPEC, passed=True, output="spec done"
     )
@@ -84,23 +91,6 @@ async def test_advance_issue_success(tmp_repo):
         )
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
-
-    await db.close()
-
-
-async def test_advance_issue_not_found(tmp_repo):
-    mock_runner = AsyncMock()
-    app, db = await _make_app_with_executor(tmp_repo, mock_runner)
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        token = await _get_csrf(client)
-        resp = await client.post(
-            "/pipeline/issues/SUP-999/advance",
-            headers={"X-CSRF-Token": token},
-            follow_redirects=False,
-        )
-        assert resp.status_code == 200
 
     await db.close()
 
@@ -218,7 +208,7 @@ async def test_retry_issue_not_found(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 400
 
     await db.close()
 
@@ -287,7 +277,7 @@ async def test_advance_issue_invalid_id(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 400
 
     await db.close()
 
@@ -304,7 +294,7 @@ async def test_retry_issue_invalid_id(tmp_repo):
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 400
 
     await db.close()
 

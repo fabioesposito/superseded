@@ -141,8 +141,7 @@ async def test_harness_full_lifecycle():
         artifacts_dir = config_dir / "artifacts"
         artifacts_dir.mkdir()
 
-        config = load_config(repo)
-        assert config.max_retries == 3
+        load_config(repo)
 
         filepath = str(issues_dir / "SUP-001-test-issue.md")
         write_issue(filepath, SAMPLE_TICKET)

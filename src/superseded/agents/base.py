@@ -58,16 +58,38 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(input=stdin_data), timeout=self.timeout
             )
+            files_changed = await self._get_files_changed(cwd)
             return AgentResult(
                 exit_code=proc.returncode or 0,
                 stdout=stdout.decode("utf-8", errors="replace"),
                 stderr=stderr.decode("utf-8", errors="replace"),
+                files_changed=files_changed,
             )
         except TimeoutError:
             proc.kill()
             return AgentResult(
                 exit_code=-1, stdout="", stderr=f"Agent timed out after {self.timeout}s"
             )
+
+    async def _get_files_changed(self, cwd: str) -> list[str]:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "diff",
+                "--name-only",
+                "HEAD",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+            )
+            stdout, _stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+            if proc.returncode == 0:
+                output = stdout.decode("utf-8", errors="replace").strip()
+                if output:
+                    return output.split("\n")
+        except (TimeoutError, FileNotFoundError, OSError):
+            pass
+        return []
 
     async def run_streaming(self, prompt: str, context: AgentContext) -> AsyncIterator[AgentEvent]:
         cmd = self._build_command(prompt, context)

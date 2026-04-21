@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
@@ -7,7 +8,7 @@ from fastapi.responses import HTMLResponse
 
 from superseded.config import RepoEntry, StageAgentConfig, SupersededConfig, save_config
 from superseded.routes import _csrf_token_for_request, get_templates
-from superseded.routes.deps import Deps, get_deps
+from superseded.routes.service import Deps, get_deps, get_form_data
 from superseded.validation import (
     InvalidInputError,
     validate_directory_path,
@@ -15,17 +16,9 @@ from superseded.validation import (
     validate_repo_path,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
-
-
-async def _get_form_data(request: Request):
-    if hasattr(request.state, "form_data"):
-        return request.state.form_data
-    try:
-        form = await request.form()
-        return dict(form)
-    except Exception:
-        return {}
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -60,7 +53,7 @@ async def add_repo(
     request: Request,
     deps: Deps = Depends(get_deps),
 ):
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     name = str(form.get("name", "")).strip()
     git_url = str(form.get("git_url", "")).strip()
     path = str(form.get("path", "")).strip()
@@ -111,7 +104,7 @@ async def delete_repo(
 
 @router.post("/settings/token", response_class=HTMLResponse)
 async def update_token(request: Request, deps: Deps = Depends(get_deps)):
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     token = str(form.get("github_token", "")).strip()
     config = deps.config
     config.github_token = token
@@ -129,7 +122,7 @@ async def update_agents(
     request: Request,
     deps: Deps = Depends(get_deps),
 ):
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     config = deps.config
     stages_data = {
         "spec": StageAgentConfig(
@@ -177,7 +170,7 @@ def _mask_key(key: str) -> str:
 
 @router.post("/settings/api-keys", response_class=HTMLResponse)
 async def update_api_keys(request: Request, deps: Deps = Depends(get_deps)):
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     config = deps.config
     config.openai_api_key = str(form.get("openai_api_key", "")).strip()
     config.anthropic_api_key = str(form.get("anthropic_api_key", "")).strip()
@@ -198,7 +191,7 @@ async def update_api_keys(request: Request, deps: Deps = Depends(get_deps)):
 
 @router.post("/settings/source-root", response_class=HTMLResponse)
 async def update_source_root(request: Request, deps: Deps = Depends(get_deps)):
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     raw_path = str(form.get("source_code_root", "")).strip()
     config = deps.config
     try:
@@ -222,7 +215,7 @@ async def update_source_root(request: Request, deps: Deps = Depends(get_deps)):
 
 @router.post("/settings/notifications", response_class=HTMLResponse)
 async def update_notifications(request: Request, deps: Deps = Depends(get_deps)):
-    form = await _get_form_data(request)
+    form = await get_form_data(request)
     config = deps.config
     enabled = bool(form.get("enabled"))
     ntfy_topic = str(form.get("ntfy_topic", "")).strip()
@@ -241,6 +234,5 @@ def _reload_pipeline(app, config: SupersededConfig) -> None:
     from superseded.main import _build_pipeline_state
 
     app.state.config = config
-    pipeline = _build_pipeline_state(config)
-    pipeline.executor.db = app.state.db
+    pipeline = _build_pipeline_state(config, app.state.db)
     app.state.pipeline = pipeline

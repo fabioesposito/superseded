@@ -54,11 +54,6 @@ host: 0.0.0.0
 
 # Pipeline settings
 stage_timeout_seconds: 600
-max_retries: 3
-retryable_stages:
-  - build
-  - verify
-  - review
 
 # Multi-repo support (optional)
 repos:

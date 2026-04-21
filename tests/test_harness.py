@@ -68,9 +68,7 @@ async def test_harness_multi_repo_fan_out():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
 
-    runner = HarnessRunner(
-        agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", max_retries=1
-    )
+    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
 
     issue = Issue(
         id="SUP-001",
@@ -102,8 +100,25 @@ async def test_harness_multi_repo_single_repo_fallback():
     mock_agent = AsyncMock()
     mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
 
-    runner = HarnessRunner(
-        agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", max_retries=1
+    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
+
+    issue = Issue(
+        id="SUP-001",
+        title="Single repo issue",
+        filepath=".superseded/issues/SUP-001-test.md",
+    )
+
+    issue = Issue(
+        id="SUP-001",
+        title="Single repo issue",
+        filepath=".superseded/issues/SUP-001-test.md",
+    )
+
+    issue = Issue(
+        id="SUP-001",
+        title="Multi-repo issue",
+        filepath=".superseded/issues/SUP-001-test.md",
+        repos=["frontend", "backend"],
     )
 
     issue = Issue(

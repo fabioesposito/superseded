@@ -20,7 +20,7 @@ from superseded.pipeline.worktree import WorktreeManager
 from superseded.routes.api.pipeline import api_router as pipeline_api_router
 from superseded.routes.auth import AuthMiddleware
 from superseded.routes.csrf import CsrfMiddleware
-from superseded.routes.deps import PipelineState
+from superseded.routes.service import PipelineState
 from superseded.routes.web.dashboard import router as dashboard_router
 from superseded.routes.web.issues import router as issues_router
 from superseded.routes.web.pipeline import router as pipeline_router
@@ -37,7 +37,9 @@ async def lifespan(app: FastAPI):
     await db.close()
 
 
-def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
+def _build_pipeline_state(config: SupersededConfig, db: Database) -> PipelineState:
+    import asyncio
+
     event_manager = PipelineEventManager()
     factory = AgentFactory(
         default_agent=config.default_agent,
@@ -51,8 +53,6 @@ def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
     runner = HarnessRunner(
         agent_factory=factory,
         repo_path=config.repo_path,
-        max_retries=config.max_retries,
-        retryable_stages=config.retryable_stages,
         event_manager=event_manager,
         stage_configs=config.stages,
     )
@@ -67,11 +67,16 @@ def _build_pipeline_state(config: SupersededConfig) -> PipelineState:
     )
     executor = StageExecutor(
         runner=runner,
-        db=None,
+        db=db,
         worktree_manager=worktree_manager,
         notification_service=notification_service,
     )
-    return PipelineState(executor=executor, event_manager=event_manager)
+    return PipelineState(
+        executor=executor,
+        event_manager=event_manager,
+        running_issues=set(),
+        running_lock=asyncio.Lock(),
+    )
 
 
 def create_app(
@@ -94,8 +99,7 @@ def create_app(
     else:
         app.state.db = Database(str(Path(config.repo_path) / config.db_path))
 
-    app.state.pipeline = _build_pipeline_state(config)
-    app.state.pipeline.executor.db = app.state.db
+    app.state.pipeline = _build_pipeline_state(config, app.state.db)
 
     static_dir = Path(__file__).parent.parent.parent / "static"
     if static_dir.exists():

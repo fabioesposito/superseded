@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from superseded.models import PipelineMetrics
-from superseded.routes.deps import Deps, get_deps
+from superseded.routes.service import Deps, get_deps
 
 api_router = APIRouter(prefix="/api/pipeline")
 
@@ -15,9 +15,27 @@ async def get_metrics(deps: Deps = Depends(get_deps)):
     return await _compute_metrics(deps)
 
 
+@api_router.get("/issues")
+async def list_issues_api(
+    deps: Deps = Depends(get_deps),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+):
+    offset = (page - 1) * per_page
+    issues = await deps.db.list_issues(offset=offset, limit=per_page)
+    total = await deps.db.count_issues()
+    return {
+        "issues": issues,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": (total + per_page - 1) // per_page,
+    }
+
+
 async def _compute_metrics(deps: Deps) -> dict:
-    issues = await deps.db.list_issues()
-    total = len(issues)
+    total = await deps.db.count_issues()
+    issues = await deps.db.list_issues(offset=0, limit=total)
     by_status: dict[str, int] = {}
     for issue in issues:
         s = issue["status"]

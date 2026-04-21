@@ -95,7 +95,7 @@ Located at `vendor/impeccable/source/skills/`. Design skill with 18 commands:
 
 Superseded is now an agent harness, not just a linear pipeline:
 
-- **Feedback loops**: Stages retry on failure with error context injected into re-prompts. Configurable via `max_retries` in `.superseded/config.yaml`.
+- **Feedback loops**: Stages retry on failure with error context injected into re-prompts. Retry is manual — click Retry in the UI to re-run a failed stage.
 - **Execution plans**: The Plan stage writes structured `plan.md` to `.superseded/artifacts/{id}/plan.md`. Build/Verify/Review stages consume it.
 - **Progressive context**: Agents receive context in layers: AGENTS.md → docs/ index → ticket → previous artifacts → rules → skill prompt → error context.
 - **Worktree isolation**: BUILD/VERIFY/REVIEW stages run in isolated git worktrees. Changes merge on success, discard on failure.

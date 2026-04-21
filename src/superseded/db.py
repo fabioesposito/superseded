@@ -121,9 +121,11 @@ class Database:
         result["labels"] = json.loads(result["labels"])
         return result
 
-    async def list_issues(self) -> list[dict[str, Any]]:
+    async def list_issues(self, offset: int = 0, limit: int = 50) -> list[dict[str, Any]]:
         conn = self._require_conn()
-        cursor = await conn.execute("SELECT * FROM issues ORDER BY id")
+        cursor = await conn.execute(
+            "SELECT * FROM issues ORDER BY id LIMIT ? OFFSET ?", (limit, offset)
+        )
         rows = await cursor.fetchall()
         cols = [desc[0] for desc in cursor.description]
         results = []
@@ -132,6 +134,12 @@ class Database:
             d["labels"] = json.loads(d["labels"])
             results.append(d)
         return results
+
+    async def count_issues(self) -> int:
+        conn = self._require_conn()
+        cursor = await conn.execute("SELECT COUNT(*) FROM issues")
+        row = await cursor.fetchone()
+        return row[0] if row else 0
 
     async def update_issue_status(self, issue_id: str, status: IssueStatus, stage: Stage) -> None:
         conn = self._require_conn()
@@ -299,11 +307,13 @@ class Database:
         )
         await conn.commit()
 
-    async def get_agent_events(self, issue_id: str, limit: int = 200) -> list[dict[str, Any]]:
+    async def get_agent_events(
+        self, issue_id: str, offset: int = 0, limit: int = 200
+    ) -> list[dict[str, Any]]:
         conn = self._require_conn()
         cursor = await conn.execute(
-            "SELECT * FROM agent_events WHERE issue_id = ? ORDER BY id DESC LIMIT ?",
-            (issue_id, limit),
+            "SELECT * FROM agent_events WHERE issue_id = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+            (issue_id, limit, offset),
         )
         rows = await cursor.fetchall()
         cols = [desc[0] for desc in cursor.description]
@@ -314,11 +324,19 @@ class Database:
             results.append(d)
         return list(reversed(results))
 
-    async def get_recent_events(self, limit: int = 20) -> list[dict[str, Any]]:
+    async def count_agent_events(self, issue_id: str) -> int:
         conn = self._require_conn()
         cursor = await conn.execute(
-            "SELECT * FROM agent_events ORDER BY id DESC LIMIT ?",
-            (limit,),
+            "SELECT COUNT(*) FROM agent_events WHERE issue_id = ?", (issue_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+    async def get_recent_events(self, offset: int = 0, limit: int = 20) -> list[dict[str, Any]]:
+        conn = self._require_conn()
+        cursor = await conn.execute(
+            "SELECT * FROM agent_events ORDER BY id DESC LIMIT ? OFFSET ?",
+            (limit, offset),
         )
         rows = await cursor.fetchall()
         cols = [desc[0] for desc in cursor.description]

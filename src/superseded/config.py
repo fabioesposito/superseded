@@ -37,8 +37,6 @@ class SupersededConfig(BaseModel):
     db_path: str = ".superseded/state.db"
     issues_dir: str = ".superseded/issues"
     artifacts_dir: str = ".superseded/artifacts"
-    max_retries: int = 3
-    retryable_stages: list[str] = Field(default_factory=lambda: ["build", "verify", "review"])
     api_key: str = ""
     github_token: str = ""
     openai_api_key: str = ""

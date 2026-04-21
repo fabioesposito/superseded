@@ -31,6 +31,13 @@ class Stage(StrEnum):
     REVIEW = "review"
     SHIP = "ship"
 
+    @classmethod
+    def by_value(cls, value: str) -> Stage | None:
+        try:
+            return cls(value)
+        except ValueError:
+            return None
+
 
 STAGE_ORDER: list[Stage] = [
     Stage.SPEC,

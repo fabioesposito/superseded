@@ -17,7 +17,7 @@ from superseded.models import (
 from superseded.notifications import NotificationService
 from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.worktree import WorktreeManager
-from superseded.tickets.writer import update_issue_status
+from superseded.state_writer import IssueStateWriter
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +97,13 @@ class StageExecutor:
                 )
 
         if all_passed:
+            writer = IssueStateWriter(self.db)
+            writer._write_markdown(issue.filepath, IssueStatus.IN_PROGRESS, stage)
             await self.db.update_issue_status(issue.id, IssueStatus.IN_PROGRESS, stage)
-            update_issue_status(issue.filepath, IssueStatus.IN_PROGRESS, stage)
         else:
+            writer = IssueStateWriter(self.db)
+            writer._write_markdown(issue.filepath, IssueStatus.PAUSED, stage)
             await self.db.update_issue_status(issue.id, IssueStatus.PAUSED, stage)
-            update_issue_status(issue.filepath, IssueStatus.PAUSED, stage)
 
         return aggregate
 

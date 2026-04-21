@@ -193,9 +193,10 @@ Agents receive context in 7 progressive layers:
 
 When a stage fails:
 - The ticket status is set to `paused`
-- You can retry the stage via the web UI
-- If configured in `retryable_stages`, the harness will retry up to `max_retries`
+- You can retry the stage via the web UI by clicking the Retry button
 - On retry, previous error output is injected into the agent prompt
+- Retry is manual — you decide when and how many times to retry
+- Retry is manual — you decide when and how many times to retry
 
 ### Await Input
 
