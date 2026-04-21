@@ -339,7 +339,7 @@ def test_docker_adapter_opencode():
     assert "python:3.12-slim" in cmd
     assert "sh" in cmd
     assert "-c" in cmd
-    
+
     # Check inner command and positional arguments
     sh_idx = cmd.index("sh")
     assert cmd[sh_idx + 1] == "-c"
@@ -347,7 +347,7 @@ def test_docker_adapter_opencode():
     assert "pip install --user uv && ~/.local/bin/uvx opencode" in inner_cmd
     assert "-m gpt-4o" in inner_cmd
     assert 'run --pure "$1"' in inner_cmd
-    
+
     assert cmd[sh_idx + 3] == "--"
     assert cmd[sh_idx + 4] == "Write a plan."
 
