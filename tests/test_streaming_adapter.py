@@ -6,12 +6,12 @@ from superseded.models import AgentContext, Issue, Stage
 
 
 class EchoAdapter(SubprocessAgentAdapter):
-    def _build_command(self, prompt: str) -> list[str]:
+    def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
         return ["echo", prompt]
 
 
 class StderrAdapter(SubprocessAgentAdapter):
-    def _build_command(self, prompt: str) -> list[str]:
+    def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
         return ["sh", "-c", "echo oops >&2; exit 1"]
 
 
@@ -64,7 +64,7 @@ async def test_run_streaming_includes_duration():
 async def test_run_streaming_timeout():
 
     class SlowAdapter(SubprocessAgentAdapter):
-        def _build_command(self, prompt: str) -> list[str]:
+        def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
             return ["sleep", "10"]
 
     adapter = SlowAdapter(timeout=1)
@@ -93,7 +93,7 @@ async def test_run_non_streaming_failure():
 
 async def test_run_non_streaming_timeout():
     class SlowAdapter(SubprocessAgentAdapter):
-        def _build_command(self, prompt: str) -> list[str]:
+        def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
             return ["sleep", "10"]
 
     adapter = SlowAdapter(timeout=1)
@@ -106,7 +106,7 @@ async def test_run_streaming_command_error():
     """Test streaming with a command that can't be found."""
 
     class BadCmdAdapter(SubprocessAgentAdapter):
-        def _build_command(self, prompt: str) -> list[str]:
+        def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
             return ["nonexistent_command_xyz"]
 
     adapter = BadCmdAdapter()
@@ -133,7 +133,7 @@ async def test_run_uses_worktree_path():
         )
 
         class PwdAdapter(SubprocessAgentAdapter):
-            def _build_command(self, prompt: str) -> list[str]:
+            def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
                 return ["pwd"]
 
         adapter = PwdAdapter()
@@ -150,7 +150,7 @@ async def test_run_uses_repo_path_when_no_worktree():
     )
 
     class PwdAdapter(SubprocessAgentAdapter):
-        def _build_command(self, prompt: str) -> list[str]:
+        def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
             return ["pwd"]
 
     adapter = PwdAdapter()

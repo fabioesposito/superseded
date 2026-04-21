@@ -23,20 +23,35 @@ class AgentFactory:
         self.anthropic_api_key = anthropic_api_key
         self.opencode_api_key = opencode_api_key
 
-    def create(self, cli: str | None = None, model: str | None = None) -> AgentAdapter:
+    def create(
+        self, cli: str | None = None, model: str | None = None, sandbox: str = "host"
+    ) -> AgentAdapter:
         cli = cli or self.default_agent
         model = model or self.default_model
-        registry = get_registry()
-        if cli not in registry:
-            raise ValueError(f"Unknown agent: {cli}")
         api_key_map = {
             "claude-code": self.anthropic_api_key,
             "opencode": self.opencode_api_key,
             "codex": self.openai_api_key,
         }
+        api_key = api_key_map.get(cli, "")
+
+        if sandbox == "docker":
+            from superseded.agents.docker import DockerAgentAdapter
+
+            return DockerAgentAdapter(
+                cli=cli,
+                model=model,
+                timeout=self.timeout,
+                github_token=self.github_token,
+                api_key=api_key,
+            )
+
+        registry = get_registry()
+        if cli not in registry:
+            raise ValueError(f"Unknown agent: {cli}")
         return registry[cli](
             model=model,
             timeout=self.timeout,
             github_token=self.github_token,
-            api_key=api_key_map.get(cli, ""),
+            api_key=api_key,
         )

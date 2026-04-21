@@ -33,7 +33,7 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
         return env
 
     @abstractmethod
-    def _build_command(self, prompt: str) -> list[str]: ...
+    def _build_command(self, prompt: str, context: AgentContext) -> list[str]: ...
 
     def _get_stdin_data(self, prompt: str) -> bytes | None:
         """Override to pass prompt via stdin instead of CLI args."""
@@ -43,7 +43,7 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
         return context.worktree_path or context.repo_path
 
     async def run(self, prompt: str, context: AgentContext) -> AgentResult:
-        cmd = self._build_command(prompt)
+        cmd = self._build_command(prompt, context)
         cwd = self._get_cwd(context)
         stdin_data = self._get_stdin_data(prompt)
         try:
@@ -70,7 +70,7 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
             )
 
     async def run_streaming(self, prompt: str, context: AgentContext) -> AsyncIterator[AgentEvent]:
-        cmd = self._build_command(prompt)
+        cmd = self._build_command(prompt, context)
         cwd = self._get_cwd(context)
         stdin_data = self._get_stdin_data(prompt)
         start = time.monotonic()

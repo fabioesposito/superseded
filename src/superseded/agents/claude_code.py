@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from superseded.agents import register_agent
 from superseded.agents.base import SubprocessAgentAdapter
+from superseded.models import AgentContext
 
 
 @register_agent("claude-code")
@@ -21,7 +22,7 @@ class ClaudeCodeAdapter(SubprocessAgentAdapter):
             env["ANTHROPIC_API_KEY"] = self._api_key
         return env
 
-    def _build_command(self, prompt: str) -> list[str]:
+    def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
         cmd = [
             "claude",
             "-p",
