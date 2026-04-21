@@ -346,3 +346,12 @@ class Database:
             d["metadata"] = json.loads(d["metadata"])
             results.append(d)
         return list(reversed(results))
+
+    async def delete_issue(self, issue_id: str) -> None:
+        conn = self._require_conn()
+        await conn.execute("DELETE FROM issues WHERE id = ?", (issue_id,))
+        await conn.execute("DELETE FROM stage_results WHERE issue_id = ?", (issue_id,))
+        await conn.execute("DELETE FROM harness_iterations WHERE issue_id = ?", (issue_id,))
+        await conn.execute("DELETE FROM session_turns WHERE issue_id = ?", (issue_id,))
+        await conn.execute("DELETE FROM agent_events WHERE issue_id = ?", (issue_id,))
+        await conn.commit()

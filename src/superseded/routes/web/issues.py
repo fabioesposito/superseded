@@ -18,8 +18,8 @@ from superseded.routes.service import (
     get_form_data,
     run_and_advance,
 )
-from superseded.tickets.reader import list_issues
-from superseded.tickets.writer import write_issue
+from superseded.tickets.reader import list_issues, read_issue
+from superseded.tickets.writer import delete_issue_file, update_issue_body, write_issue
 from superseded.validation import InvalidInputError, validate_issue_id
 
 router = APIRouter(prefix="/issues")
@@ -347,6 +347,79 @@ async def answer_questions(
         if approval_file.exists():
             approval_file.unlink()
 
+    await deps.db.update_pause_reason(issue_id, "")
+
+    return await run_and_advance(deps, issue_id, request, background_tasks)
+
+
+@router.post("/{issue_id}/delete", response_class=RedirectResponse)
+async def delete_issue_handler(
+    request: Request,
+    issue_id: str,
+    deps: Deps = Depends(get_deps),
+):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return RedirectResponse(url="/", status_code=303)
+
+    issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
+    matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
+    if not matching:
+        return RedirectResponse(url="/", status_code=303)
+    issue = matching[0]
+
+    delete_issue_file(issue.filepath)
+    await deps.db.delete_issue(issue_id)
+
+    return RedirectResponse(url="/", status_code=303)
+
+
+@router.post("/{issue_id}/update-body", response_class=HTMLResponse)
+async def update_issue_body_handler(
+    request: Request,
+    issue_id: str,
+    background_tasks: BackgroundTasks,
+    deps: Deps = Depends(get_deps),
+):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Invalid issue ID",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=400,
+        )
+
+    form = await get_form_data(request)
+    body = str(form.get("body", "")).strip()
+
+    issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
+    matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
+    if not matching:
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Issue not found",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=404,
+        )
+    issue = matching[0]
+
+    update_issue_body(issue.filepath, body)
+
+    updated_issue = read_issue(issue.filepath)
+    await deps.db.upsert_issue(updated_issue)
     await deps.db.update_pause_reason(issue_id, "")
 
     return await run_and_advance(deps, issue_id, request, background_tasks)

@@ -174,14 +174,14 @@ def test_codex_no_model():
     adapter = CodexAdapter()
     ctx = _make_context("/tmp")
     cmd = adapter._build_command("test prompt", ctx)
-    assert cmd == ["codex", "--quiet", "--model", "o4-mini"]
+    assert cmd == ["codex", "--quiet", "--model", "o4-mini", "test prompt"]
 
 
 def test_codex_with_model():
     adapter = CodexAdapter(model="o4-mini")
     ctx = _make_context("/tmp")
     cmd = adapter._build_command("test prompt", ctx)
-    assert cmd == ["codex", "--quiet", "--model", "o4-mini"]
+    assert cmd == ["codex", "--quiet", "--model", "o4-mini", "test prompt"]
 
 
 def test_codex_with_timeout():
@@ -192,7 +192,7 @@ def test_codex_with_timeout():
 def test_codex_stdin():
     adapter = CodexAdapter()
     data = adapter._get_stdin_data("hello")
-    assert data == b"hello"
+    assert data is None
 
 
 # --- AgentFactory tests ---

@@ -1,0 +1,28 @@
+<div class="card rounded-xl p-6 mb-6">
+    {% if success %}
+    <div class="mb-4 px-3 py-2 rounded-lg bg-olive-950/50 border border-olive-800/40 text-olive-400 text-sm">
+        Server settings saved. Restart the server for host/port changes to take effect.
+    </div>
+    {% endif %}
+    <form hx-post="/settings/server"
+          hx-target="#server-settings"
+          hx-swap="outerHTML">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Host</label>
+                <input type="text" name="host" value="{{ host }}"
+                       class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                       placeholder="127.0.0.1">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Port</label>
+                <input type="number" name="port" value="{{ port }}"
+                       class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                       placeholder="8000">
+            </div>
+        </div>
+        <button type="submit" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold mt-4">
+            Save
+        </button>
+    </form>
+</div>

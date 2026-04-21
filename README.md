@@ -86,9 +86,9 @@ uv run ruff format src/ tests/
 
 ## Documentation
 
-- **[User Guide](docs/user-guide.md)** — Complete usage documentation: creating tickets, pipeline stages, agent configuration, multi-repo support, settings, and troubleshooting
-- **[Ticket Format](docs/tickets.md)** — Detailed ticket specification
-- **[Multi-Repo Support](docs/multi-repo.md)** — Multi-repo configuration and behavior
+- **[User Guide](docs/guides/user-guide.md)** — Complete usage documentation: creating tickets, pipeline stages, agent configuration, multi-repo support, settings, and troubleshooting
+- **[Ticket Format](docs/guides/tickets.md)** — Detailed ticket specification
+- **[Multi-Repo Support](docs/architecture/multi-repo.md)** — Multi-repo configuration and behavior
 
 ## Project Structure
 

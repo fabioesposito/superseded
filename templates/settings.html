@@ -88,6 +88,12 @@
     </div>
     {% include "_notifications_field.html" %}
 
+    <div class="mt-10 mb-3">
+        <h2 class="text-lg font-semibold text-shell-100">Server</h2>
+        <p class="text-shell-500 text-sm mt-1">Host and port configuration — changes require a server restart</p>
+    </div>
+    {% include "_server_settings_field.html" %}
+
     {% if stage_agents is defined %}
     <div class="mt-10 mb-3">
         <h2 class="text-lg font-semibold text-shell-100">Pipeline Agents</h2>

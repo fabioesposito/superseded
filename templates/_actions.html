@@ -33,5 +33,14 @@
             </button>
         </form>
     {% endif %}
+    <form action="/issues/{{ issue.id }}/delete" method="post" class="mb-2.5 mt-4"
+        hx-post="/issues/{{ issue.id }}/delete"
+        hx-target="body"
+        hx-swap="outerHTML"
+        hx-confirm="Permanently delete this issue? This cannot be undone.">
+        <button type="submit" class="w-full text-coral-400 hover:text-coral-300 px-4 py-2.5 rounded-lg text-sm font-semibold border border-coral-800/40 hover:border-coral-700/40 transition-colors">
+            Delete Issue
+        </button>
+    </form>
     <a href="/" class="block text-center text-shell-500 hover:text-shell-300 text-xs mt-2 transition-colors">Back to Dashboard</a>
 </div>

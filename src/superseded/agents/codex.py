@@ -23,8 +23,8 @@ class CodexAdapter(SubprocessAgentAdapter):
         return env
 
     def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
-        cmd = ["codex", "--quiet", "--model", self.model or self.DEFAULT_MODEL]
+        cmd = ["codex", "--quiet", "--model", self.model or self.DEFAULT_MODEL, prompt]
         return cmd
 
     def _get_stdin_data(self, prompt: str) -> bytes | None:
-        return prompt.encode("utf-8")
+        return None

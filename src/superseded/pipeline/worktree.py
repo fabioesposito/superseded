@@ -159,4 +159,4 @@ class WorktreeManager:
     async def pop_stash(self, stash_ref: str | None, repo: str | None = None) -> None:
         if stash_ref:
             repo_path = self._get_repo_path(repo)
-            await self._run_git("stash", "pop", cwd=str(repo_path))
+            await self._run_git("stash", "pop", stash_ref, cwd=str(repo_path))

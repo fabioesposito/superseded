@@ -20,4 +20,4 @@ def get_registry() -> dict[str, type[SubprocessAgentAdapter]]:
     return _registry
 
 
-from superseded.agents import claude_code, codex, opencode  # noqa: F401,E402
+from superseded.agents import claude_code, codex, docker, opencode  # noqa: F401,E402

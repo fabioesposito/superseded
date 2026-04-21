@@ -4,7 +4,7 @@ import datetime
 
 from fastapi import APIRouter, Depends, Query
 
-from superseded.models import PipelineMetrics
+from superseded.models import AgentEvent, PipelineMetrics, Stage
 from superseded.routes.service import Deps, get_deps
 
 api_router = APIRouter(prefix="/api/pipeline")
@@ -82,6 +82,17 @@ async def _compute_metrics(deps: Deps) -> dict:
         stage: sum(durs) / len(durs) for stage, durs in stage_durations.items()
     }
 
+    recent_raw = await deps.db.get_recent_events(limit=20)
+    recent_events = [
+        AgentEvent(
+            event_type=e["event_type"],
+            content=e["content"],
+            stage=Stage(e["stage"]),
+            metadata=e.get("metadata", {}),
+        )
+        for e in recent_raw
+    ]
+
     return PipelineMetrics(
         total_issues=total,
         issues_by_status=by_status,
@@ -89,5 +100,5 @@ async def _compute_metrics(deps: Deps) -> dict:
         avg_stage_duration_ms=avg_stage_duration_ms,
         total_retries=total_retries,
         retries_by_stage=retries_by_stage,
-        recent_events=[],
+        recent_events=recent_events,
     ).model_dump()

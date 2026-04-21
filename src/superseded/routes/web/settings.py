@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
@@ -40,6 +41,8 @@ async def settings_page(request: Request, deps: Deps = Depends(get_deps)):
             "opencode_api_key": deps.config.opencode_api_key,
             "source_code_root": deps.config.source_code_root,
             "notifications": deps.config.notifications,
+            "host": deps.config.host,
+            "port": deps.config.port,
         },
     )
     if "csrf_token" not in request.cookies:
@@ -239,6 +242,24 @@ async def update_notifications(request: Request, deps: Deps = Depends(get_deps))
         request,
         "_notifications_field.html",
         {"notifications": config.notifications, "success": True},
+    )
+
+
+@router.post("/settings/server", response_class=HTMLResponse)
+async def update_server_settings(request: Request, deps: Deps = Depends(get_deps)):
+    form = await get_form_data(request)
+    config = deps.config
+    config.host = str(form.get("host", config.host)).strip()
+    port_str = str(form.get("port", config.port)).strip()
+    if port_str:
+        with suppress(ValueError, TypeError):
+            config.port = int(port_str)
+    save_config(config, Path(config.repo_path))
+    _reload_pipeline(request.app, config)
+    return get_templates().TemplateResponse(
+        request,
+        "_server_settings_field.html",
+        {"host": config.host, "port": config.port, "success": True},
     )
 
 

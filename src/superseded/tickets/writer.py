@@ -19,3 +19,16 @@ def update_issue_status(filepath: str, status: IssueStatus, stage: Stage) -> Non
     post["status"] = status.value
     post["stage"] = stage.value
     path.write_text(frontmatter.dumps(post))
+
+
+def update_issue_body(filepath: str, body: str) -> None:
+    path = Path(filepath)
+    post = frontmatter.load(path)
+    post.content = body
+    path.write_text(frontmatter.dumps(post))
+
+
+def delete_issue_file(filepath: str) -> None:
+    path = Path(filepath)
+    if path.exists():
+        path.unlink()
