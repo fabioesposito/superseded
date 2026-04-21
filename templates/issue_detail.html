@@ -97,6 +97,35 @@
         </div>
     </div>
 
+    {% if issue.pause_reason == 'approval-required' %}
+    <div class="card card-accent rounded-xl p-6 mt-6">
+        <h3 class="text-lg font-bold text-coral-400 mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            Approval Required
+        </h3>
+        <div class="text-sm text-shell-300 mb-6 bg-shell-900/50 p-4 rounded-lg whitespace-pre-wrap font-mono">{{ approval_content }}</div>
+        
+        <div class="flex gap-4">
+            <form hx-post="/issues/{{ issue.id }}/approve" hx-target="body" class="flex-1">
+                <button type="submit" class="w-full bg-olive-600 hover:bg-olive-500 text-white font-bold py-2 px-4 rounded transition-colors">
+                    Approve & Continue
+                </button>
+            </form>
+            
+            <button type="button" @click="document.getElementById('reject-form').classList.toggle('hidden')" class="flex-1 bg-shell-800 hover:bg-shell-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                Reject with Feedback
+            </button>
+        </div>
+        
+        <form id="reject-form" hx-post="/issues/{{ issue.id }}/reject" hx-target="body" class="hidden mt-4">
+            <textarea name="feedback" rows="3" class="w-full bg-shell-900 border border-shell-800 rounded-lg p-3 text-shell-100 text-sm mb-3 focus:outline-none focus:border-neon-500" placeholder="Explain what needs to be fixed..."></textarea>
+            <button type="submit" class="bg-coral-600 hover:bg-coral-500 text-white font-bold py-2 px-4 rounded transition-colors w-full">
+                Submit Rejection
+            </button>
+        </form>
+    </div>
+    {% endif %}
+
     <div class="mt-6 card rounded-xl overflow-hidden" x-data="{ expanded: false }">
         <div class="px-5 py-3 border-b border-shell-800/60 flex items-center justify-between">
             <h2 class="text-sm font-semibold uppercase tracking-widest text-sand-500">Agent Log</h2>
