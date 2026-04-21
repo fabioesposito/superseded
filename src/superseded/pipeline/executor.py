@@ -114,6 +114,31 @@ class StageExecutor:
         needs_worktree: bool,
     ) -> StageResult:
         effective_repo = repo_name or "primary"
+
+        repo_artifacts = str(Path(artifacts_path) / effective_repo)
+        Path(repo_artifacts).mkdir(parents=True, exist_ok=True)
+
+        stage_config = self.runner.stage_configs.get(stage.value)
+        if stage_config and stage_config.require_approval:
+            approval_file = Path(repo_artifacts) / "approval.md"
+            if not approval_file.exists():
+                approval_file.write_text(
+                    f"Stage {stage.value} requires manual approval to proceed.\n\nPlease review the current state and approve to continue.",
+                    encoding="utf-8",
+                )
+                await self.db.update_pause_reason(issue.id, "approval-required")
+
+                result = StageResult(
+                    stage=stage,
+                    passed=False,
+                    output="",
+                    error="approval-required",
+                    started_at=datetime.datetime.now(datetime.UTC),
+                    finished_at=datetime.datetime.now(datetime.UTC),
+                )
+                await self.db.save_stage_result(issue.id, result, repo=effective_repo)
+                return result
+
         stash_ref = None
         worktree_created = False
 
@@ -145,9 +170,6 @@ class StageExecutor:
 
         repo_previous_errors = await self._collect_previous_errors(issue.id, effective_repo)
 
-        repo_artifacts = str(Path(artifacts_path) / effective_repo)
-        Path(repo_artifacts).mkdir(parents=True, exist_ok=True)
-
         result = await self.runner.run_stage_streaming(
             issue=issue,
             stage=stage,
@@ -160,12 +182,21 @@ class StageExecutor:
 
         if not result.passed:
             questions_file = Path(repo_artifacts) / "questions.md"
+            approval_file = Path(repo_artifacts) / "approval.md"
             if questions_file.exists():
                 await self.db.update_pause_reason(issue.id, "awaiting-input")
+            elif approval_file.exists():
+                await self.db.update_pause_reason(issue.id, "approval-required")
             else:
                 await self.db.update_pause_reason(issue.id, "failed")
         else:
-            await self.db.update_pause_reason(issue.id, "")
+            approval_file = Path(repo_artifacts) / "approval.md"
+            if approval_file.exists():
+                result.passed = False
+                result.error = "approval-required"
+                await self.db.update_pause_reason(issue.id, "approval-required")
+            else:
+                await self.db.update_pause_reason(issue.id, "")
 
         await self.db.save_stage_result(issue.id, result, repo=effective_repo)
 

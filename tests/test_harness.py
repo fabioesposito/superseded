@@ -163,3 +163,28 @@ def test_resolve_agent_falls_back_to_default():
     agent = runner.resolve_agent(Stage.SPEC)
     assert isinstance(agent, ClaudeCodeAdapter)
     assert agent.model == "sonnet"
+
+
+async def test_harness_approval_required_updates_status():
+    mock_agent = AsyncMock()
+
+    async def side_effect(prompt, context):
+        artifacts_path = context.artifacts_path
+        if artifacts_path:
+            (Path(artifacts_path) / "approval.md").write_text("approve me")
+        return AgentResult(exit_code=0, stdout="please approve", stderr="")
+
+    mock_agent.run.side_effect = side_effect
+
+    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
+    with tempfile.TemporaryDirectory() as tmp:
+        artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
+        artifacts_path.mkdir(parents=True)
+        result = await runner.run_stage(
+            issue=_make_issue(),
+            stage=Stage.BUILD,
+            artifacts_path=str(artifacts_path),
+        )
+
+    assert result.passed is False
+    assert result.error == "approval-required"
