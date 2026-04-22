@@ -295,6 +295,32 @@ async def test_create_issue_saves_github_url(tmp_repo):
     assert 'github_url: "https://github.com/owner/repo/issues/42"' in content
 
 
+async def test_approve_issue(tmp_repo):
+    app = create_app(repo_path=tmp_repo)
+    await app.state.db.initialize()
+
+    issue = Issue(
+        id="SUP-001", title="Test", filepath="", pause_reason="approval-required", stage=Stage.PLAN
+    )
+    await app.state.db.upsert_issue(issue)
+
+    artifacts_dir = Path(tmp_repo) / ".superseded" / "artifacts" / "SUP-001" / "primary"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    (artifacts_dir / "approval.md").write_text("Needs approval")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _get_csrf(client)
+        resp = await client.post(
+            "/issues/SUP-001/approve",
+            headers={"X-CSRF-Token": token},
+        )
+
+    assert resp.status_code == 200
+    db_issue = await app.state.db.get_issue("SUP-001")
+    assert db_issue["pause_reason"] == ""
+    assert not (artifacts_dir / "approval.md").exists()
+
+
 async def test_reject_issue(tmp_repo):
     app = create_app(repo_path=tmp_repo)
     await app.state.db.initialize()

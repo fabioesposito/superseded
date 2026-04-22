@@ -425,6 +425,55 @@ async def update_issue_body_handler(
     return await run_and_advance(deps, issue_id, request, background_tasks)
 
 
+@router.post("/{issue_id}/approve", response_class=HTMLResponse)
+async def approve_issue(
+    request: Request,
+    issue_id: str,
+    background_tasks: BackgroundTasks,
+    deps: Deps = Depends(get_deps),
+):
+    try:
+        issue_id = validate_issue_id(issue_id)
+    except InvalidInputError:
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Invalid issue ID",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=400,
+        )
+
+    issues_dir = str(Path(deps.config.repo_path) / deps.config.issues_dir)
+    matching = [i for i in list_issues(issues_dir) if i.id == issue_id]
+    if not matching:
+        return get_templates().TemplateResponse(
+            request,
+            "issue_detail.html",
+            {
+                "issue": None,
+                "error": "Issue not found",
+                "stage_results": [],
+                "stage_order": [s.value for s in Stage],
+            },
+            status_code=404,
+        )
+    issue = matching[0]
+
+    for repo_name in issue.repos if issue.repos else [None]:
+        effective_repo = repo_name or "primary"
+        artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue_id)
+        approval_file = Path(artifacts_path) / effective_repo / "approval.md"
+        if approval_file.exists():
+            approval_file.unlink()
+
+    await deps.db.update_pause_reason(issue_id, "")
+    return await run_and_advance(deps, issue_id, request, background_tasks)
+
+
 @router.post("/{issue_id}/reject", response_class=HTMLResponse)
 async def reject_issue(
     request: Request,
