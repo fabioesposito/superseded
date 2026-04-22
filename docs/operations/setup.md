@@ -24,3 +24,5 @@ uv run ruff check src/ tests/     # Lint
 uv run ruff format src/ tests/    # Format
 npx playwright test                # Run Playwright browser tests
 ```
+
+See [Testing](testing.md) for a full overview of the test suite.
