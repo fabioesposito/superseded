@@ -1,5 +1,7 @@
+import pytest
+from pydantic import ValidationError
+
 from superseded.models import (
-    AgentContext,
     AgentResult,
     Issue,
     IssueStatus,
@@ -40,27 +42,40 @@ def test_issue_defaults():
     assert issue.assignee == ""
 
 
-def test_stage_result_pass():
-    result = StageResult(stage=Stage.BUILD, passed=True, output="done", artifacts=["src/auth.py"])
-    assert result.passed is True
-    assert result.stage == Stage.BUILD
+def test_stage_result_rejects_invalid_stage():
+    with pytest.raises(ValidationError):
+        StageResult(stage="deploy", passed=True)
 
 
-def test_agent_result():
+def test_agent_result_serializes_and_deserializes():
     result = AgentResult(exit_code=0, stdout="ok", stderr="", files_changed=["src/main.py"])
-    assert result.exit_code == 0
-    assert len(result.files_changed) == 1
+    raw = result.model_dump_json()
+    restored = AgentResult.model_validate_json(raw)
+    assert restored.exit_code == 0
+    assert restored.stdout == "ok"
+    assert restored.files_changed == ["src/main.py"]
 
 
-def test_agent_context():
-    ctx = AgentContext(
-        repo_path="/tmp/myrepo",
-        issue=Issue(id="SUP-001", title="Test", filepath=".superseded/issues/SUP-001-test.md"),
-        skill_prompt="You are a planner...",
-        artifacts_path=".superseded/artifacts/SUP-001",
-    )
-    assert ctx.repo_path == "/tmp/myrepo"
-    assert ctx.skill_prompt == "You are a planner..."
+def test_issue_from_frontmatter_invalid_stage_defaults_to_spec():
+    content = """---
+id: SUP-001
+title: Test
+stage: invalid-stage
+---
+"""
+    issue = Issue.from_frontmatter(content, filepath="/tmp/test.md")
+    assert issue.stage == Stage.SPEC
+
+
+def test_issue_from_frontmatter_invalid_status_defaults_to_new():
+    content = """---
+id: SUP-001
+title: Test
+status: unknown-status
+---
+"""
+    issue = Issue.from_frontmatter(content, filepath="/tmp/test.md")
+    assert issue.status == IssueStatus.NEW
 
 
 def test_issue_next_stage():
@@ -69,16 +84,6 @@ def test_issue_next_stage():
 
     issue = Issue(id="SUP-002", title="Test", stage=Stage.SHIP)
     assert issue.next_stage() is None
-
-
-def test_issue_with_repos():
-    issue = Issue(id="SUP-001", title="Test", repos=["frontend", "backend"])
-    assert issue.repos == ["frontend", "backend"]
-
-
-def test_issue_repos_default_empty():
-    issue = Issue(id="SUP-001", title="Test")
-    assert issue.repos == []
 
 
 def test_issue_from_frontmatter_with_repos():

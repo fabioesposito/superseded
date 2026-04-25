@@ -3,7 +3,7 @@ from superseded.agents.claude_code import ClaudeCodeAdapter
 from superseded.agents.codex import CodexAdapter
 from superseded.agents.factory import AgentFactory
 from superseded.agents.opencode import OpenCodeAdapter
-from superseded.models import AgentContext, AgentResult, Issue
+from superseded.models import AgentContext, Issue
 
 
 def _make_context(tmp: str) -> AgentContext:
@@ -38,22 +38,6 @@ def test_adapter_protocol_enforced():
     assert hasattr(OpenCodeAdapter, "run")
     assert isinstance(ClaudeCodeAdapter(), AgentAdapter)
     assert isinstance(OpenCodeAdapter(), AgentAdapter)
-
-
-def test_adapter_timeout_default():
-    adapter = ClaudeCodeAdapter()
-    assert adapter.timeout == 600
-
-
-def test_adapter_timeout_custom():
-    adapter = ClaudeCodeAdapter(timeout=300)
-    assert adapter.timeout == 300
-
-
-def test_agent_result_model():
-    result = AgentResult(exit_code=0, stdout="done", stderr="", files_changed=["a.py"])
-    assert result.exit_code == 0
-    assert result.files_changed == ["a.py"]
 
 
 def test_claude_code_uses_worktree_when_set():
@@ -139,11 +123,6 @@ def test_claude_code_with_model():
     ]
 
 
-def test_claude_code_with_timeout():
-    adapter = ClaudeCodeAdapter(timeout=300)
-    assert adapter.timeout == 300
-
-
 def test_claude_code_stdin():
     adapter = ClaudeCodeAdapter()
     data = adapter._get_stdin_data("hello")
@@ -182,11 +161,6 @@ def test_codex_with_model():
     ctx = _make_context("/tmp")
     cmd = adapter._build_command("test prompt", ctx)
     assert cmd == ["codex", "--quiet", "--model", "o4-mini", "test prompt"]
-
-
-def test_codex_with_timeout():
-    adapter = CodexAdapter(timeout=300)
-    assert adapter.timeout == 300
 
 
 def test_codex_stdin():
