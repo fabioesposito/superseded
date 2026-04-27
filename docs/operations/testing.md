@@ -21,6 +21,10 @@ The pytest suite covers models, database operations, ticket CRUD, pipeline servi
 ## Playwright e2e
 
 ```bash
+# Start the server first
+uv run superseded . --port 8000 &
+
+# Run e2e tests
 npx playwright test
 ```
 

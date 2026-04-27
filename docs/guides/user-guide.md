@@ -196,7 +196,6 @@ When a stage fails:
 - You can retry the stage via the web UI by clicking the Retry button
 - On retry, previous error output is injected into the agent prompt
 - Retry is manual — you decide when and how many times to retry
-- Retry is manual — you decide when and how many times to retry
 
 ### Await Input
 

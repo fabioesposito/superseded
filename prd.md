@@ -59,7 +59,7 @@ When working on UI (templates, HTMX, styling):
 - **In-repo `.superseded/`** — tickets, artifacts, and state live in the repo
 - **SQLite as cache** — markdown is canonical, SQLite is a fast index
 - **SSE for real-time** — pipeline progress pushed to browser via Server-Sent Events
-- **Personal single-user** — no auth, no multi-tenant, no hosting
+- **Personal single-user** — optional API key auth, no multi-tenant, no hosting
 
 ## Competitive Positioning
 Unlike GitHub Copilot (IDE-focused), Replit (hosted), or Aider (CLI-only):

@@ -840,9 +840,9 @@
     <li><a href="#demo">Demo</a></li>
     <li><a href="#architecture">Architecture</a></li>
   </ul>
-  <button class="nav-cta" onclick="window.open('https://github.com/fabioesposito/superseded','_blank')">
+  <a href="https://github.com/fabioesposito/superseded" class="nav-cta" target="_blank" rel="noopener">
     View on GitHub →
-  </button>
+  </a>
 </nav>
 
 <!-- Hero -->
@@ -1031,9 +1031,11 @@
         <span class="terminal-title">superseded — pipeline run</span>
       </div>
       <div class="terminal-body">
-        <div><span class="term-prompt">$ </span><span class="term-cmd">superseded run 42</span></div>
+        <div><span class="term-prompt">$ </span><span class="term-cmd">uv run superseded</span></div>
         <br>
-        <div><span class="term-comment"># Starting pipeline for issue #42: Add dark mode toggle</span></div>
+        <div><span class="term-output">INFO:     Uvicorn running on http://0.0.0.0:8000</span></div>
+        <br>
+        <div><span class="term-comment"># Open http://localhost:8000 → create ticket → click "Advance"</span></div>
         <br>
         <div><span class="term-output">  ◉ SPEC     </span><span class="term-success">done</span><span class="term-output">  — parsed 4 requirements</span></div>
         <div><span class="term-output">  ⊞ PLAN     </span><span class="term-success">done</span><span class="term-output">  — 6 tasks, 2 files to touch</span></div>
