@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import datetime
 import logging
@@ -62,7 +63,7 @@ class PipelineState:
     executor: StageExecutor
     event_manager: PipelineEventManager
     running_issues: set[str]
-    running_lock: object
+    running_lock: asyncio.Lock
 
 
 @dataclass
@@ -153,7 +154,7 @@ async def _run_stage_background(
                         message=f"Pipeline complete for {issue_id}",
                         priority="default",
                         tags=["rocket"],
-                        click_url=f"http://localhost:8000/issues/{issue_id}",
+                        click_url=f"{deps.config.base_url}/issues/{issue_id}",
                     )
             else:
                 await state_writer.write_status(
@@ -173,7 +174,7 @@ async def _run_stage_background(
                     message=f"Pipeline paused at {issue.stage.value}",
                     priority="high",
                     tags=["warning"],
-                    click_url=f"http://localhost:8000/issues/{issue_id}",
+                    click_url=f"{deps.config.base_url}/issues/{issue_id}",
                 )
     except Exception:
         logger.exception("Background stage run failed for %s", issue_id)

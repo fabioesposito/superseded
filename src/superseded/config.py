@@ -46,6 +46,7 @@ class SupersededConfig(BaseModel):
     source_code_root: str = ""
     default_model: str = ""
     rtk: bool = False
+    base_url: str = ""
     stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
 
@@ -67,7 +68,10 @@ def load_config(repo_path: Path) -> SupersededConfig:
         val = os.environ.get(env_key, "")
         if val:
             overrides[config_key] = val
-    return SupersededConfig(**overrides)
+    config = SupersededConfig(**overrides)
+    if not config.base_url:
+        config.base_url = f"http://{config.host}:{config.port}"
+    return config
 
 
 def save_config(config: SupersededConfig, repo_path: Path) -> None:

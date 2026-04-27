@@ -16,7 +16,7 @@ class PipelineEventManager:
     def stop(self, issue_id: str) -> None:
         queue = self._queues.pop(issue_id, None)
         if queue:
-            _task = asyncio.create_task(queue.put(None))  # noqa: RUF006
+            queue.put_nowait(None)
 
     async def publish(self, issue_id: str, event: AgentEvent) -> None:
         queue = self._queues.get(issue_id)

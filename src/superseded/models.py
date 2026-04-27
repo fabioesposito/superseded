@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import datetime
+import logging
 from enum import StrEnum
 from typing import Any, Literal
 
 import frontmatter
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class IssueStatus(StrEnum):
@@ -65,7 +68,16 @@ class Issue(BaseModel):
 
     @classmethod
     def from_frontmatter(cls, content: str, filepath: str = "") -> Issue:
-        post = frontmatter.loads(content)
+        try:
+            post = frontmatter.loads(content)
+        except Exception:
+            logger.warning("Failed to parse frontmatter in %s, using defaults", filepath)
+            return cls(
+                id="SUP-000",
+                title="Untitled (malformed frontmatter)",
+                filepath=filepath,
+                body=content,
+            )
 
         raw_status = post.get("status", "new")
         try:

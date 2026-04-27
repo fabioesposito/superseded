@@ -85,7 +85,7 @@ class StageExecutor:
                     message=f"Stage {stage.value} passed{duration}",
                     priority="default",
                     tags=["white_check_mark"],
-                    click_url=f"http://localhost:8000/issues/{issue.id}",
+                    click_url=f"{config.base_url}/issues/{issue.id}",
                 )
             else:
                 await self.notification_service.notify(
@@ -93,17 +93,15 @@ class StageExecutor:
                     message=f"Stage {stage.value} failed: {aggregate.error[:200]}",
                     priority="high",
                     tags=["x"],
-                    click_url=f"http://localhost:8000/issues/{issue.id}",
+                    click_url=f"{config.base_url}/issues/{issue.id}",
                 )
 
         if all_passed:
             writer = IssueStateWriter(self.db)
-            writer._write_markdown(issue.filepath, IssueStatus.IN_PROGRESS, stage)
-            await self.db.update_issue_status(issue.id, IssueStatus.IN_PROGRESS, stage)
+            await writer.write_status(issue.id, issue.filepath, IssueStatus.IN_PROGRESS, stage)
         else:
             writer = IssueStateWriter(self.db)
-            writer._write_markdown(issue.filepath, IssueStatus.PAUSED, stage)
-            await self.db.update_issue_status(issue.id, IssueStatus.PAUSED, stage)
+            await writer.write_status(issue.id, issue.filepath, IssueStatus.PAUSED, stage)
 
         return aggregate
 

@@ -19,6 +19,9 @@ from superseded.pipeline.context import ContextAssembler
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.worktree import WorktreeManager
 
+MAX_SESSION_TURN_CONTENT_LENGTH = 2000
+MIN_OUTPUT_CHARS = 50
+
 
 class HarnessRunner:
     def __init__(
@@ -204,7 +207,7 @@ class HarnessRunner:
             issue.id,
             SessionTurn(
                 role="assistant",
-                content=stdout[:2000],
+                content=stdout[:MAX_SESSION_TURN_CONTENT_LENGTH],
                 stage=stage,
                 attempt=0,
                 metadata={
@@ -246,15 +249,14 @@ class HarnessRunner:
                 )
 
             # Minimum output check — reject trivially empty runs
-            min_output_chars = 50
-            if len(stdout.strip()) < min_output_chars:
+            if len(stdout.strip()) < MIN_OUTPUT_CHARS:
                 return StageResult(
                     stage=stage,
                     passed=False,
                     output=stdout,
                     error=(
                         f"Agent produced only {len(stdout.strip())} chars of output "
-                        f"(minimum: {min_output_chars}). The agent may not have "
+                        f"(minimum: {MIN_OUTPUT_CHARS}). The agent may not have "
                         f"actually performed the stage work."
                     ),
                     artifacts=[],
