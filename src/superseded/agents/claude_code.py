@@ -8,11 +8,17 @@ from superseded.models import AgentContext
 @register_agent("claude-code")
 class ClaudeCodeAdapter(SubprocessAgentAdapter):
     DEFAULT_MODEL = "claude-sonnet-4-20250514"
+    rtk_agent_flag = "claude"
 
     def __init__(
-        self, model: str = "", timeout: int = 600, github_token: str = "", api_key: str = ""
+        self,
+        model: str = "",
+        timeout: int = 600,
+        github_token: str = "",
+        api_key: str = "",
+        rtk: bool = False,
     ) -> None:
-        super().__init__(timeout=timeout, github_token=github_token)
+        super().__init__(timeout=timeout, github_token=github_token, rtk=rtk)
         self.model = model
         self._api_key = api_key
 

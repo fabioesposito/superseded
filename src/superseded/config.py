@@ -13,6 +13,7 @@ class StageAgentConfig(BaseModel):
     model: str = ""
     sandbox: Literal["host", "docker"] = "host"
     require_approval: bool = False
+    rtk: bool = False
 
 
 class RepoEntry(BaseModel):
@@ -44,6 +45,7 @@ class SupersededConfig(BaseModel):
     opencode_api_key: str = ""
     source_code_root: str = ""
     default_model: str = ""
+    rtk: bool = False
     stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
 

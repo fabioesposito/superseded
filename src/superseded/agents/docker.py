@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shlex
+
 from superseded.agents import register_agent
 from superseded.agents.base import SubprocessAgentAdapter
 from superseded.models import AgentContext
@@ -14,10 +16,11 @@ class DockerAgentAdapter(SubprocessAgentAdapter):
         timeout: int = 600,
         github_token: str = "",
         api_key: str = "",
+        rtk: bool = False,
     ) -> None:
         if cli not in ["opencode", "claude-code"]:
             raise ValueError(f"Unsupported cli for docker sandbox: {cli}")
-        super().__init__(timeout=timeout, github_token=github_token)
+        super().__init__(timeout=timeout, github_token=github_token, rtk=rtk)
         self.cli = cli
         self.model = model
         self._api_key = api_key
@@ -30,6 +33,10 @@ class DockerAgentAdapter(SubprocessAgentAdapter):
             elif self.cli == "opencode":
                 env["OPENCODE_API_KEY"] = self._api_key
         return env
+
+    async def _ensure_rtk_initialized(self) -> None:
+        # RTK init happens inside the ephemeral container command, not on the host.
+        return
 
     def _build_command(self, prompt: str, context: AgentContext) -> list[str]:
         cmd = [
@@ -54,25 +61,38 @@ class DockerAgentAdapter(SubprocessAgentAdapter):
             cmd.extend(["-e", f"{k}={v}"])
 
         if self.cli == "opencode":
-            inner_cmd = "pip install --user uv && ~/.local/bin/uvx opencode "
+            inner_cmd = ""
+            if self.rtk:
+                inner_cmd += "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh && rtk init -g --opencode && "
+            inner_cmd += "pip install --user uv && ~/.local/bin/uvx opencode "
             if self.model:
                 inner_cmd += f"-m {self.model} "
             inner_cmd += 'run --pure "$1"'
             cmd.extend(["python:3.12-slim", "sh", "-c", inner_cmd, "--", prompt])
         elif self.cli == "claude-code":
-            cmd.extend(
-                [
-                    "node:20-slim",
-                    "npx",
-                    "-y",
-                    "@anthropic-ai/claude-code",
-                    "-p",
-                    prompt,
-                    "--output-format",
-                    "text",
-                ]
-            )
-            if self.model:
-                cmd.extend(["--model", self.model])
+            if self.rtk:
+                inner = (
+                    "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh && "
+                    "rtk init -g --claude && "
+                    f"npx -y @anthropic-ai/claude-code -p {shlex.quote(prompt)} --output-format text"
+                )
+                if self.model:
+                    inner += f" --model {shlex.quote(self.model)}"
+                cmd.extend(["node:20-slim", "sh", "-c", inner])
+            else:
+                cmd.extend(
+                    [
+                        "node:20-slim",
+                        "npx",
+                        "-y",
+                        "@anthropic-ai/claude-code",
+                        "-p",
+                        prompt,
+                        "--output-format",
+                        "text",
+                    ]
+                )
+                if self.model:
+                    cmd.extend(["--model", self.model])
 
         return cmd

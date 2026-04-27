@@ -918,6 +918,11 @@
         <span class="stage-desc">Create PR via gh, ready to merge</span>
       </div>
     </div>
+    <div style="margin-top: 2rem; text-align: center;">
+      <span style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.8rem; background: var(--bg-raised); border: 1px solid var(--border); font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em;">
+        <span style="color: var(--cyan);">≋</span> RTK-optimized — shell output compressed before reaching agents
+      </span>
+    </div>
   </div>
 </section>
 
@@ -1000,6 +1005,12 @@
         <h3>Web Dashboard</h3>
         <p>Full UI to create tickets, advance stages, review agent output, configure agents, and manage repos — all from the browser. Real-time SSE updates.</p>
         <span class="feature-tag">Control</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">≋</span>
+        <h3>RTK Token Compression</h3>
+        <p>Optional integration with RTK filters and compresses verbose shell output before it hits the agent context window — saving 60–90% tokens on common commands.</p>
+        <span class="feature-tag">Efficiency</span>
       </div>
     </div>
   </div>
@@ -1155,11 +1166,21 @@
           <text x="75" y="96" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">extensible adapters</text>
         </g>
 
+        <!-- RTK -->
+        <g class="arch-node" transform="translate(610, 335)">
+          <rect width="80" height="46" rx="2" fill="#0d0d18" stroke="#1a1a35" stroke-width="1" stroke-dasharray="3 2"/>
+          <text x="40" y="20" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="9" font-weight="500">RTK</text>
+          <text x="40" y="34" text-anchor="middle" fill="#3d3d5c" font-family="JetBrains Mono, monospace" font-size="7">token filter</text>
+        </g>
+
+        <!-- Arrow: Agents → RTK -->
+        <line x1="600" y1="355" x2="610" y2="358" stroke="#1a1a35" stroke-width="1" stroke-dasharray="3 2" opacity="0.6"/>
+
         <!-- Arrow: Worktree → PR -->
         <line x1="600" y1="110" x2="670" y2="110" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-cyan)" stroke-dasharray="4 3"/>
 
-        <!-- Arrow: Agents → PR -->
-        <line x1="600" y1="355" x2="670" y2="310" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-amber)" stroke-dasharray="4 3"/>
+        <!-- Arrow: RTK → PR -->
+        <line x1="690" y1="358" x2="670" y2="310" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-amber)" stroke-dasharray="4 3"/>
 
         <!-- PR Output -->
         <g class="arch-node" transform="translate(675, 180)">

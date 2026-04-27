@@ -103,6 +103,30 @@ Superseded is now an agent harness, not just a linear pipeline:
 - **Iteration history**: Every harness attempt is tracked in the database and shown in the UI.
 - **Multi-repo support**: Tickets can target multiple repositories. Set `repos: [frontend, backend]` in ticket frontmatter. Available repos are defined in `.superseded/config.yaml` under the `repos` key. SPEC/PLAN run once (primary repo). BUILD/VERIFY/REVIEW fan out per target repo. SHIP creates a PR per repo. See `docs/architecture/multi-repo.md`.
 
+## RTK Integration
+
+Superseded can optionally integrate with [RTK](https://github.com/rtk-ai/rtk) (Rust Token Killer) to reduce token burn during pipeline stages. RTK is a CLI proxy that filters and compresses verbose command output (e.g., `git status`, `pytest`, `cargo test`) before it reaches the LLM context window.
+
+RTK does **not** replace Claude Code, OpenCode, or Codex — it hooks into their Bash tool calls to save 60–90% tokens.
+
+### Enabling RTK
+
+Add `rtk: true` to `.superseded/config.yaml` globally or per-stage:
+
+```yaml
+rtk: true
+stages:
+  build:
+    cli: claude-code
+    model: claude-sonnet-4-20250514
+    rtk: true
+  verify:
+    cli: opencode
+    rtk: false
+```
+
+The `rtk` binary must be available in `$PATH`. The harness automatically runs `rtk init -g --<agent>` before spawning the agent. For Docker sandboxes, RTK is installed and initialized inside the ephemeral container.
+
 ## Key Files for Agents
 
 - `.superseded/issues/` — Tickets (markdown + YAML frontmatter), single source of truth. See `docs/guides/tickets.md` for format.

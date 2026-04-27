@@ -96,20 +96,25 @@ def test_stage_agent_config_defaults():
     assert cfg.model == ""
     assert cfg.sandbox == "host"
     assert cfg.require_approval is False
+    assert cfg.rtk is False
 
 
 def test_stage_agent_config_custom():
-    cfg = StageAgentConfig(cli="opencode", model="gpt-4o", sandbox="docker", require_approval=True)
+    cfg = StageAgentConfig(
+        cli="opencode", model="gpt-4o", sandbox="docker", require_approval=True, rtk=True
+    )
     assert cfg.cli == "opencode"
     assert cfg.model == "gpt-4o"
     assert cfg.sandbox == "docker"
     assert cfg.require_approval is True
+    assert cfg.rtk is True
 
 
 def test_superseded_config_stages_default():
     cfg = SupersededConfig()
     assert cfg.stages == {}
     assert cfg.default_model == ""
+    assert cfg.rtk is False
 
 
 def test_superseded_config_stages_populated():
@@ -128,6 +133,7 @@ def test_config_api_keys_default_empty():
     assert cfg.anthropic_api_key == ""
     assert cfg.opencode_api_key == ""
     assert cfg.source_code_root == ""
+    assert cfg.rtk is False
 
 
 def test_config_api_keys_from_file():
@@ -187,3 +193,11 @@ def test_notifications_config_from_file():
         config = load_config(Path(tmp))
         assert config.notifications.enabled is True
         assert config.notifications.ntfy_topic == "my-project"
+
+
+def test_load_config_with_rtk():
+    with tempfile.TemporaryDirectory() as tmp:
+        config_path = Path(tmp) / ".superseded" / "config.yaml"
+        write_yaml_config(config_path, {"rtk": True})
+        config = load_config(Path(tmp))
+        assert config.rtk is True

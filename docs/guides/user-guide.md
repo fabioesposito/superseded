@@ -254,6 +254,23 @@ stages:
 
 Stages without explicit configuration fall back to `default_agent` and `default_model`.
 
+### RTK Integration
+
+Enable [RTK](https://github.com/rtk-ai/rtk) (Rust Token Killer) to compress verbose shell output before it reaches the agent's context window, saving 60–90% tokens during BUILD/VERIFY/SHIP stages.
+
+```yaml
+rtk: true
+stages:
+  build:
+    cli: claude-code
+    rtk: true
+  verify:
+    cli: opencode
+    rtk: false
+```
+
+The `rtk` binary must be on `$PATH`. The harness automatically initializes RTK for the configured agent before each stage run.
+
 ### Via Settings UI
 
 Navigate to `/settings` to configure agents and repos from the browser. Changes are saved to `.superseded/config.yaml` and take effect immediately — the pipeline reloads automatically.

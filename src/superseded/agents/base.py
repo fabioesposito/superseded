@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from abc import ABC, abstractmethod
@@ -8,6 +9,9 @@ from collections.abc import AsyncIterator
 from typing import Protocol, runtime_checkable
 
 from superseded.models import AgentContext, AgentEvent, AgentResult
+
+logger = logging.getLogger(__name__)
+_rtk_initialized: set[str] = set()
 
 
 @runtime_checkable
@@ -22,15 +26,47 @@ class AgentAdapter(Protocol):
 
 
 class SubprocessAgentAdapter(AgentAdapter, ABC):
-    def __init__(self, timeout: int = 600, github_token: str = "") -> None:
+    rtk_agent_flag: str = ""
+
+    def __init__(self, timeout: int = 600, github_token: str = "", rtk: bool = False) -> None:
         self.timeout = timeout
         self.github_token = github_token
+        self.rtk = rtk
 
     def _build_env(self) -> dict[str, str]:
         env = os.environ.copy()
         if self.github_token:
             env["GITHUB_TOKEN"] = self.github_token
         return env
+
+    async def _ensure_rtk_initialized(self) -> None:
+        if not self.rtk or not self.rtk_agent_flag:
+            return
+        if self.rtk_agent_flag in _rtk_initialized:
+            return
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "rtk",
+                "init",
+                "-g",
+                f"--{self.rtk_agent_flag}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+            if proc.returncode == 0:
+                _rtk_initialized.add(self.rtk_agent_flag)
+                logger.info("rtk initialized for %s", self.rtk_agent_flag)
+            else:
+                logger.warning(
+                    "rtk init failed for %s: %s",
+                    self.rtk_agent_flag,
+                    stderr.decode("utf-8", errors="replace").strip(),
+                )
+        except FileNotFoundError:
+            logger.warning("rtk binary not found in PATH")
+        except TimeoutError:
+            logger.warning("rtk init timed out for %s", self.rtk_agent_flag)
 
     @abstractmethod
     def _build_command(self, prompt: str, context: AgentContext) -> list[str]: ...
@@ -43,6 +79,7 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
         return context.worktree_path or context.repo_path
 
     async def run(self, prompt: str, context: AgentContext) -> AgentResult:
+        await self._ensure_rtk_initialized()
         cmd = self._build_command(prompt, context)
         cwd = self._get_cwd(context)
         stdin_data = self._get_stdin_data(prompt)
@@ -92,6 +129,7 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
         return []
 
     async def run_streaming(self, prompt: str, context: AgentContext) -> AsyncIterator[AgentEvent]:
+        await self._ensure_rtk_initialized()
         cmd = self._build_command(prompt, context)
         cwd = self._get_cwd(context)
         stdin_data = self._get_stdin_data(prompt)

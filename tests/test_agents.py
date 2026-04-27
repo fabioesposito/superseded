@@ -234,6 +234,18 @@ def test_registry_creates_correct_types():
     assert registry["codex"] is CodexAdapter
 
 
+def test_claude_rtk_flag():
+    assert ClaudeCodeAdapter.rtk_agent_flag == "claude"
+
+
+def test_opencode_rtk_flag():
+    assert OpenCodeAdapter.rtk_agent_flag == "opencode"
+
+
+def test_codex_rtk_flag():
+    assert CodexAdapter.rtk_agent_flag == "codex"
+
+
 def test_claude_code_injects_anthropic_key():
     adapter = ClaudeCodeAdapter(api_key="sk-ant-test")
     env = adapter._build_env()
@@ -333,3 +345,60 @@ def test_factory_sandbox_docker():
 
     assert isinstance(agent, DockerAgentAdapter)
     assert agent.cli == "opencode"
+
+
+def test_factory_rtk_global():
+    factory = AgentFactory(rtk=True)
+    agent = factory.create(cli="claude-code")
+    assert isinstance(agent, ClaudeCodeAdapter)
+    assert agent.rtk is True
+
+
+def test_factory_rtk_override_false():
+    factory = AgentFactory(rtk=True)
+    agent = factory.create(cli="opencode", rtk=False)
+    assert isinstance(agent, OpenCodeAdapter)
+    assert agent.rtk is False
+
+
+def test_factory_rtk_override_true():
+    factory = AgentFactory(rtk=False)
+    agent = factory.create(cli="codex", rtk=True)
+    assert isinstance(agent, CodexAdapter)
+    assert agent.rtk is True
+
+
+def test_docker_rtk_enabled():
+    from superseded.agents.docker import DockerAgentAdapter
+
+    adapter = DockerAgentAdapter(cli="opencode", model="gpt-4o", rtk=True)
+    ctx = _make_context("/tmp/repo/.superseded/worktrees/SUP-001")
+    cmd = adapter._build_command("test prompt", ctx)
+    sh_idx = cmd.index("sh")
+    inner_cmd = cmd[sh_idx + 2]
+    assert "rtk init -g --opencode" in inner_cmd
+
+
+def test_docker_claude_rtk_enabled():
+    from superseded.agents.docker import DockerAgentAdapter
+
+    adapter = DockerAgentAdapter(cli="claude-code", model="claude-sonnet-4-20250514", rtk=True)
+    ctx = _make_context("/tmp")
+    cmd = adapter._build_command("test prompt", ctx)
+    assert "node:20-slim" in cmd
+    sh_idx = cmd.index("sh")
+    assert cmd[sh_idx + 1] == "-c"
+    inner = cmd[sh_idx + 2]
+    assert "rtk init -g --claude" in inner
+    assert "npx -y @anthropic-ai/claude-code" in inner
+
+
+def test_docker_rtk_disabled():
+    from superseded.agents.docker import DockerAgentAdapter
+
+    adapter = DockerAgentAdapter(cli="opencode", model="gpt-4o", rtk=False)
+    ctx = _make_context("/tmp/repo/.superseded/worktrees/SUP-001")
+    cmd = adapter._build_command("test prompt", ctx)
+    sh_idx = cmd.index("sh")
+    inner_cmd = cmd[sh_idx + 2]
+    assert "rtk" not in inner_cmd

@@ -14,6 +14,7 @@ class AgentFactory:
         openai_api_key: str = "",
         anthropic_api_key: str = "",
         opencode_api_key: str = "",
+        rtk: bool = False,
     ) -> None:
         self.default_agent = default_agent
         self.default_model = default_model
@@ -22,12 +23,18 @@ class AgentFactory:
         self.openai_api_key = openai_api_key
         self.anthropic_api_key = anthropic_api_key
         self.opencode_api_key = opencode_api_key
+        self.rtk = rtk
 
     def create(
-        self, cli: str | None = None, model: str | None = None, sandbox: str = "host"
+        self,
+        cli: str | None = None,
+        model: str | None = None,
+        sandbox: str = "host",
+        rtk: bool | None = None,
     ) -> AgentAdapter:
         cli = cli or self.default_agent
         model = model or self.default_model
+        use_rtk = self.rtk if rtk is None else rtk
         api_key_map = {
             "claude-code": self.anthropic_api_key,
             "opencode": self.opencode_api_key,
@@ -44,6 +51,7 @@ class AgentFactory:
                 timeout=self.timeout,
                 github_token=self.github_token,
                 api_key=api_key,
+                rtk=use_rtk,
             )
 
         registry = get_registry()
@@ -54,4 +62,5 @@ class AgentFactory:
             timeout=self.timeout,
             github_token=self.github_token,
             api_key=api_key,
+            rtk=use_rtk,
         )

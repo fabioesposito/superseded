@@ -39,7 +39,7 @@ class HarnessRunner:
         config = self.stage_configs.get(stage.value)
         if config:
             return self.agent_factory.create(
-                cli=config.cli, model=config.model, sandbox=config.sandbox
+                cli=config.cli, model=config.model, sandbox=config.sandbox, rtk=config.rtk
             )
         return self.agent_factory.create()
 

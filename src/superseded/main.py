@@ -49,6 +49,7 @@ def _build_pipeline_state(config: SupersededConfig, db: Database) -> PipelineSta
         openai_api_key=config.openai_api_key,
         anthropic_api_key=config.anthropic_api_key,
         opencode_api_key=config.opencode_api_key,
+        rtk=config.rtk,
     )
     runner = HarnessRunner(
         agent_factory=factory,
