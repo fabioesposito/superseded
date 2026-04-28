@@ -86,6 +86,10 @@ class WorktreeManager:
             stderr=stderr.decode("utf-8", errors="replace"),
         )
 
+    async def pull(self, repo: str | None = None) -> None:
+        repo_path = self._get_repo_path(repo)
+        await self._run_git("pull", "--rebase", "--autostash", cwd=str(repo_path))
+
     async def create(self, issue_id: str, repo: str | None = None) -> Path:
         if repo and repo != "primary":
             await self._ensure_repo_exists(repo)
