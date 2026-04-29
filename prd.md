@@ -8,7 +8,7 @@ Local-first agentic pipeline tool. You write the ticket, the pipeline does the r
 - Web UI: FastAPI + HTMX dashboard for ticket management, pipeline visualization, and review
 
 ## Tech Stack
-Python 3.12+ / uv / FastAPI / HTMX / Alpine.js / Tailwind CDN / SQLite / Jinja2 / aiosqlite / python-frontmatter / pyyaml / pydantic / sse-starlette
+Python 3.14+ / uv / FastAPI / HTMX / Alpine.js / Tailwind CDN / SQLite / Jinja2 / aiosqlite / python-frontmatter / pyyaml / pydantic / sse-starlette
 
 ## Architecture
 Monolithic FastAPI + HTMX application. Single process serves web UI and runs the pipeline engine. Agent adapters spawn CLI tools as subprocesses. In-repo `.superseded/` directories hold tickets (markdown with YAML frontmatter) and pipeline state (SQLite). Markdown is canonical — SQLite is a cache/index.

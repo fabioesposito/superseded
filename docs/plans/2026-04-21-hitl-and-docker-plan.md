@@ -6,7 +6,7 @@
 
 **Architecture:** We will add a `DockerAgentAdapter` to execute agents inside a standard container, mounting the repository worktree. We will also add a new `PauseReason` for approvals, pausing the pipeline automatically if a stage requires approval or if an agent outputs an `approval.md` file. The web UI will handle the "Approve/Reject" flows.
 
-**Tech Stack:** Python 3.12+, FastAPI, HTMX, Docker.
+**Tech Stack:** Python 3.14+, FastAPI, HTMX, Docker.
 
 ---
 

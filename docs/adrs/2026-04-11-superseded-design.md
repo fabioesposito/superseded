@@ -159,7 +159,7 @@ Default agent is configurable per issue or globally in `.superseded/config.yaml`
 
 | Layer | Choice |
 |-------|--------|
-| **Runtime** | Python 3.12+, `uv` |
+| **Runtime** | Python 3.14+, `uv` |
 | **Web Framework** | FastAPI + Uvicorn |
 | **Templates** | Jinja2 + HTMX + Alpine.js |
 | **CSS** | Tailwind CDN |

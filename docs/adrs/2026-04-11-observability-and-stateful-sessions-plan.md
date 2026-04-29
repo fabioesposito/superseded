@@ -14,7 +14,7 @@ date: 2026-04-11
 
 **Architecture:** Two new SQLite tables (session_turns, agent_events). Agent adapter gains async streaming. SSE endpoint streams events to UI. ContextAssembler reads prior session history. Metrics computed from existing + new tables.
 
-**Tech Stack:** Python 3.12+, aiosqlite, FastAPI, SSE-Starlette, HTMX (SSE extension), Jinja2, Pydantic
+**Tech Stack:** Python 3.14+, aiosqlite, FastAPI, SSE-Starlette, HTMX (SSE extension), Jinja2, Pydantic
 
 ---
 

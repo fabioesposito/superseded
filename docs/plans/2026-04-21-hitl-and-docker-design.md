@@ -8,7 +8,7 @@ This document outlines the design for integrating two major features into the Su
 ## 1. Docker Sandbox Execution
 **Goal:** Run the agent CLI (Claude Code or OpenCode) in an isolated container instead of directly on the host machine.
 **Approach:**
-- **Standard Image:** We will use a standard Docker image (e.g. `python:3.12-slim` or `node:20`) and invoke the agent CLI using `uvx opencode` or `npx @anthropic-ai/claude-code`. This avoids maintaining a custom sandbox image.
+- **Standard Image:** We will use a standard Docker image (e.g. `python:3.14-slim` or `node:20`) and invoke the agent CLI using `uvx opencode` or `npx @anthropic-ai/claude-code`. This avoids maintaining a custom sandbox image.
 - **Mounts:** The current repository worktree will be volume mounted to `/workspace` inside the container as read-write. Other sensitive paths (if any) could be read-only or not mounted.
 - **Agent Adapter:** Introduce a `DockerAgentAdapter` that inherits from `SubprocessAgentAdapter`. This adapter modifies the command to `docker run ... uvx opencode ...` instead of directly calling `opencode`.
 - **Configuration:** Add a setting `sandbox: "docker"` in the `.superseded/config.yaml` to trigger this mode instead of the default `host` execution.

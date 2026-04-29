@@ -33,7 +33,7 @@ uv run superseded --host 0.0.0.0 --port 8000
 
 ### Requirements
 
-- Python 3.12+
+- Python 3.14+
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - At least one of: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://github.com/opencodeco/opencode), or [Codex](https://github.com/openai/codex) CLI installed and available on `$PATH`
 - `gh` CLI for the Ship stage (PR creation)

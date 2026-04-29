@@ -14,7 +14,7 @@ date: 2026-04-15
 
 **Architecture:** Three features that compose together. Duration timestamps go on `stage_results` rows (migration-safe). Timeline uses those timestamps in a server-rendered HTMX partial. Notifications use `httpx` to POST to ntfy.sh from the executor after stage completion. All config lives in `.superseded/config.yaml` and the settings page.
 
-**Tech Stack:** Python 3.12+, SQLite (aiosqlite), FastAPI + HTMX + Alpine.js + Tailwind CSS, httpx (already a dep), ntfy.sh HTTP API.
+**Tech Stack:** Python 3.14+, SQLite (aiosqlite), FastAPI + HTMX + Alpine.js + Tailwind CSS, httpx (already a dep), ntfy.sh HTTP API.
 
 ---
 

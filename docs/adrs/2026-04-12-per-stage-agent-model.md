@@ -14,7 +14,7 @@ date: 2026-04-12
 
 **Architecture:** AgentFactory builds adapters from CLI name + model. HarnessRunner resolves the correct agent per stage via stage_configs dict. Config lives in `.superseded/config.yaml` with fallback to defaults.
 
-**Tech Stack:** Python 3.12, FastAPI, Jinja2, HTMX, Pydantic, yaml
+**Tech Stack:** Python 3.14, FastAPI, Jinja2, HTMX, Pydantic, yaml
 
 ---
 

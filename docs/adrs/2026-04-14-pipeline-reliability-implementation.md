@@ -14,7 +14,7 @@ date: 2026-04-14
 
 **Architecture:** Four groups of changes across config, UI, agent subprocess env injection, executor pre-flight, harness artifact writing, and SSE event wiring.
 
-**Tech Stack:** Python 3.12+, FastAPI, HTMX, Jinja2, asyncio subprocess
+**Tech Stack:** Python 3.14+, FastAPI, HTMX, Jinja2, asyncio subprocess
 
 ---
 

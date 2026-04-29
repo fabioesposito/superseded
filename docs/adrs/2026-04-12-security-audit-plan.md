@@ -14,7 +14,7 @@ date: 2026-04-12
 
 **Architecture:** Add a validation module for input sanitization, harden subprocess calls to use stdin, add optional API key auth + CSRF middleware, fix template escaping, and harden Dockerfile.
 
-**Tech Stack:** Python 3.12, FastAPI, Jinja2, aiosqlite, subprocess
+**Tech Stack:** Python 3.14, FastAPI, Jinja2, aiosqlite, subprocess
 
 ---
 
@@ -782,7 +782,7 @@ git commit -m "feat(security): add CSRF protection middleware"
 **Step 1: Add non-root user and harden**
 
 ```dockerfile
-FROM python:3.12-slim AS base
+FROM python:3.14-slim AS base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \

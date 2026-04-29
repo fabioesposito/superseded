@@ -14,7 +14,7 @@ date: 2026-04-19
 
 **Architecture:** Move existing docs into `architecture/`, `guides/`, `adrs/`, `operations/` folders. Add YAML frontmatter (title, category, summary, tags, date) to every doc file. Update `ContextAssembler._build_docs_index_layer()` to parse frontmatter via PyYAML and group docs by category.
 
-**Tech Stack:** Python 3.12+, PyYAML (already a dependency), existing test framework (pytest)
+**Tech Stack:** Python 3.14+, PyYAML (already a dependency), existing test framework (pytest)
 
 ---
 
@@ -247,7 +247,7 @@ date: 2026-04-19
 
 ## Prerequisites
 
-- Python 3.12+
+- Python 3.14+
 - Node.js (for Playwright tests)
 - `uv` for dependency management
 

@@ -68,7 +68,7 @@ class DockerAgentAdapter(SubprocessAgentAdapter):
             if self.model:
                 inner_cmd += f"-m {self.model} "
             inner_cmd += 'run --pure "$1"'
-            cmd.extend(["python:3.12-slim", "sh", "-c", inner_cmd, "--", prompt])
+            cmd.extend(["python:3.14-slim", "sh", "-c", inner_cmd, "--", prompt])
         elif self.cli == "claude-code":
             if self.rtk:
                 inner = (

@@ -322,7 +322,7 @@ def test_docker_adapter_opencode():
     assert cmd[0:3] == ["docker", "run", "--rm"]
     assert "-v" in cmd
     assert "/tmp/repo/.superseded/worktrees/SUP-001:/workspace" in cmd
-    assert "python:3.12-slim" in cmd
+    assert "python:3.14-slim" in cmd
     assert "sh" in cmd
     assert "-c" in cmd
 

@@ -14,7 +14,7 @@ date: 2026-04-14
 
 **Architecture:** Add `pause_reason` to Issue model. Detect `questions.md` after agent runs. Add two new endpoints for answering questions and editing ticket body. Update UI to show contextual actions based on pause reason.
 
-**Tech Stack:** Python 3.12+, FastAPI, HTMX, Jinja2, SQLite, frontmatter
+**Tech Stack:** Python 3.14+, FastAPI, HTMX, Jinja2, SQLite, frontmatter
 
 ---
 

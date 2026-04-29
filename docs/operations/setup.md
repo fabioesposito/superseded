@@ -10,7 +10,7 @@ date: 2026-04-19
 
 ## Prerequisites
 
-- Python 3.12+
+- Python 3.14+
 - Node.js (for Playwright tests)
 - `uv` for dependency management
 

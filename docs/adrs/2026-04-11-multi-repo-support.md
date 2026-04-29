@@ -14,7 +14,7 @@ date: 2026-04-11
 
 **Architecture:** Extend the existing single-repo design with a `repos` map in config and a `repos` field in ticket frontmatter. A ticket lists which repos it targets. The pipeline runs SPEC/PLAN against the primary repo (where `.superseded/` lives), then fans out BUILD/VERIFY/REVIEW across each target repo in isolated worktrees. SHIP creates one PR per repo. Stage results become per-repo. Single-repo tickets (the default) continue to work unchanged.
 
-**Tech Stack:** Python 3.12+, Pydantic, aiosqlite, FastAPI, Jinja2, git worktrees
+**Tech Stack:** Python 3.14+, Pydantic, aiosqlite, FastAPI, Jinja2, git worktrees
 
 ---
 

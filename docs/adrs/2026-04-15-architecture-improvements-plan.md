@@ -14,7 +14,7 @@ date: 2026-04-15
 
 **Architecture:** Incremental refactoring — each task is independently testable and deployable. All 258 existing tests must remain green throughout.
 
-**Tech Stack:** Python 3.12+, Alembic, FastAPI, aiosqlite, Pydantic
+**Tech Stack:** Python 3.14+, Alembic, FastAPI, aiosqlite, Pydantic
 
 ---
 

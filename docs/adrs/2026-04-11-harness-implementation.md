@@ -14,7 +14,7 @@ date: 2026-04-11
 
 **Architecture:** Add four new modules (harness.py, context.py, worktree.py, plan.py) alongside the existing pipeline engine. The HarnessRunner replaces the current PipelineEngine.run_stage workflow with retry logic and context assembly. WorktreeManager handles git worktree lifecycle per-issue. ContextAssembler builds progressive context from repo docs, artifacts, and rules. Plan parser makes execution plans first-class artifacts consumable by downstream stages.
 
-**Tech Stack:** Python 3.12+ / uv / FastAPI / SQLite (aiosqlite) / git worktrees / Pydantic
+**Tech Stack:** Python 3.14+ / uv / FastAPI / SQLite (aiosqlite) / git worktrees / Pydantic
 
 ---
 

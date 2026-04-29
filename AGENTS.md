@@ -6,7 +6,7 @@ Superseded is a local-first agentic pipeline tool. You write tickets (markdown s
 
 ## Tech Stack
 
-- Python 3.12+ with `uv` for dependency management
+- Python 3.14+ with `uv` for dependency management
 - FastAPI + HTMX + Alpine.js + Tailwind CSS (CDN) for the web UI
 - SQLite (aiosqlite) for pipeline state
 - Jinja2 for templating
