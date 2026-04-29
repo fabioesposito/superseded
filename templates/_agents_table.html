@@ -22,20 +22,32 @@
                 <tbody>
                     {% set stages = ['spec', 'plan', 'build', 'verify', 'review', 'ship'] %}
                     {% for stage in stages %}
-                    <tr class="border-t border-shell-800/40 hover:bg-shell-900/50 transition-colors group">
+                    <tr class="border-t border-shell-800/40 hover:bg-shell-900/50 transition-colors group"
+                        x-data="{ cli: '{{ stage_agents[stage].cli }}' }">
                         <td class="px-5 py-3.5 font-mono text-sm text-neon-400">{{ stage | capitalize }}</td>
                         <td class="px-5 py-3.5">
-                            <select name="{{ stage }}_cli"
+                            <select name="{{ stage }}_cli" x-model="cli"
                                     class="bg-shell-900 border border-shell-700 rounded-lg px-3 py-1.5 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors">
-                                <option value="claude-code" {% if stage_agents[stage].cli == 'claude-code' %}selected{% endif %}>Claude Code</option>
-                                <option value="opencode" {% if stage_agents[stage].cli == 'opencode' %}selected{% endif %}>OpenCode</option>
-                                <option value="codex" {% if stage_agents[stage].cli == 'codex' %}selected{% endif %}>Codex</option>
+                                <option value="claude-code">Claude Code</option>
+                                <option value="opencode">OpenCode</option>
+                                <option value="codex">Codex</option>
                             </select>
                         </td>
                         <td class="px-5 py-3.5">
-                            <input type="text" name="{{ stage }}_model" value="{{ stage_agents[stage].model | default('') }}"
-                                   class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-1.5 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
-                                   placeholder="e.g. opencode-go/kimi-k2.5" />
+                            <template x-if="cli === 'claude-code'">
+                                <select name="{{ stage }}_model"
+                                        class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-1.5 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors">
+                                    <option value="" {% if not stage_agents[stage].model %}selected{% endif %}>default</option>
+                                    <option value="haiku" {% if stage_agents[stage].model == 'haiku' %}selected{% endif %}>haiku</option>
+                                    <option value="sonnet" {% if stage_agents[stage].model == 'sonnet' %}selected{% endif %}>sonnet</option>
+                                    <option value="opus" {% if stage_agents[stage].model == 'opus' %}selected{% endif %}>opus</option>
+                                </select>
+                            </template>
+                            <template x-if="cli !== 'claude-code'">
+                                <input type="text" name="{{ stage }}_model" value="{{ stage_agents[stage].model | default('') }}"
+                                       class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-1.5 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
+                                       placeholder="model identifier" />
+                            </template>
                         </td>
                         <td class="px-5 py-3.5">
                             <select name="{{ stage }}_sandbox"
