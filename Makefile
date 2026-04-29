@@ -1,41 +1,47 @@
-.PHONY: install test test-v lint fmt check clean run dev e2e
+.PHONY: install test test-v lint lint-fix fmt check clean run dev db-upgrade docker-build lock help
 
-install:            ## Install dependencies
+help:                ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+install:             ## Install dependencies
 	uv sync --extra dev
 
-test:               ## Run tests
+test:                ## Run tests
 	uv run pytest tests/ -v
 
-test-v:             ## Run tests with verbose output and short tracebacks
+test-v:              ## Run tests with verbose output and short tracebacks
 	uv run pytest tests/ -v --tb=short
 
-lint:               ## Run ruff linter
+lint:                ## Run ruff linter
 	uv run ruff check src/ tests/
 
-lint-fix:           ## Run ruff linter with auto-fix
+lint-fix:            ## Run ruff linter with auto-fix
 	uv run ruff check --fix src/ tests/
 
-fmt:                ## Format code with ruff
+fmt:                 ## Format code with ruff
 	uv run ruff format src/ tests/
 
-check:              ## Lint + format check (CI gate)
+check:               ## Lint + format check (CI gate)
 	uv run ruff check src/ tests/
 	uv run ruff format --check src/ tests/
 
-clean:              ## Remove caches and build artifacts
+clean:               ## Remove caches and build artifacts
 	rm -rf .ruff_cache .pytest_cache __pycache__ dist/ build/ *.egg-info
 	find src tests -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 
-run:                ## Start the server
+run:                 ## Start the server
 	uv run superseded
 
-dev:                ## Start the server with auto-reload
-	uv run uvicorn app:app --reload
+dev:                 ## Start the server with auto-reload
+	uv run uvicorn superseded.main:create_app --factory --reload
 
-e2e:                ## Run Playwright browser tests (requires server running)
-	npx playwright test
+db-upgrade:          ## Run alembic migrations
+	uv run alembic upgrade head
 
-e2e-install:        ## Install Playwright browsers
-	npx playwright install
+docker-build:        ## Build Docker image
+	docker build -t superseded .
 
-all: check test e2e  ## Run check + test + e2e (full CI suite)
+lock:                ## Regenerate uv.lock
+	uv lock
+
+all: check test      ## Run check + test (full CI suite)
