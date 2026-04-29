@@ -55,14 +55,6 @@ test.describe('Settings Mutations', () => {
     await expect(page.locator('text=API keys saved successfully.')).toBeVisible();
   });
 
-  test('should save source root', async ({ page }) => {
-    await page.fill('#source-root-config input[name="source_code_root"]', '/tmp/source-root');
-    await page.click('#source-root-config button:has-text("Save Source Root")');
-    await page.waitForTimeout(1500);
-
-    await expect(page.locator('text=Source root saved successfully.')).toBeVisible();
-  });
-
   test('should save notifications settings', async ({ page }) => {
     // Click the visible toggle div (the checkbox is sr-only, so force the click)
     await page.check('#notifications-field input[name="enabled"]', { force: true });
@@ -86,14 +78,4 @@ test.describe('Settings Mutations', () => {
     expect(html).toContain('Server settings saved');
   });
 
-  test('should show validation error for relative source root via API', async ({ page }) => {
-    await page.goto('/settings');
-    const csrfToken = await page.locator('meta[name="csrf-token"]').getAttribute('content');
-    const response = await page.request.post('/settings/source-root', {
-      form: { source_code_root: 'relative/path', csrf_token: csrfToken },
-    });
-    expect(response.status()).toBe(400);
-    const html = await response.text();
-    expect(html).toContain('Path must be absolute');
-  });
 });

@@ -43,7 +43,6 @@ class SupersededConfig(BaseModel):
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     opencode_api_key: str = ""
-    source_code_root: str = ""
     default_model: str = ""
     rtk: bool = False
     base_url: str = ""

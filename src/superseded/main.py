@@ -57,7 +57,7 @@ def _build_pipeline_state(config: SupersededConfig, db: Database) -> PipelineSta
         event_manager=event_manager,
         stage_configs=config.stages,
     )
-    worktree_manager = WorktreeManager(config.repo_path, source_code_root=config.source_code_root)
+    worktree_manager = WorktreeManager(config.repo_path)
     if config.repos:
         runner.configure_repos(config.repos)
         for name, entry in config.repos.items():

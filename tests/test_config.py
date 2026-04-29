@@ -132,7 +132,6 @@ def test_config_api_keys_default_empty():
     assert cfg.openai_api_key == ""
     assert cfg.anthropic_api_key == ""
     assert cfg.opencode_api_key == ""
-    assert cfg.source_code_root == ""
     assert cfg.rtk is False
 
 
@@ -162,14 +161,6 @@ def test_config_env_var_overrides(monkeypatch):
         assert config.openai_api_key == "env-openai"
         assert config.anthropic_api_key == "env-anthropic"
         assert config.opencode_api_key == "env-opencode"
-
-
-def test_config_source_code_root_from_file():
-    with tempfile.TemporaryDirectory() as tmp:
-        config_path = Path(tmp) / ".superseded" / "config.yaml"
-        write_yaml_config(config_path, {"source_code_root": "/opt/repos"})
-        config = load_config(Path(tmp))
-        assert config.source_code_root == "/opt/repos"
 
 
 def test_notifications_config_defaults():

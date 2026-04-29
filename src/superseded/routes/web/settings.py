@@ -12,7 +12,6 @@ from superseded.routes import _csrf_token_for_request, get_templates
 from superseded.routes.service import Deps, get_deps, get_form_data
 from superseded.validation import (
     InvalidInputError,
-    validate_directory_path,
     validate_git_url,
     validate_repo_path,
 )
@@ -39,7 +38,6 @@ async def settings_page(request: Request, deps: Deps = Depends(get_deps)):
             "openai_api_key": deps.config.openai_api_key,
             "anthropic_api_key": deps.config.anthropic_api_key,
             "opencode_api_key": deps.config.opencode_api_key,
-            "source_code_root": deps.config.source_code_root,
             "notifications": deps.config.notifications,
             "host": deps.config.host,
             "port": deps.config.port,
@@ -63,15 +61,13 @@ async def add_repo(
     branch = str(form.get("branch", "")).strip()
 
     config = deps.config
-    if not path and config.source_code_root:
-        path = f"{config.source_code_root.rstrip('/')}/{name}"
     if not path:
         return get_templates().TemplateResponse(
             request,
             "_repos_table.html",
             {
                 "repos": config.repos,
-                "error": "Local path is required (or set a source root in Settings)",
+                "error": "Local path is required",
             },
             status_code=400,
         )
@@ -201,30 +197,6 @@ async def update_api_keys(request: Request, deps: Deps = Depends(get_deps)):
             "opencode_api_key": config.opencode_api_key,
             "success": True,
         },
-    )
-
-
-@router.post("/settings/source-root", response_class=HTMLResponse)
-async def update_source_root(request: Request, deps: Deps = Depends(get_deps)):
-    form = await get_form_data(request)
-    raw_path = str(form.get("source_code_root", "")).strip()
-    config = deps.config
-    try:
-        validated = validate_directory_path(raw_path) if raw_path else ""
-    except InvalidInputError as e:
-        return get_templates().TemplateResponse(
-            request,
-            "_source_root_field.html",
-            {"source_code_root": config.source_code_root, "error": str(e)},
-            status_code=400,
-        )
-    config.source_code_root = validated
-    save_config(config, Path(config.repo_path))
-    _reload_pipeline(request.app, config)
-    return get_templates().TemplateResponse(
-        request,
-        "_source_root_field.html",
-        {"source_code_root": validated, "success": True},
     )
 
 

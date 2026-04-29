@@ -16,16 +16,16 @@
 
     <div x-show="showAddForm" x-cloak
          class="card rounded-xl p-6 mb-6 animate-fade-in"
-         x-data="{ name: '', git_url: '', path: '', branch: '' }">
+         x-data="{ name: '', git_url: '', path: '', branch: '', suggestPath() { if (!this.path || this.path === '~/repos/') { this.path = this.name ? '~/repos/' + this.name : ''; } } }">
         <h2 class="text-lg font-semibold text-shell-100 mb-4">Add Repository</h2>
         <form hx-post="/settings/repos"
               hx-target="#repos-table"
               hx-swap="outerHTML"
-              @htmx:after-request="showAddForm = false; $reset()">
+              @htmx:after-request="if (evt.detail.successful) { showAddForm = false; name = ''; git_url = ''; path = ''; branch = ''; }">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Name</label>
-                    <input type="text" name="name" x-model="name" required
+                    <input type="text" name="name" x-model="name" required @input="suggestPath()"
                            class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
                            placeholder="e.g. frontend">
                 </div>
@@ -37,9 +37,9 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Local Path</label>
-                    <input type="text" name="path" x-model="path"
+                    <input type="text" name="path" x-model="path" required
                            class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors"
-                           placeholder="/path/to/repo (optional if source root is set)">
+                           placeholder="/absolute/path/to/repo">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Branch</label>
@@ -75,12 +75,6 @@
         <p class="text-shell-500 text-sm mt-1">Agent authentication — each key is injected only into its matching CLI subprocess</p>
     </div>
     {% include "_api_keys_field.html" %}
-
-    <div class="mt-10 mb-3">
-        <h2 class="text-lg font-semibold text-shell-100">Source Root</h2>
-        <p class="text-shell-500 text-sm mt-1">Base directory for repo cloning</p>
-    </div>
-    {% include "_source_root_field.html" %}
 
     <div class="mt-10 mb-3">
         <h2 class="text-lg font-semibold text-shell-100">Notifications</h2>
