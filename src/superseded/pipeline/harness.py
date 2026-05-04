@@ -18,6 +18,7 @@ from superseded.models import (
 from superseded.pipeline.context import ContextAssembler
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.worktree import WorktreeManager
+from superseded.verification import VerificationEngine
 
 MAX_SESSION_TURN_CONTENT_LENGTH = 2000
 MIN_OUTPUT_CHARS = 50
@@ -37,6 +38,7 @@ class HarnessRunner:
         self.context_assembler = ContextAssembler(repo_path)
         self.event_manager = event_manager or PipelineEventManager()
         self.worktree_manager = WorktreeManager(repo_path)
+        self.verification_engine = VerificationEngine()
 
     def resolve_agent(self, stage: Stage) -> AgentAdapter:
         config = self.stage_configs.get(stage.value)
@@ -261,8 +263,30 @@ class HarnessRunner:
                     ),
                     artifacts=[],
                     started_at=datetime.datetime.now(datetime.UTC),
-                    finished_at=datetime.datetime.now(datetime.UTC),
+                        finished_at=datetime.datetime.now(datetime.UTC),
+                    )
+
+            stage_config = self.stage_configs.get(stage.value)
+            if stage_config:
+                verify_config = stage_config.verify
+                artifact_contents = {}
+                artifact_dir = Path(artifacts_path)
+                if artifact_dir.exists():
+                    for f in artifact_dir.glob("*.md"):
+                        artifact_contents[f.name] = f.read_text(encoding="utf-8")
+                verification = self.verification_engine.verify(
+                    stage.value, stdout, artifact_contents, verify_config
                 )
+                if not verification.passed:
+                    return StageResult(
+                        stage=stage,
+                        passed=False,
+                        output=stdout,
+                        error=self.verification_engine.format_errors_for_retry(verification),
+                        artifacts=[],
+                        started_at=datetime.datetime.now(datetime.UTC),
+                        finished_at=datetime.datetime.now(datetime.UTC),
+                    )
 
             return StageResult(
                 stage=stage,
