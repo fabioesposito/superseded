@@ -282,7 +282,7 @@ def _detect_agents() -> list[dict[str, str]]:
     return results
 
 
-def _detect_api_keys(config: SupersededConfig) -> list[dict[str, str]]:
+def _detect_api_keys(config: SupersededConfig) -> list[dict[str, str | bool]]:
     keys = [
         {
             "name": "ANTHROPIC_API_KEY",

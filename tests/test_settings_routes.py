@@ -187,8 +187,17 @@ async def test_setup_wizard_shows_agent_detection(tmp_repo):
         assert "Setup" in response.text
 
 
-async def test_setup_wizard_detects_agents(tmp_repo):
+async def test_setup_wizard_detects_agents(tmp_repo, monkeypatch):
+    def mock_which(binary):
+        if binary == "opencode":
+            return "/usr/bin/opencode"
+        return None
+
+    monkeypatch.setattr("shutil.which", mock_which)
+
     client, _ = await _make_client(tmp_repo)
     async with client:
         response = await client.get("/settings/setup")
-        assert "claude-code" in response.text or "opencode" in response.text
+        assert response.status_code == 200
+        assert "opencode" in response.text
+        assert "not found" in response.text
