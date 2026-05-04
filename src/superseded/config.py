@@ -81,3 +81,23 @@ def save_config(config: SupersededConfig, repo_path: Path) -> None:
     data = {k: v for k, v in data.items() if v != defaults.get(k)}
     with open(config_file, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
+
+VALID_AGENTS = {"opencode", "claude-code", "codex", "docker"}
+
+
+def validate_config(config: SupersededConfig) -> list[str]:
+    """Return list of validation error messages. Empty list means valid."""
+    errors = []
+    if not config.default_agent:
+        errors.append("default_agent is required. Set it to 'opencode', 'claude-code', 'codex', or 'docker'.")
+    elif config.default_agent not in VALID_AGENTS:
+        errors.append(
+            f"Unknown default_agent: '{config.default_agent}'. "
+            f"Valid agents: {', '.join(sorted(VALID_AGENTS))}."
+        )
+    if config.stage_timeout_seconds < 0:
+        errors.append(f"stage_timeout_seconds must be positive, got {config.stage_timeout_seconds}.")
+    if not (1 <= config.port <= 65535):
+        errors.append(f"port must be 1-65535, got {config.port}.")
+    return errors
