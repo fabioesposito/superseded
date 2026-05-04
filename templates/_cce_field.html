@@ -1,0 +1,47 @@
+<div id="cce-config">
+    {% if success %}
+    <div class="mb-4 px-5 py-3 text-sm text-olive-400 bg-olive-900/20 rounded-lg border border-olive-800/30">
+        CCE settings saved successfully.
+    </div>
+    {% endif %}
+    <div class="card rounded-xl p-6">
+        <form hx-post="/settings/cce" hx-target="#cce-config" hx-swap="outerHTML">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="enabled" {% if cce.enabled %}checked{% endif %}
+                               class="rounded border-shell-700 bg-shell-900 text-neon-500 focus:ring-neon-500">
+                        <span class="text-sm text-shell-200">Enable CCE</span>
+                    </label>
+                    <p class="text-shell-500 text-xs mt-1">Code Context Engine for token-efficient code search</p>
+                </div>
+                <div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="auto_index" {% if cce.auto_index %}checked{% endif %}
+                               class="rounded border-shell-700 bg-shell-900 text-neon-500 focus:ring-neon-500">
+                        <span class="text-sm text-shell-200">Auto-index</span>
+                    </label>
+                    <p class="text-shell-500 text-xs mt-1">Index repos before stages run</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Index stale after (minutes)</label>
+                    <input type="number" name="index_stale_minutes" value="{{ cce.index_stale_minutes }}"
+                           class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Compression level</label>
+                    <select name="compression_level"
+                            class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors">
+                        <option value="off" {% if cce.compression_level == 'off' %}selected{% endif %}>Off</option>
+                        <option value="lite" {% if cce.compression_level == 'lite' %}selected{% endif %}>Lite</option>
+                        <option value="standard" {% if cce.compression_level == 'standard' %}selected{% endif %}>Standard</option>
+                        <option value="max" {% if cce.compression_level == 'max' %}selected{% endif %}>Max</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                Save CCE Settings
+            </button>
+        </form>
+    </div>
+</div>
