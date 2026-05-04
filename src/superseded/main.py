@@ -125,14 +125,44 @@ def create_app(
 
 def cli() -> None:
     parser = argparse.ArgumentParser(description="Superseded - local-first agentic pipeline tool")
-    parser.add_argument("repo_path", nargs="?", default=".", help="Path to the git repository")
-    parser.add_argument("--port", type=int, default=None, help="Port to run the server on")
-    parser.add_argument("--host", type=str, default=None, help="Host to bind to")
+    subparsers = parser.add_subparsers(dest="command")
+
+    init_parser = subparsers.add_parser("init", help="Initialize .superseded/ in current directory")
+    init_parser.add_argument("repo_path", nargs="?", default=".", help="Path to the git repository")
+
+    run_parser = subparsers.add_parser("run", help="Start the server (default)")
+    run_parser.add_argument("repo_path", nargs="?", default=".", help="Path to the git repository")
+    run_parser.add_argument("--port", type=int, default=None, help="Port to run the server on")
+    run_parser.add_argument("--host", type=str, default=None, help="Host to bind to")
+
+    parser.add_argument("bare_repo_path", nargs="?", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--port", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--host", type=str, default=None, help=argparse.SUPPRESS)
+
     args = parser.parse_args()
 
-    config = load_config(Path(args.repo_path).resolve())
-    port = args.port or config.port
-    host = args.host or config.host
+    if args.command == "init":
+        from superseded.cli import init_command
+
+        init_command(Path(args.repo_path).resolve())
+        print(f"Initialized .superseded/ in {args.repo_path}")
+        return
+
+    repo_path = getattr(args, "repo_path", None) or getattr(args, "bare_repo_path", None) or "."
+    config = load_config(Path(repo_path).resolve())
+
+    from superseded.config import validate_config
+
+    errors = validate_config(config)
+    if errors:
+        print("Configuration errors:")
+        for err in errors:
+            print(f"  - {err}")
+        print("\nRun 'superseded init' or edit .superseded/config.yaml to fix.")
+        return
+
+    port = getattr(args, "port", None) or config.port
+    host = getattr(args, "host", None) or config.host
 
     import uvicorn
 
