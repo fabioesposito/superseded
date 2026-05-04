@@ -75,7 +75,7 @@ async def _compute_metrics(deps: Deps) -> dict:
                 dur = (dt_end - dt_start).total_seconds() * 1000
                 if dur > 0:
                     stage_durations.setdefault(r["stage"], []).append(dur)
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 pass
 
     avg_stage_duration_ms = {
