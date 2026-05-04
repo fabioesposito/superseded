@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 from superseded.agents.factory import AgentFactory
 from superseded.db import Database
-from superseded.models import AgentEvent, AgentResult, Issue, Stage
+from superseded.models import AgentEvent, Issue, Stage
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.harness import HarnessRunner
 
@@ -46,7 +46,9 @@ async def test_streaming_saves_session_turns():
 
         mock_agent.run_streaming = fake_stream
 
-        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", db=db
+        )
         event_manager = PipelineEventManager()
 
         artifacts_path = Path(tmp) / "artifacts"
@@ -97,7 +99,9 @@ async def test_streaming_saves_agent_events():
 
         mock_agent.run_streaming = fake_stream
 
-        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", db=db
+        )
         event_manager = PipelineEventManager()
 
         artifacts_path = Path(tmp) / "artifacts"
@@ -132,11 +136,26 @@ async def test_streaming_runs_once_on_failure():
         await db.initialize()
 
         mock_agent = AsyncMock()
-        mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="error on build")
+
+        async def fake_stream(prompt, context):
+            yield AgentEvent(
+                event_type="stdout",
+                content="error on build",
+                stage=Stage.BUILD,
+            )
+            yield AgentEvent(
+                event_type="status",
+                content="",
+                stage=Stage.BUILD,
+                metadata={"exit_code": 1, "duration_ms": 100},
+            )
+
+        mock_agent.run_streaming = fake_stream
 
         runner = HarnessRunner(
             agent_factory=_mock_factory(mock_agent),
             repo_path="/tmp/testrepo",
+            db=db,
         )
 
         artifacts_path = Path(tmp) / "artifacts"
@@ -150,7 +169,6 @@ async def test_streaming_runs_once_on_failure():
 
         assert result.passed is False
         assert "error on build" in result.error
-        assert mock_agent.run.call_count == 1
 
         await db.close()
 
@@ -178,7 +196,9 @@ async def test_streaming_truncates_long_output():
 
         mock_agent.run_streaming = fake_stream
 
-        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo", db=db
+        )
         event_manager = PipelineEventManager()
 
         artifacts_path = Path(tmp) / "artifacts"

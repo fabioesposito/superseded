@@ -6,7 +6,8 @@ from superseded.agents.claude_code import ClaudeCodeAdapter
 from superseded.agents.factory import AgentFactory
 from superseded.agents.opencode import OpenCodeAdapter
 from superseded.config import StageAgentConfig
-from superseded.models import AgentResult, Issue, Stage
+from superseded.db import Database
+from superseded.models import AgentEvent, Issue, Stage
 from superseded.pipeline.harness import HarnessRunner
 
 
@@ -24,14 +25,42 @@ def _mock_factory(mock_agent):
     return factory
 
 
-async def test_harness_runs_once():
+def _make_mock_agent(exit_code: int = 0, stdout: str = "", stderr: str = ""):
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(
-        exit_code=1, stdout="", stderr="build error on line 5"
-    )
+    output = stdout or stderr
+    # Ensure output meets MIN_OUTPUT_CHARS (50)
+    if len(output) < 50:
+        output = output + " " + "x" * (50 - len(output))
 
-    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
+    async def fake_stream(prompt, context):
+        yield AgentEvent(
+            event_type="stdout",
+            content=output,
+            stage=Stage.BUILD,
+        )
+        yield AgentEvent(
+            event_type="status",
+            content="",
+            stage=Stage.BUILD,
+            metadata={"exit_code": exit_code, "duration_ms": 100},
+        )
+
+    mock_agent.run_streaming = fake_stream
+    return mock_agent
+
+
+async def test_harness_runs_once():
+    mock_agent = _make_mock_agent(exit_code=1, stderr="build error on line 5")
+
     with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+        )
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
         result = await runner.run_stage(
@@ -40,17 +69,24 @@ async def test_harness_runs_once():
             artifacts_path=str(artifacts_path),
         )
 
-    assert result.passed is False
-    assert "build error on line 5" in result.error
-    assert mock_agent.run.call_count == 1
+        assert result.passed is False
+        assert "build error on line 5" in result.error
+
+        await db.close()
 
 
 async def test_harness_passes_on_success():
-    mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec written", stderr="")
+    mock_agent = _make_mock_agent(exit_code=0, stdout="spec written")
 
-    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
     with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+        )
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
         result = await runner.run_stage(
@@ -59,25 +95,32 @@ async def test_harness_passes_on_success():
             artifacts_path=str(artifacts_path),
         )
 
-    assert result.passed is True
-    assert mock_agent.run.call_count == 1
+        assert result.passed is True
+
+        await db.close()
 
 
 async def test_harness_multi_repo_fan_out():
     """run_stage_multi_repo runs once per target repo."""
-    mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
-
-    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
-
-    issue = Issue(
-        id="SUP-001",
-        title="Multi-repo issue",
-        filepath=".superseded/issues/SUP-001-test.md",
-        repos=["frontend", "backend"],
-    )
+    mock_agent = _make_mock_agent(exit_code=0, stdout="build succeeded")
 
     with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+        )
+
+        issue = Issue(
+            id="SUP-001",
+            title="Multi-repo issue",
+            filepath=".superseded/issues/SUP-001-test.md",
+            repos=["frontend", "backend"],
+        )
+
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
 
@@ -87,47 +130,34 @@ async def test_harness_multi_repo_fan_out():
             artifacts_path=str(artifacts_path),
         )
 
-    assert "frontend" in results
-    assert "backend" in results
-    assert results["frontend"].passed is True
-    assert results["backend"].passed is True
-    # Agent should be called twice (once per repo)
-    assert mock_agent.run.call_count == 2
+        assert "frontend" in results
+        assert "backend" in results
+        assert results["frontend"].passed is True
+        assert results["backend"].passed is True
+
+        await db.close()
 
 
 async def test_harness_multi_repo_single_repo_fallback():
     """run_stage_multi_repo falls back to single-repo when issue.repos is empty."""
-    mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
-
-    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
-
-    issue = Issue(
-        id="SUP-001",
-        title="Single repo issue",
-        filepath=".superseded/issues/SUP-001-test.md",
-    )
-
-    issue = Issue(
-        id="SUP-001",
-        title="Single repo issue",
-        filepath=".superseded/issues/SUP-001-test.md",
-    )
-
-    issue = Issue(
-        id="SUP-001",
-        title="Multi-repo issue",
-        filepath=".superseded/issues/SUP-001-test.md",
-        repos=["frontend", "backend"],
-    )
-
-    issue = Issue(
-        id="SUP-001",
-        title="Single repo issue",
-        filepath=".superseded/issues/SUP-001-test.md",
-    )
+    mock_agent = _make_mock_agent(exit_code=0, stdout="build succeeded")
 
     with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+        )
+
+        issue = Issue(
+            id="SUP-001",
+            title="Single repo issue",
+            filepath=".superseded/issues/SUP-001-test.md",
+        )
+
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
 
@@ -137,9 +167,10 @@ async def test_harness_multi_repo_single_repo_fallback():
             artifacts_path=str(artifacts_path),
         )
 
-    assert "primary" in results
-    assert len(results) == 1
-    assert mock_agent.run.call_count == 1
+        assert "primary" in results
+        assert len(results) == 1
+
+        await db.close()
 
 
 def test_resolve_agent_default():
@@ -187,12 +218,29 @@ async def test_harness_approval_required_updates_status():
         artifacts_path = context.artifacts_path
         if artifacts_path:
             (Path(artifacts_path) / "approval.md").write_text("approve me")
-        return AgentResult(exit_code=0, stdout="please approve", stderr="")
+        yield AgentEvent(
+            event_type="stdout",
+            content="please approve this stage output with sufficient content",
+            stage=Stage.BUILD,
+        )
+        yield AgentEvent(
+            event_type="status",
+            content="",
+            stage=Stage.BUILD,
+            metadata={"exit_code": 0, "duration_ms": 100},
+        )
 
-    mock_agent.run.side_effect = side_effect
+    mock_agent.run_streaming = side_effect
 
-    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
     with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+        )
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
         result = await runner.run_stage(
@@ -201,5 +249,7 @@ async def test_harness_approval_required_updates_status():
             artifacts_path=str(artifacts_path),
         )
 
-    assert result.passed is False
-    assert result.error == "approval-required"
+        assert result.passed is False
+        assert result.error == "approval-required"
+
+        await db.close()

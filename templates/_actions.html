@@ -4,6 +4,11 @@
         {% include "_edit_ticket_form.html" %}
     {% elif issue.status.value == 'paused' %}
         {% include "_edit_ticket_form.html" %}
+        {% if issue.stage.value == 'review' %}
+        <div hx-get="/issues/{{ issue.id }}/files" hx-trigger="load" hx-swap="outerHTML">
+            <div class="card rounded-xl p-5 animate-pulse"><div class="h-20 bg-shell-800 rounded"></div></div>
+        </div>
+        {% endif %}
         <form action="/pipeline/issues/{{ issue.id }}/retry" method="post" class="mb-2.5"
             hx-post="/pipeline/issues/{{ issue.id }}/retry"
             hx-target="#issue-detail-content"

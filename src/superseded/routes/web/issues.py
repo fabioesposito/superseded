@@ -356,6 +356,124 @@ async def reject_issue(
     return await run_and_advance(deps, issue.id, request, background_tasks)
 
 
+@router.post("/{issue_id}/approve-file", response_class=HTMLResponse)
+async def approve_file(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    issue: Issue = Depends(get_issue),
+    deps: Deps = Depends(get_deps),
+):
+    form = await _get_form_data(request)
+    filename = str(form.get("filename", "")).strip()
+    if not filename:
+        return _render_error(request, "Filename is required")
+
+    artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue.id)
+
+    approvals_file = Path(artifacts_path) / "file-approvals.txt"
+    with open(approvals_file, "a") as f:
+        f.write(f"APPROVED: {filename}\n")
+
+    changed_files = _get_changed_files(artifacts_path)
+    approved = _get_approved_files(artifacts_path)
+    if changed_files and all(f in approved for f in changed_files):
+        for repo_name in issue.repos if issue.repos else [None]:
+            effective_repo = repo_name or "primary"
+            approval_file = Path(artifacts_path) / effective_repo / "approval.md"
+            if approval_file.exists():
+                approval_file.unlink()
+        await deps.db.update_pause_reason(issue.id, "")
+        return await run_and_advance(deps, issue.id, request, background_tasks)
+
+    return get_templates().TemplateResponse(
+        request,
+        "_file_approval.html",
+        {"issue": issue, "changed_files": changed_files, "approved_files": approved},
+    )
+
+
+@router.post("/{issue_id}/reject-file", response_class=HTMLResponse)
+async def reject_file(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    issue: Issue = Depends(get_issue),
+    deps: Deps = Depends(get_deps),
+):
+    form = await _get_form_data(request)
+    filename = str(form.get("filename", "")).strip()
+    feedback = str(form.get("feedback", "")).strip()
+    if not filename:
+        return _render_error(request, "Filename is required")
+
+    artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue.id)
+
+    result = StageResult(
+        stage=issue.stage,
+        passed=False,
+        output="",
+        error=f"File rejected: {filename} — {feedback}",
+    )
+    await deps.db.save_stage_result(issue.id, result)
+
+    approvals_file = Path(artifacts_path) / "file-approvals.txt"
+    if approvals_file.exists():
+        approvals_file.unlink()
+
+    for repo_name in issue.repos if issue.repos else [None]:
+        effective_repo = repo_name or "primary"
+        approval_file = Path(artifacts_path) / effective_repo / "approval.md"
+        if approval_file.exists():
+            approval_file.unlink()
+
+    await deps.db.update_pause_reason(issue.id, "")
+    return await run_and_advance(deps, issue.id, request, background_tasks)
+
+
+@router.get("/{issue_id}/files", response_class=HTMLResponse)
+async def get_file_approval(
+    request: Request,
+    issue: Issue = Depends(get_issue),
+    deps: Deps = Depends(get_deps),
+):
+    artifacts_path = str(Path(deps.config.repo_path) / deps.config.artifacts_dir / issue.id)
+    changed_files = _get_changed_files(artifacts_path)
+    approved = _get_approved_files(artifacts_path)
+    return get_templates().TemplateResponse(
+        request,
+        "_file_approval.html",
+        {"issue": issue, "changed_files": changed_files, "approved_files": approved},
+    )
+
+
+def _get_changed_files(artifacts_path: str) -> list[str]:
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD~1"],
+            capture_output=True,
+            text=True,
+            cwd=artifacts_path,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
+    except Exception:
+        pass
+    return []
+
+
+def _get_approved_files(artifacts_path: str) -> set[str]:
+    approvals_file = Path(artifacts_path) / "file-approvals.txt"
+    if not approvals_file.exists():
+        return set()
+    approved = set()
+    for line in approvals_file.read_text().split("\n"):
+        if line.startswith("APPROVED: "):
+            approved.add(line[10:].strip())
+    return approved
+
+
 async def _get_form_data(request: Request) -> dict:
     if hasattr(request.state, "form_data"):
         return request.state.form_data

@@ -34,6 +34,8 @@ The slug is derived from the title: lowercase, non-alphanumeric characters repla
 | `assignee` | string | no | `""` | Person or agent assigned |
 | `labels` | list | no | `[]` | Categorization tags |
 | `repos` | list | no | `[]` | Target repositories for multi-repo tickets |
+| `github_url` | string | — | — | URL of the source GitHub issue (if imported) |
+| `pause_reason` | string | — | — | Why the pipeline is paused (set automatically) |
 
 ### Status Values
 

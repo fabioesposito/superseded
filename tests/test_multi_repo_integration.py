@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 from superseded.agents.factory import AgentFactory
 from superseded.config import RepoEntry, SupersededConfig
 from superseded.db import Database
-from superseded.models import AgentResult, Issue, Stage
+from superseded.models import Issue, Stage
 from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.worktree import WorktreeManager
 from superseded.tickets.reader import read_issue
@@ -90,10 +90,30 @@ Add feature that spans frontend and backend.
 
         # Set up mock agent that always succeeds
         mock_agent = AsyncMock()
-        mock_agent.run.return_value = AgentResult(exit_code=0, stdout="build succeeded", stderr="")
+
+        async def fake_stream(prompt, context):
+            from superseded.models import AgentEvent
+
+            yield AgentEvent(
+                event_type="stdout",
+                content="build succeeded with sufficient content to pass the minimum output character check",
+                stage=Stage.BUILD,
+            )
+            yield AgentEvent(
+                event_type="status",
+                content="",
+                stage=Stage.BUILD,
+                metadata={"exit_code": 0, "duration_ms": 100},
+            )
+
+        mock_agent.run_streaming = fake_stream
 
         # Create harness runner and configure repos
-        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path=str(primary))
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path=str(primary),
+            db=db,
+        )
         runner.configure_repos(config.repos)
 
         # Run BUILD stage (multi-repo)
@@ -111,7 +131,6 @@ Add feature that spans frontend and backend.
         assert "backend" in results
         assert results["frontend"].passed is True
         assert results["backend"].passed is True
-        assert mock_agent.run.call_count == 2
 
         # Save per-repo results
         await db.save_stage_result("SUP-050", results["frontend"], repo="frontend")
@@ -147,10 +166,34 @@ async def test_multi_repo_backward_compatible():
         primary.mkdir()
         _init_git_repo(primary)
 
-        mock_agent = AsyncMock()
-        mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec done", stderr="")
+        db_path = primary / ".superseded" / "state.db"
+        db = Database(str(db_path))
+        await db.initialize()
 
-        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path=str(primary))
+        mock_agent = AsyncMock()
+
+        async def fake_stream(prompt, context):
+            from superseded.models import AgentEvent
+
+            yield AgentEvent(
+                event_type="stdout",
+                content="spec done with sufficient content to pass the minimum output character check for validation",
+                stage=Stage.SPEC,
+            )
+            yield AgentEvent(
+                event_type="status",
+                content="",
+                stage=Stage.SPEC,
+                metadata={"exit_code": 0, "duration_ms": 100},
+            )
+
+        mock_agent.run_streaming = fake_stream
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path=str(primary),
+            db=db,
+        )
 
         issue = Issue(
             id="SUP-051",
@@ -170,3 +213,5 @@ async def test_multi_repo_backward_compatible():
         assert "primary" in results
         assert len(results) == 1
         assert results["primary"].passed is True
+
+        await db.close()

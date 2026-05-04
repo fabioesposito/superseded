@@ -160,6 +160,31 @@ async def _run_stage_background(
                 await state_writer.write_status(
                     issue_id, issue.filepath, IssueStatus.IN_PROGRESS, next_stage
                 )
+                if deps.config.auto_advance and next_stage:
+                    next_stage_obj = next_stage
+                    next_stage_config = deps.config.stages.get(next_stage_obj.value)
+                    if not (next_stage_config and next_stage_config.require_approval):
+                        next_issue = _find_issue(deps, issue_id)
+                        if next_issue:
+                            result_next = await executor.run_stage(
+                                next_issue, next_stage_obj, deps.config
+                            )
+                            if result_next.passed:
+                                following = next_issue.next_stage()
+                                if following is None:
+                                    await state_writer.write_status(
+                                        issue_id,
+                                        issue.filepath,
+                                        IssueStatus.DONE,
+                                        Stage.SHIP,
+                                    )
+                                else:
+                                    await state_writer.write_status(
+                                        issue_id,
+                                        issue.filepath,
+                                        IssueStatus.IN_PROGRESS,
+                                        following,
+                                    )
         else:
             await state_writer.write_status(
                 issue_id, issue.filepath, IssueStatus.PAUSED, issue.stage

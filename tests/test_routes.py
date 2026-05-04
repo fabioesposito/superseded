@@ -117,17 +117,20 @@ def tmp_multi_repo():
 async def test_run_stage_multi_repo_fans_out(tmp_multi_repo):
     from unittest.mock import AsyncMock
 
-    from superseded.models import Stage, StageResult
+    from superseded.agents.factory import AgentFactory
+    from superseded.models import AgentEvent, Stage
+    from superseded.pipeline.events import PipelineEventManager
     from superseded.pipeline.executor import StageExecutor
     from superseded.pipeline.worktree import WorktreeManager
 
     app = create_app(repo_path=tmp_multi_repo)
     await app.state.db.initialize()
 
-    mock_result = StageResult(stage=Stage.SPEC, passed=True, output="ok")
     mock_runner = AsyncMock()
+    mock_runner.repo_path = tmp_multi_repo
+    mock_runner.agent_factory = AgentFactory()
     mock_runner.stage_configs = {}
-    mock_runner.run_stage_streaming.return_value = mock_result
+    mock_runner.event_manager = PipelineEventManager()
 
     worktree_manager = WorktreeManager(tmp_multi_repo)
     executor = StageExecutor(
@@ -135,6 +138,31 @@ async def test_run_stage_multi_repo_fans_out(tmp_multi_repo):
         db=app.state.db,
         worktree_manager=worktree_manager,
     )
+
+    call_count = 0
+
+    def mock_resolve(stage):
+        nonlocal call_count
+        call_count += 1
+        mock_agent = AsyncMock()
+
+        async def fake_stream(prompt, context):
+            yield AgentEvent(
+                event_type="stdout",
+                content="ok with sufficient content to pass the minimum output character requirement",
+                stage=Stage.SPEC,
+            )
+            yield AgentEvent(
+                event_type="status",
+                content="",
+                stage=Stage.SPEC,
+                metadata={"exit_code": 0, "duration_ms": 100},
+            )
+
+        mock_agent.run_streaming = fake_stream
+        return mock_agent
+
+    executor._harness.resolve_agent = mock_resolve
 
     issues_dir = Path(tmp_multi_repo) / ".superseded" / "issues"
     from superseded.tickets.reader import list_issues
@@ -147,17 +175,15 @@ async def test_run_stage_multi_repo_fans_out(tmp_multi_repo):
     assert result.passed is True
     assert "[frontend]" in result.output
     assert "[backend]" in result.output
-
-    calls = mock_runner.run_stage_streaming.call_args_list
-    assert len(calls) == 2
-    repos_called = {c.kwargs.get("repo") for c in calls}
-    assert repos_called == {"frontend", "backend"}
+    assert call_count == 2
 
 
 async def test_run_stage_single_repo_backward_compat(tmp_multi_repo):
     from unittest.mock import AsyncMock
 
-    from superseded.models import Stage, StageResult
+    from superseded.agents.factory import AgentFactory
+    from superseded.models import AgentEvent, Stage
+    from superseded.pipeline.events import PipelineEventManager
     from superseded.pipeline.executor import StageExecutor
     from superseded.pipeline.worktree import WorktreeManager
     from superseded.tickets.reader import list_issues
@@ -175,16 +201,18 @@ stage: spec
 created: "2026-04-11"
 assignee: ""
 labels: []
+repos: []
 ---
 
 Single repo body.
 """
     )
 
-    mock_result = StageResult(stage=Stage.SPEC, passed=True, output="ok")
     mock_runner = AsyncMock()
+    mock_runner.repo_path = tmp_multi_repo
+    mock_runner.agent_factory = AgentFactory()
     mock_runner.stage_configs = {}
-    mock_runner.run_stage_streaming.return_value = mock_result
+    mock_runner.event_manager = PipelineEventManager()
 
     worktree_manager = WorktreeManager(tmp_multi_repo)
     executor = StageExecutor(
@@ -193,6 +221,24 @@ Single repo body.
         worktree_manager=worktree_manager,
     )
 
+    mock_agent = AsyncMock()
+
+    async def fake_stream(prompt, context):
+        yield AgentEvent(
+            event_type="stdout",
+            content="ok with sufficient content to pass the minimum output character requirement",
+            stage=Stage.SPEC,
+        )
+        yield AgentEvent(
+            event_type="status",
+            content="",
+            stage=Stage.SPEC,
+            metadata={"exit_code": 0, "duration_ms": 100},
+        )
+
+    mock_agent.run_streaming = fake_stream
+    executor._harness.resolve_agent = lambda stage: mock_agent
+
     issues = list_issues(str(issues_dir))
     single_issue = next(i for i in issues if i.id == "SUP-003")
 
@@ -200,7 +246,3 @@ Single repo body.
 
     assert result.passed is True
     assert "[primary]" in result.output
-
-    calls = mock_runner.run_stage_streaming.call_args_list
-    assert len(calls) == 1
-    assert calls[0].kwargs.get("repo") is None

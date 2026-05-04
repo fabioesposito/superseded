@@ -101,6 +101,9 @@ def _build_pipeline_state(config: SupersededConfig, db: Database) -> PipelineSta
     notification_service = NotificationService(
         topic=config.notifications.ntfy_topic,
         enabled=config.notifications.enabled,
+        slack_webhook_url=config.notifications.slack.webhook_url,
+        webhook_url=config.notifications.webhook.url,
+        webhook_headers=config.notifications.webhook.headers or None,
     )
     runner = HarnessRunner(
         agent_factory=factory,

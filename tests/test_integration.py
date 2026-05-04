@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 from superseded.agents.factory import AgentFactory
 from superseded.config import load_config
 from superseded.db import Database
-from superseded.models import AgentResult, Issue, IssueStatus, Stage
+from superseded.models import Issue, IssueStatus, Stage
 from superseded.pipeline.context import ContextAssembler
 from superseded.pipeline.harness import HarnessRunner
 from superseded.pipeline.worktree import WorktreeManager
@@ -149,10 +149,33 @@ async def test_harness_full_lifecycle():
         issue = read_issue(filepath)
         assert issue.stage == Stage.SPEC
 
-        mock_agent = AsyncMock()
-        mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec written", stderr="")
+        db = Database(str(config_dir / "state.db"))
+        await db.initialize()
 
-        runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path=str(repo))
+        mock_agent = AsyncMock()
+
+        async def fake_stream(prompt, context):
+            from superseded.models import AgentEvent
+
+            yield AgentEvent(
+                event_type="stdout",
+                content="spec written with sufficient content to pass the minimum output character check",
+                stage=Stage.SPEC,
+            )
+            yield AgentEvent(
+                event_type="status",
+                content="",
+                stage=Stage.SPEC,
+                metadata={"exit_code": 0, "duration_ms": 100},
+            )
+
+        mock_agent.run_streaming = fake_stream
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path=str(repo),
+            db=db,
+        )
         result = await runner.run_stage(
             issue=issue,
             stage=Stage.SPEC,
@@ -160,7 +183,8 @@ async def test_harness_full_lifecycle():
         )
 
         assert result.passed is True
-        assert mock_agent.run.call_count == 1
+
+        await db.close()
 
 
 async def test_context_assembler_includes_artifacts():

@@ -6,15 +6,50 @@ tags: [harness, agents, orchestration]
 date: 2026-04-19
 ---
 
-# Agent Harness
+# Agent Harness Architecture
 
-Superseded is an agent harness that orchestrates AI agents through a structured pipeline.
+The agent harness is the infrastructure layer that wraps AI agents and manages their lifecycle, context, tool access, verification, and safety. Superseded implements a harness as the central orchestration component.
 
-## Features
+## Harness Class
 
-- **Feedback loops**: Stages retry on failure with error context
-- **Execution plans**: Plan stage writes structured plan.md consumed by downstream stages
-- **Progressive context**: Agents receive context in layers (AGENTS.md → docs → ticket → artifacts → rules → skill prompt)
-- **Worktree isolation**: Changes are sandboxed until success
-- **Quality enforcement**: Review findings loop back to BUILD
-- **Iteration history**: Every attempt tracked in database and UI
+The `Harness` class (`src/superseded/harness/__init__.py`) is the core orchestrator. It composes:
+
+- **ContextAssembler** — builds progressive context prompts from 10+ layers
+- **VerificationEngine** — validates stage outputs against configurable criteria
+- **CheckpointManager** — saves/loads stage progress for crash recovery
+- **LifecycleManager** — health monitoring, graceful shutdown, resource limits
+- **WorktreeManager** — isolated git worktrees per stage
+- **AgentFactory** — creates agent adapters (Claude Code, OpenCode, Codex, Docker)
+- **NotificationService** — sends alerts via ntfy.sh, Slack, or webhooks
+
+## Stage Execution Flow
+
+When `Harness.run_stage()` is called:
+
+1. **Worktree creation** — BUILD/VERIFY/REVIEW stages run in isolated git worktrees
+2. **Approval gate** — If `require_approval: true`, create `approval.md` and pause
+3. **Context assembly** — Build prompt from AGENTS.md, docs, ticket, artifacts, rules, skill prompt
+4. **Checkpoint resume** — If checkpoint exists, inject resume context into prompt
+5. **Agent execution** — Stream agent output, persist events to DB
+6. **Artifact extraction** — SPEC/PLAN stages write output to `*.md` files
+7. **HITL detection** — Check for `questions.md` and `approval.md`
+8. **Minimum output check** — Reject runs with < 50 chars output
+9. **Verification** — Validate artifact sections, review findings, test results
+10. **Checkpoint clear** — Clear checkpoint on success
+11. **Notifications** — Send alerts on completion/failure
+12. **State update** — Write issue status to DB
+
+## Backward Compatibility
+
+The `HarnessRunner` and `StageExecutor` classes in `pipeline/` are thin wrappers that delegate to `Harness`. They preserve the existing API surface while the logic lives in the harness package.
+
+## Package Structure
+
+```
+src/superseded/harness/
+  __init__.py          # Harness class
+  context.py           # ContextAssembler
+  verification.py      # VerificationEngine
+  checkpoint.py        # CheckpointManager
+  lifecycle.py         # LifecycleManager + HealthStatus + ResourceLimits
+```

@@ -130,11 +130,15 @@ async def test_notification_service_called_on_stage_pass():
         db = Database(db_path)
         await db.initialize()
 
+        from superseded.agents.factory import AgentFactory
+        from superseded.models import AgentEvent
+        from superseded.pipeline.events import PipelineEventManager
+
         mock_runner = AsyncMock()
+        mock_runner.repo_path = str(repo_path)
+        mock_runner.agent_factory = AgentFactory()
         mock_runner.stage_configs = {}
-        mock_runner.run_stage_streaming.return_value = StageResult(
-            stage=Stage.SPEC, passed=True, output="spec done"
-        )
+        mock_runner.event_manager = PipelineEventManager()
 
         notification_service = NotificationService(enabled=True, topic="test")
 
@@ -145,6 +149,24 @@ async def test_notification_service_called_on_stage_pass():
             worktree_manager=worktree_manager,
             notification_service=notification_service,
         )
+
+        mock_agent = AsyncMock()
+
+        async def fake_stream(prompt, context):
+            yield AgentEvent(
+                event_type="stdout",
+                content="spec done with sufficient content to pass the minimum output character check",
+                stage=Stage.SPEC,
+            )
+            yield AgentEvent(
+                event_type="status",
+                content="",
+                stage=Stage.SPEC,
+                metadata={"exit_code": 0, "duration_ms": 100},
+            )
+
+        mock_agent.run_streaming = fake_stream
+        executor._harness.resolve_agent = lambda stage: mock_agent
 
         ticket_path = repo_path / ".superseded" / "issues" / "SUP-001-test.md"
         ticket_path.write_text(

@@ -36,14 +36,36 @@ class RepoEntry(BaseModel):
     branch: str = ""
 
 
+class SlackNotificationConfig(BaseModel):
+    webhook_url: str = ""
+
+
+class EmailNotificationConfig(BaseModel):
+    smtp_host: str = ""
+    smtp_port: int = 587
+    username: str = ""
+    password: str = ""
+    from_addr: str = ""
+    to_addrs: list[str] = Field(default_factory=list)
+
+
+class WebhookNotificationConfig(BaseModel):
+    url: str = ""
+    headers: dict[str, str] = Field(default_factory=dict)
+
+
 class NotificationsConfig(BaseModel):
     enabled: bool = False
     ntfy_topic: str = ""
+    slack: SlackNotificationConfig = Field(default_factory=SlackNotificationConfig)
+    email: EmailNotificationConfig = Field(default_factory=EmailNotificationConfig)
+    webhook: WebhookNotificationConfig = Field(default_factory=WebhookNotificationConfig)
 
 
 class SupersededConfig(BaseModel):
     default_agent: str = "opencode"
     stage_timeout_seconds: int = 600
+    auto_advance: bool = False
     repo_path: str = ""
     repos: dict[str, RepoEntry] = Field(default_factory=dict)
     port: int = 8000
@@ -62,6 +84,7 @@ class SupersededConfig(BaseModel):
     base_url: str = ""
     stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
+    approvers: list[str] = Field(default_factory=list)
 
 
 def load_config(repo_path: Path) -> SupersededConfig:

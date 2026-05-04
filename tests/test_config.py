@@ -168,6 +168,9 @@ def test_notifications_config_defaults():
     cfg = SupersededConfig()
     assert cfg.notifications.enabled is False
     assert cfg.notifications.ntfy_topic == ""
+    assert cfg.notifications.slack.webhook_url == ""
+    assert cfg.notifications.email.smtp_host == ""
+    assert cfg.notifications.webhook.url == ""
 
 
 def test_notifications_config_from_file():
@@ -185,6 +188,30 @@ def test_notifications_config_from_file():
         config = load_config(Path(tmp))
         assert config.notifications.enabled is True
         assert config.notifications.ntfy_topic == "my-project"
+
+
+def test_notifications_config_slack():
+    cfg = SupersededConfig(
+        notifications={
+            "enabled": True,
+            "slack": {"webhook_url": "https://hooks.slack.com/test"},
+        }
+    )
+    assert cfg.notifications.slack.webhook_url == "https://hooks.slack.com/test"
+
+
+def test_notifications_config_webhook():
+    cfg = SupersededConfig(
+        notifications={
+            "enabled": True,
+            "webhook": {
+                "url": "https://example.com/hook",
+                "headers": {"Authorization": "Bearer tok"},
+            },
+        }
+    )
+    assert cfg.notifications.webhook.url == "https://example.com/hook"
+    assert cfg.notifications.webhook.headers == {"Authorization": "Bearer tok"}
 
 
 def test_load_config_with_rtk():
@@ -253,3 +280,23 @@ def test_stage_agent_config_with_resource_limits():
     )
     assert cfg.resource_limits.max_tokens == 500000
     assert cfg.resource_limits.max_wall_time_seconds == 1800
+
+
+def test_auto_advance_config_default():
+    cfg = SupersededConfig()
+    assert cfg.auto_advance is False
+
+
+def test_auto_advance_config_enabled():
+    cfg = SupersededConfig(auto_advance=True)
+    assert cfg.auto_advance is True
+
+
+def test_approvers_config_default():
+    cfg = SupersededConfig()
+    assert cfg.approvers == []
+
+
+def test_approvers_config_set():
+    cfg = SupersededConfig(approvers=["alice", "bob"])
+    assert cfg.approvers == ["alice", "bob"]

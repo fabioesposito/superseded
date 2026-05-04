@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,9 @@ class CheckpointManager:
     def has_checkpoint(self, issue_id: str, stage: str) -> bool:
         return self._checkpoint_path(issue_id, stage).exists()
 
-    def validate_preconditions(self, issue_id: str, stage: str, expected_files: list[str] | None = None) -> bool:
+    def validate_preconditions(
+        self, issue_id: str, stage: str, expected_files: list[str] | None = None
+    ) -> bool:
         """Validate that checkpoint preconditions still hold.
 
         Returns True if checkpoint is valid, False if stale.

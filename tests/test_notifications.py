@@ -56,3 +56,61 @@ async def test_notify_includes_click_url():
         assert call_args.kwargs["headers"]["Click"] == "http://localhost:8000/issues/SUP-001"
         assert call_args.kwargs["headers"]["Priority"] == "high"
         assert call_args.kwargs["headers"]["Tags"] == "x"
+
+
+async def test_slack_notification():
+    service = NotificationService(
+        topic="", enabled=True, slack_webhook_url="https://hooks.slack.com/test"
+    )
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = AsyncMock()
+        await service.notify("Test Title", "test message")
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert call_args.args[0] == "https://hooks.slack.com/test"
+        assert call_args.kwargs["json"] == {"text": "*Test Title*\ntest message"}
+
+
+async def test_webhook_notification():
+    service = NotificationService(topic="", enabled=True, webhook_url="https://example.com/hook")
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = AsyncMock()
+        await service.notify("Test Title", "test message")
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert call_args.args[0] == "https://example.com/hook"
+        assert call_args.kwargs["json"] == {"title": "Test Title", "message": "test message"}
+
+
+async def test_webhook_notification_with_headers():
+    service = NotificationService(
+        topic="",
+        enabled=True,
+        webhook_url="https://example.com/hook",
+        webhook_headers={"Authorization": "Bearer token123"},
+    )
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = AsyncMock()
+        await service.notify("Test", "msg")
+        call_args = mock_post.call_args
+        assert call_args.kwargs["headers"] == {"Authorization": "Bearer token123"}
+
+
+async def test_multiple_backends_triggered():
+    service = NotificationService(
+        topic="test-topic",
+        enabled=True,
+        slack_webhook_url="https://hooks.slack.com/test",
+        webhook_url="https://example.com/hook",
+    )
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = AsyncMock()
+        await service.notify("Test", "msg")
+        assert mock_post.call_count == 3
+
+
+async def test_slack_disabled_when_no_url():
+    service = NotificationService(topic="", enabled=True, slack_webhook_url="")
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        await service.notify("Test", "msg")
+        mock_post.assert_not_called()

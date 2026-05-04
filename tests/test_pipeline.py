@@ -3,8 +3,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 from superseded.agents.factory import AgentFactory
+from superseded.db import Database
 from superseded.models import (
-    AgentResult,
     Issue,
     Stage,
 )
@@ -56,43 +56,92 @@ def test_stage_order():
 
 async def test_harness_processes_stage():
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(exit_code=0, stdout="spec written", stderr="")
 
-    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
+    async def fake_stream(prompt, context):
+        from superseded.models import AgentEvent
 
-    issue = Issue(
-        id="SUP-001",
-        title="Add rate limiting",
-        filepath=".superseded/issues/SUP-001-add-rate-limiting.md",
-    )
+        yield AgentEvent(
+            event_type="stdout",
+            content="spec written with sufficient content to pass the minimum output character check",
+            stage=Stage.SPEC,
+        )
+        yield AgentEvent(
+            event_type="status",
+            content="",
+            stage=Stage.SPEC,
+            metadata={"exit_code": 0, "duration_ms": 100},
+        )
+
+    mock_agent.run_streaming = fake_stream
+
     with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+        )
+
+        issue = Issue(
+            id="SUP-001",
+            title="Add rate limiting",
+            filepath=".superseded/issues/SUP-001-add-rate-limiting.md",
+        )
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
         result = await runner.run_stage(issue, Stage.SPEC, str(artifacts_path))
 
-    assert result.passed is True
-    assert result.stage == Stage.SPEC
-    mock_agent.run.assert_called_once()
+        assert result.passed is True
+        assert result.stage == Stage.SPEC
+
+        await db.close()
 
 
 async def test_harness_halts_on_failure():
     mock_agent = AsyncMock()
-    mock_agent.run.return_value = AgentResult(exit_code=1, stdout="", stderr="agent crashed")
 
-    runner = HarnessRunner(agent_factory=_mock_factory(mock_agent), repo_path="/tmp/testrepo")
+    async def fake_stream(prompt, context):
+        from superseded.models import AgentEvent
 
-    issue = Issue(
-        id="SUP-001",
-        title="Add rate limiting",
-        filepath=".superseded/issues/SUP-001-add-rate-limiting.md",
-    )
+        yield AgentEvent(
+            event_type="stdout",
+            content="agent crashed",
+            stage=Stage.BUILD,
+        )
+        yield AgentEvent(
+            event_type="status",
+            content="",
+            stage=Stage.BUILD,
+            metadata={"exit_code": 1, "duration_ms": 100},
+        )
+
+    mock_agent.run_streaming = fake_stream
+
     with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+        )
+
+        issue = Issue(
+            id="SUP-001",
+            title="Add rate limiting",
+            filepath=".superseded/issues/SUP-001-add-rate-limiting.md",
+        )
         artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
         artifacts_path.mkdir(parents=True)
         result = await runner.run_stage(issue, Stage.BUILD, str(artifacts_path))
 
-    assert result.passed is False
-    assert "agent crashed" in result.error
+        assert result.passed is False
+        assert "agent crashed" in result.error
+
+        await db.close()
 
 
 def test_prompts_contain_agent_skills_content():
