@@ -12,7 +12,17 @@
                 <span class="text-shell-500 text-xs font-mono ml-2">{{ durations[result.stage] }}</span>
                 {% endif %}
             </div>
-            {% if result.error %}<p class="text-coral-400/80 text-xs mt-1 font-mono">{{ result.error }}</p>{% endif %}
+            {% if result.error %}
+                {% if '\n' in result.error and result.error.startswith('The previous attempt') %}
+                <div class="mt-2 px-3 py-2 text-xs text-coral-400 bg-coral-900/20 rounded border border-coral-800/30 font-mono">
+                    {% for line in result.error.split('\n') if line.strip() %}
+                    <p>{{ line }}</p>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-coral-400/80 text-xs mt-1 font-mono">{{ result.error }}</p>
+                {% endif %}
+            {% endif %}
         </a>
         {% endfor %}
     </div>
