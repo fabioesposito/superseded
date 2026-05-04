@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -132,7 +133,7 @@ def cli() -> None:
     parser.add_argument("--host", type=str, default=None, help="Host to bind to")
     args = parser.parse_args()
 
-    if args.repo_path == "init":
+    if args.repo_path == "init" and not Path("init").is_dir():
         from superseded.cli import init_command
 
         init_command(Path(".").resolve())
@@ -149,7 +150,7 @@ def cli() -> None:
         for err in errors:
             print(f"  - {err}")
         print("\nRun 'superseded init' or edit .superseded/config.yaml to fix.")
-        return
+        sys.exit(1)
 
     port = args.port or config.port
     host = args.host or config.host
