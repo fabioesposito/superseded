@@ -235,6 +235,33 @@ async def update_server_settings(request: Request, deps: Deps = Depends(get_deps
     )
 
 
+@router.get("/settings/rules", response_class=HTMLResponse)
+async def get_rules_editor(request: Request, deps: Deps = Depends(get_deps)):
+    rules_path = Path(deps.config.repo_path) / ".superseded" / "rules.md"
+    rules_content = ""
+    if rules_path.exists():
+        rules_content = rules_path.read_text()
+    return get_templates().TemplateResponse(
+        request,
+        "_rules_field.html",
+        {"rules": rules_content},
+    )
+
+
+@router.post("/settings/rules", response_class=HTMLResponse)
+async def save_rules(request: Request, deps: Deps = Depends(get_deps)):
+    form = await get_form_data(request)
+    rules_content = str(form.get("rules", ""))
+    rules_path = Path(deps.config.repo_path) / ".superseded" / "rules.md"
+    rules_path.parent.mkdir(parents=True, exist_ok=True)
+    rules_path.write_text(rules_content)
+    return get_templates().TemplateResponse(
+        request,
+        "_rules_field.html",
+        {"rules": rules_content, "success": True},
+    )
+
+
 def _reload_pipeline(app, config: SupersededConfig) -> None:
     from superseded.main import _build_pipeline_state
 

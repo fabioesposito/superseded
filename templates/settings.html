@@ -83,6 +83,17 @@
     {% include "_notifications_field.html" %}
 
     <div class="mt-10 mb-3">
+        <h2 class="text-lg font-semibold text-shell-100">Project Rules</h2>
+        <p class="text-shell-500 text-sm mt-1">Non-negotiable rules injected into every agent prompt</p>
+    </div>
+    <div hx-get="/settings/rules" hx-trigger="load" hx-swap="outerHTML">
+        <div class="card rounded-xl p-6 animate-pulse">
+            <div class="h-4 bg-shell-800 rounded w-1/4 mb-4"></div>
+            <div class="h-32 bg-shell-800 rounded"></div>
+        </div>
+    </div>
+
+    <div class="mt-10 mb-3">
         <h2 class="text-lg font-semibold text-shell-100">Server</h2>
         <p class="text-shell-500 text-sm mt-1">Host and port configuration — changes require a server restart</p>
     </div>

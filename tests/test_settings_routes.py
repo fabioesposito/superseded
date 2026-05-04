@@ -142,3 +142,38 @@ async def test_save_api_keys(tmp_repo):
         )
         assert response.status_code == 200
         assert "successfully" in response.text
+
+
+async def test_settings_page_shows_rules_editor(tmp_repo):
+    client, _ = await _make_client(tmp_repo)
+    async with client:
+        response = await client.get("/settings")
+        assert response.status_code == 200
+        assert "Project Rules" in response.text
+
+
+async def test_save_rules(tmp_repo):
+    client, _ = await _make_client(tmp_repo)
+    async with client:
+        token = await _get_csrf(client)
+        response = await client.post(
+            "/settings/rules",
+            data={"rules": "# My Rules\n- Be nice"},
+            headers={"X-CSRF-Token": token},
+        )
+        assert response.status_code == 200
+        assert "saved" in response.text.lower()
+
+
+async def test_rules_persisted_to_file(tmp_repo):
+    client, _ = await _make_client(tmp_repo)
+    async with client:
+        token = await _get_csrf(client)
+        await client.post(
+            "/settings/rules",
+            data={"rules": "# Custom Rules\nNo tests allowed"},
+            headers={"X-CSRF-Token": token},
+        )
+        rules_path = Path(tmp_repo) / ".superseded" / "rules.md"
+        assert rules_path.exists()
+        assert "Custom Rules" in rules_path.read_text()
