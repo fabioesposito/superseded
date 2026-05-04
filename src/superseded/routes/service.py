@@ -228,7 +228,7 @@ async def run_and_advance(
             return _render_running_indicator(request, issue.stage.value)
         deps.pipeline.running_issues.add(issue_id)
 
-    state_writer = IssueStateWriter(deps.db)
+    state_writer = IssueStateWriter(deps.db, deps.config.repo_path)
     background_tasks.add_task(_run_stage_background, deps, issue_id, issue.stage, state_writer)
 
     templates = get_templates()

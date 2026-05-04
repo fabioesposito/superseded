@@ -107,10 +107,10 @@ class Harness:
         await self._send_notifications(issue, stage, aggregate, config)
 
         if all_passed:
-            writer = IssueStateWriter(self.db)
+            writer = IssueStateWriter(self.db, self.repo_path)
             await writer.write_status(issue.id, issue.filepath, IssueStatus.IN_PROGRESS, stage)
         else:
-            writer = IssueStateWriter(self.db)
+            writer = IssueStateWriter(self.db, self.repo_path)
             await writer.write_status(issue.id, issue.filepath, IssueStatus.PAUSED, stage)
 
         return aggregate

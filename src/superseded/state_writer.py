@@ -19,8 +19,9 @@ class IssueStateWriter:
     markdown remains the canonical source of truth.
     """
 
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, repo_path: str = "") -> None:
         self.db = db
+        self.repo_path = Path(repo_path) if repo_path else None
 
     async def write_status(
         self, issue_id: str, filepath: str, status: IssueStatus, stage: Stage
@@ -31,8 +32,16 @@ class IssueStateWriter:
         except Exception:
             logger.exception("SQLite write failed for %s (markdown is canonical)", issue_id)
 
-    def _write_markdown(self, filepath: str, status: IssueStatus, stage: Stage) -> None:
+    def _resolve_path(self, filepath: str) -> Path:
         path = Path(filepath)
+        if path.is_absolute():
+            return path
+        if self.repo_path:
+            return self.repo_path / path
+        return path.resolve()
+
+    def _write_markdown(self, filepath: str, status: IssueStatus, stage: Stage) -> None:
+        path = self._resolve_path(filepath)
         post = frontmatter.load(path)
         post["status"] = status.value
         post["stage"] = stage.value

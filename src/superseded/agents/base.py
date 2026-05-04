@@ -124,7 +124,7 @@ class SubprocessAgentAdapter(AgentAdapter, ABC):
                 output = stdout.decode("utf-8", errors="replace").strip()
                 if output:
                     return output.split("\n")
-        except TimeoutError, FileNotFoundError, OSError:
+        except (TimeoutError, FileNotFoundError, OSError):
             pass
         return []
 

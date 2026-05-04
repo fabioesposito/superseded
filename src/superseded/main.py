@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 async def _recover_in_progress(app: FastAPI) -> None:
     """Check for in-progress issues on startup and mark them for retry."""
     db: Database = app.state.db
+    config: SupersededConfig = app.state.config
     issues = await db.list_issues(offset=0, limit=1000)
     recovered = 0
     for issue_data in issues:
@@ -51,7 +52,7 @@ async def _recover_in_progress(app: FastAPI) -> None:
             else:
                 logger.info("Marking %s as paused (no checkpoint found)", issue_id)
                 await db.update_pause_reason(issue_id, "server-restarted")
-                writer = IssueStateWriter(db)
+                writer = IssueStateWriter(db, config.repo_path)
                 filepath = issue_data.get("filepath", "")
                 await writer.write_status(
                     issue_id, filepath, IssueStatus.PAUSED, Stage.by_value(stage)
