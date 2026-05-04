@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import signal
 from dataclasses import dataclass
@@ -35,20 +36,16 @@ class LifecycleManager:
         for issue_id, proc in self._running_processes.items():
             if proc.returncode is None:
                 logger.info("Sending SIGTERM to process for %s", issue_id)
-                try:
+                with contextlib.suppress(ProcessLookupError):
                     proc.terminate()
-                except ProcessLookupError:
-                    pass
 
         await asyncio.sleep(timeout)
 
         for issue_id, proc in list(self._running_processes.items()):
             if proc.returncode is None:
                 logger.warning("Force-killing process for %s", issue_id)
-                try:
+                with contextlib.suppress(ProcessLookupError):
                     proc.kill()
-                except ProcessLookupError:
-                    pass
 
         self._running_processes.clear()
 
@@ -66,7 +63,13 @@ class LifecycleManager:
             signal.signal(sig, handler)
         self._running_processes.clear()
 
-    def check_resource_limits(self, limits: ResourceLimits, tokens_used: int = 0, wall_time: float = 0.0, cost: float = 0.0) -> str | None:
+    def check_resource_limits(
+        self,
+        limits: ResourceLimits,
+        tokens_used: int = 0,
+        wall_time: float = 0.0,
+        cost: float = 0.0,
+    ) -> str | None:
         """Check if resource limits are exceeded. Returns error message or None."""
         if limits.max_tokens > 0 and tokens_used > limits.max_tokens:
             return f"Token limit exceeded: {tokens_used} > {limits.max_tokens}"
