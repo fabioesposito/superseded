@@ -263,8 +263,8 @@ class HarnessRunner:
                     ),
                     artifacts=[],
                     started_at=datetime.datetime.now(datetime.UTC),
-                        finished_at=datetime.datetime.now(datetime.UTC),
-                    )
+                    finished_at=datetime.datetime.now(datetime.UTC),
+                )
 
             stage_config = self.stage_configs.get(stage.value)
             if stage_config:

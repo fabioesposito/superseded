@@ -226,9 +226,7 @@ def test_config_stages_with_verification():
             ),
             "review": StageAgentConfig(
                 cli="opencode",
-                verify=VerificationConfig(
-                    max_critical_findings=0, max_important_findings=3
-                ),
+                verify=VerificationConfig(max_critical_findings=0, max_important_findings=3),
             ),
         }
     )
