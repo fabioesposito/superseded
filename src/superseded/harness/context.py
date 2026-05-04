@@ -140,6 +140,29 @@ class ContextAssembler:
             )
         return f"## Stage Instructions: {stage.value.upper()}\n\n{prompt}{repo_context}"
 
+    def _build_cce_search_layer(self, query: str, results: list) -> str | None:
+        if not results:
+            return None
+        parts = [f"## Code Search Results: \"{query}\"\n"]
+        for r in results:
+            parts.append(f"### {r.file} (score: {r.score:.2f})\n```\n{r.compressed}\n```")
+        return "\n\n".join(parts)
+
+    def _build_cce_tools_layer(self) -> str:
+        return (
+            "## Code Context Tools\n\n"
+            "You have access to code search via the CCE MCP server:\n\n"
+            "- `context_search(query)` — Search the codebase for relevant code chunks. "
+            "Use this INSTEAD of reading entire files.\n"
+            "- `expand_chunk(chunk_id)` — Get full source for a compressed result.\n"
+            "- `related_context(file)` — Find code via graph edges (calls, imports).\n"
+            "- `session_recall(topic)` — Recall decisions from past sessions.\n"
+            "- `record_decision(decision, reason)` — Save a decision for future sessions.\n"
+            "- `record_code_area(file, description)` — Record which files you're working in.\n\n"
+            "Use `context_search` to find relevant code before reading files. "
+            "This saves tokens and finds the right code faster."
+        )
+
     def _build_session_history_layer(
         self, current_stage: Stage, session_turns: list[dict] | None = None
     ) -> str | None:
@@ -192,6 +215,8 @@ class ContextAssembler:
         iteration: int = 0,
         session_turns: list[dict] | None = None,
         target_repo: str | None = None,
+        cce_search_results: list | None = None,
+        cce_enabled: bool = False,
     ) -> str:
         layers: list[str] = []
         previous_errors = previous_errors or []
@@ -200,9 +225,14 @@ class ContextAssembler:
         if agents_md:
             layers.append(agents_md)
 
-        docs_index = self._build_docs_index_layer()
-        if docs_index:
-            layers.append(docs_index)
+        if cce_enabled and cce_search_results:
+            cce_layer = self._build_cce_search_layer("codebase", cce_search_results)
+            if cce_layer:
+                layers.append(cce_layer)
+        else:
+            docs_index = self._build_docs_index_layer()
+            if docs_index:
+                layers.append(docs_index)
 
         layers.append(self._build_issue_layer(issue))
 
@@ -226,9 +256,13 @@ class ContextAssembler:
         if answers:
             layers.append(answers)
 
-        session_history = self._build_session_history_layer(stage, session_turns)
-        if session_history:
-            layers.append(session_history)
+        if cce_enabled:
+            cce_tools = self._build_cce_tools_layer()
+            layers.append(cce_tools)
+        else:
+            session_history = self._build_session_history_layer(stage, session_turns)
+            if session_history:
+                layers.append(session_history)
 
         rules = self._build_rules_layer()
         if rules:
