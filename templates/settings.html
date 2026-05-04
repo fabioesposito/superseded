@@ -59,6 +59,17 @@
         </form>
     </div>
 
+    <div class="mt-10 mb-3">
+        <h2 class="text-lg font-semibold text-shell-100">Setup</h2>
+        <p class="text-shell-500 text-sm mt-1">Detected agents and API key status</p>
+    </div>
+    <div hx-get="/settings/setup" hx-trigger="load" hx-swap="outerHTML">
+        <div class="card rounded-xl p-6 animate-pulse">
+            <div class="h-4 bg-shell-800 rounded w-1/4 mb-4"></div>
+            <div class="h-20 bg-shell-800 rounded"></div>
+        </div>
+    </div>
+
     <div class="mt-8 mb-3">
         <h2 class="text-lg font-semibold text-shell-100">Repositories</h2>
     </div>

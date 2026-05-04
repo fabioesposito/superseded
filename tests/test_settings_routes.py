@@ -177,3 +177,18 @@ async def test_rules_persisted_to_file(tmp_repo):
         rules_path = Path(tmp_repo) / ".superseded" / "rules.md"
         assert rules_path.exists()
         assert "Custom Rules" in rules_path.read_text()
+
+
+async def test_setup_wizard_shows_agent_detection(tmp_repo):
+    client, _ = await _make_client(tmp_repo)
+    async with client:
+        response = await client.get("/settings/setup")
+        assert response.status_code == 200
+        assert "Setup" in response.text
+
+
+async def test_setup_wizard_detects_agents(tmp_repo):
+    client, _ = await _make_client(tmp_repo)
+    async with client:
+        response = await client.get("/settings/setup")
+        assert "claude-code" in response.text or "opencode" in response.text

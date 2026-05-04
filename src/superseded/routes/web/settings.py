@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from contextlib import suppress
 from pathlib import Path
 
@@ -259,6 +260,58 @@ async def save_rules(request: Request, deps: Deps = Depends(get_deps)):
         request,
         "_rules_field.html",
         {"rules": rules_content, "success": True},
+    )
+
+
+def _detect_agents() -> list[dict[str, str]]:
+    agents = [
+        {"name": "claude-code", "binary": "claude", "description": "Anthropic Claude Code"},
+        {"name": "opencode", "binary": "opencode", "description": "OpenCode CLI"},
+        {"name": "codex", "binary": "codex", "description": "OpenAI Codex CLI"},
+    ]
+    results = []
+    for agent in agents:
+        found = shutil.which(agent["binary"])
+        results.append(
+            {
+                **agent,
+                "available": found is not None,
+                "path": found or "not found",
+            }
+        )
+    return results
+
+
+def _detect_api_keys(config: SupersededConfig) -> list[dict[str, str]]:
+    keys = [
+        {
+            "name": "ANTHROPIC_API_KEY",
+            "configured": bool(config.anthropic_api_key),
+            "agent": "claude-code",
+        },
+        {"name": "OPENAI_API_KEY", "configured": bool(config.openai_api_key), "agent": "codex"},
+        {
+            "name": "OPENCODE_API_KEY",
+            "configured": bool(config.opencode_api_key),
+            "agent": "opencode",
+        },
+        {
+            "name": "GITHUB_TOKEN",
+            "configured": bool(config.github_token),
+            "agent": "ship (PR creation)",
+        },
+    ]
+    return keys
+
+
+@router.get("/settings/setup", response_class=HTMLResponse)
+async def setup_wizard(request: Request, deps: Deps = Depends(get_deps)):
+    agents = _detect_agents()
+    api_keys = _detect_api_keys(deps.config)
+    return get_templates().TemplateResponse(
+        request,
+        "_setup_wizard.html",
+        {"agents": agents, "api_keys": api_keys},
     )
 
 
