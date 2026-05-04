@@ -14,6 +14,12 @@ class VerificationConfig(BaseModel):
     max_important_findings: int = 10
 
 
+class ResourceLimitsConfig(BaseModel):
+    max_tokens: int = 0
+    max_wall_time_seconds: int = 0
+    max_cost_usd: float = 0.0
+
+
 class StageAgentConfig(BaseModel):
     cli: str = "opencode"
     model: str = ""
@@ -21,6 +27,7 @@ class StageAgentConfig(BaseModel):
     require_approval: bool = False
     rtk: bool = False
     verify: VerificationConfig = Field(default_factory=VerificationConfig)
+    resource_limits: ResourceLimitsConfig = Field(default_factory=ResourceLimitsConfig)
 
 
 class RepoEntry(BaseModel):

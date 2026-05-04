@@ -2,11 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
 import logging
 import signal
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class HealthStatus:
+    issue_id: str
+    alive: bool
+    last_output_time: str | None
+    silence_duration_seconds: float
+    status: str  # "healthy", "silent", "dead"
 
 
 @dataclass
@@ -19,8 +29,38 @@ class ResourceLimits:
 class LifecycleManager:
     def __init__(self) -> None:
         self._running_processes: dict[str, asyncio.subprocess.Process] = {}
+        self._last_output: dict[str, datetime.datetime] = {}
         self._shutdown_event = asyncio.Event()
         self._original_handlers: dict = {}
+
+    def record_output(self, issue_id: str) -> None:
+        """Record that an agent produced output at this time."""
+        self._last_output[issue_id] = datetime.datetime.now(datetime.UTC)
+
+    def check_health(self, issue_id: str, silence_threshold: float = 300.0) -> HealthStatus:
+        """Check health of a running agent."""
+        proc = self._running_processes.get(issue_id)
+        alive = proc is not None and proc.returncode is None
+
+        last_output = self._last_output.get(issue_id)
+        silence_duration = 0.0
+        if last_output:
+            silence_duration = (datetime.datetime.now(datetime.UTC) - last_output).total_seconds()
+
+        if not alive:
+            status = "dead"
+        elif silence_duration > silence_threshold:
+            status = "silent"
+        else:
+            status = "healthy"
+
+        return HealthStatus(
+            issue_id=issue_id,
+            alive=alive,
+            last_output_time=last_output.isoformat() if last_output else None,
+            silence_duration_seconds=silence_duration,
+            status=status,
+        )
 
     def register_process(self, issue_id: str, process: asyncio.subprocess.Process) -> None:
         self._running_processes[issue_id] = process

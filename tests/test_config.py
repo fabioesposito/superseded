@@ -5,6 +5,7 @@ import yaml
 
 from superseded.config import (
     RepoEntry,
+    ResourceLimitsConfig,
     StageAgentConfig,
     SupersededConfig,
     load_config,
@@ -236,3 +237,19 @@ def test_config_stages_with_verification():
         "Requirements",
     ]
     assert cfg.stages["review"].verify.max_critical_findings == 0
+
+
+def test_resource_limits_config_defaults():
+    cfg = ResourceLimitsConfig()
+    assert cfg.max_tokens == 0
+    assert cfg.max_wall_time_seconds == 0
+    assert cfg.max_cost_usd == 0.0
+
+
+def test_stage_agent_config_with_resource_limits():
+    cfg = StageAgentConfig(
+        cli="opencode",
+        resource_limits=ResourceLimitsConfig(max_tokens=500000, max_wall_time_seconds=1800),
+    )
+    assert cfg.resource_limits.max_tokens == 500000
+    assert cfg.resource_limits.max_wall_time_seconds == 1800

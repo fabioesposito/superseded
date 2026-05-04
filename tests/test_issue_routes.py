@@ -215,7 +215,10 @@ async def test_health_endpoint(tmp_repo):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/health")
         assert resp.status_code == 200
-        assert resp.json() == {"status": "ok"}
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert "running_issues" in data
+        assert "active_stages" in data
 
 
 async def test_import_github_issue_returns_form_partial(tmp_repo):
