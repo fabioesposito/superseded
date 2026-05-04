@@ -21,6 +21,7 @@ def test_init_creates_default_config():
         repo = Path(tmp)
         init_command(repo)
         import yaml
+
         with open(repo / ".superseded" / "config.yaml") as f:
             config = yaml.safe_load(f)
         assert config["default_agent"] == "opencode"
@@ -61,6 +62,7 @@ def test_init_preserves_existing_config():
         (config_dir / "config.yaml").write_text("port: 9000\n")
         init_command(repo)
         import yaml
+
         with open(config_dir / "config.yaml") as f:
             config = yaml.safe_load(f)
         assert config["port"] == 9000
