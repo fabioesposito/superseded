@@ -300,3 +300,20 @@ def test_approvers_config_default():
 def test_approvers_config_set():
     cfg = SupersededConfig(approvers=["alice", "bob"])
     assert cfg.approvers == ["alice", "bob"]
+
+
+def test_cce_config_defaults():
+    from superseded.config import CCEConfig
+
+    cfg = CCEConfig()
+    assert cfg.enabled is False
+    assert cfg.auto_index is True
+    assert cfg.index_stale_minutes == 60
+    assert cfg.compression_level == "standard"
+
+
+def test_superseded_config_with_cce():
+    from superseded.config import CCEConfig
+
+    cfg = SupersededConfig(cce=CCEConfig(enabled=True))
+    assert cfg.cce.enabled is True
