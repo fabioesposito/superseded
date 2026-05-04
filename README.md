@@ -14,12 +14,19 @@ Local-first agentic pipeline harness. Write a ticket in markdown, and Superseded
 - **Per-stage agent selection** — Configure different CLIs and models per pipeline stage
 - **Multi-repo support** — Tickets can target multiple repositories
 - **GitHub integration** — Import issues from GitHub repositories
+- **Verification engine** — Artifact section validation, review severity parsing, test result parsing
+- **Health monitoring and crash recovery** — `/health` endpoint, silent agent detection, checkpoint-based resume
+- **Per-file review approval** — Approve or reject individual files during Review stage
+- **Bulk operations** — Retry all paused issues at once from the dashboard
+- **Auto-advance** — Skip manual transitions when verification passes
+- **Notifications** — Push notifications via ntfy.sh, Slack, and webhooks
+- **Resource limits** — Per-stage caps on tokens, wall time, and cost
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-uv sync
+# Initialize a project (creates .superseded/ with defaults)
+uv run superseded init
 
 # Start the server (defaults to http://127.0.0.1:8000)
 uv run superseded
@@ -95,12 +102,16 @@ uv run ruff format src/ tests/
 ```
 src/superseded/
   main.py            # FastAPI app factory and CLI entry point
+  cli.py             # `superseded init` command
   config.py          # YAML config loader
   models.py          # Pydantic models
   db.py              # SQLite async operations
+  validation.py      # Input validation
+  notifications.py   # NotificationService (ntfy.sh, Slack, webhook)
   tickets/            # Markdown + frontmatter CRUD
   agents/             # Agent adapters (Claude Code, OpenCode, Codex)
   pipeline/           # Pipeline engine, context assembler, harness, worktrees
+  harness/            # Harness class, checkpoint, context, lifecycle, verification
   routes/             # FastAPI route handlers
 
 templates/            # Jinja2 + HTMX templates

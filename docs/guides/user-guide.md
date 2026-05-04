@@ -14,13 +14,24 @@ Complete guide to using Superseded — from creating your first ticket to config
 
 - [Overview](#overview)
 - [Getting Started](#getting-started)
+- [Quick Start with `superseded init`](#quick-start-with-superseded-init)
 - [Creating Tickets](#creating-tickets)
 - [Ticket Format](#ticket-format)
 - [Pipeline Stages](#pipeline-stages)
+- [Verification](#verification)
+- [Notifications](#notifications)
+- [Auto-Advance](#auto-advance)
+- [Approval Delegation](#approval-delegation)
+- [Resource Limits](#resource-limits)
+- [Checkpoints & Crash Recovery](#checkpoints--crash-recovery)
+- [Health Monitoring](#health-monitoring)
+- [Docker Sandbox](#docker-sandbox)
 - [Running the Pipeline](#running-the-pipeline)
 - [Agent Configuration](#agent-configuration)
 - [Project Rules](#project-rules)
 - [Multi-Repo Support](#multi-repo-support)
+- [Bulk Operations](#bulk-operations)
+- [File-Level Review Approval](#file-level-review-approval)
 - [Settings](#settings)
 - [Authentication](#authentication)
 - [Metrics](#metrics)
@@ -57,6 +68,23 @@ uv run superseded --host 0.0.0.0 --port 8000
 - At least one agent CLI: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://github.com/opencodeco/opencode), or [Codex](https://github.com/openai/codex)
 - `gh` CLI for the Ship stage (PR creation)
 - [Playwright](https://playwright.dev/) for browser UI testing
+
+## Quick Start with `superseded init`
+
+The fastest way to get started:
+
+```bash
+cd your-project
+uv run superseded init
+uv run superseded
+```
+
+This creates `.superseded/` with:
+- `config.yaml` — sensible defaults (opencode agent, port 8000)
+- `rules.md` — template for non-negotiable agent instructions
+- `issues/SUP-001-example.md` — example ticket
+
+Edit `rules.md` in the Settings UI at `/settings`.
 
 ## Creating Tickets
 
@@ -200,6 +228,115 @@ When a stage fails:
 ### Await Input
 
 During the Spec stage, the agent can pause and ask questions by writing a `questions.md` artifact. The ticket enters `paused` status with reason `awaiting-input`. You can answer the questions on the issue detail page, and the pipeline resumes automatically.
+
+## Verification
+
+The verification engine validates stage outputs against configurable criteria.
+
+### Artifact Section Validation
+
+Require specific sections in spec/plan artifacts:
+
+```yaml
+stages:
+  spec:
+    verify:
+      required_sections: ["Problem", "Solution", "Requirements"]
+```
+
+### Review Severity Parsing
+
+Block merges when too many critical findings are found:
+
+```yaml
+stages:
+    review:
+      verify:
+        max_critical_findings: 0
+        max_important_findings: 3
+```
+
+### Test Result Parsing
+
+The verify stage automatically parses test output from pytest, jest, and go test. Failed tests block the pipeline.
+
+## Notifications
+
+Configure push notifications for pipeline events:
+
+```yaml
+notifications:
+  enabled: true
+  ntfy_topic: my-project
+  slack:
+    webhook_url: https://hooks.slack.com/services/...
+  webhook:
+    url: https://example.com/hook
+```
+
+Notifications are sent on stage completion, failure, and approval requests.
+
+## Auto-Advance
+
+Skip manual stage transitions when verification passes:
+
+```yaml
+auto_advance: true
+```
+
+Stages that require approval still pause for human input.
+
+## Approval Delegation
+
+Configure who can approve stages:
+
+```yaml
+approvers: ["alice", "bob", "charlie"]
+```
+
+Any listed approver can approve or reject from the UI.
+
+## Resource Limits
+
+Set per-stage limits for tokens, time, and cost:
+
+```yaml
+stages:
+  build:
+    resource_limits:
+      max_tokens: 500000
+      max_wall_time_seconds: 1800
+      max_cost_usd: 5.00
+```
+
+Exceeded limits fail the stage with a clear error message.
+
+## Checkpoints & Crash Recovery
+
+The harness saves stage progress to `.superseded/checkpoints/`. If the server crashes during a long-running stage, it can resume from the last checkpoint on restart.
+
+Checkpoints are automatically cleared when a stage succeeds.
+
+## Health Monitoring
+
+The `/health` endpoint reports:
+- `status` — "ok" or "shutting-down"
+- `running_issues` — list of currently executing issues
+- `active_stages` — count of running stages
+
+Agents that produce no output for > 5 minutes are flagged as "silent" in logs.
+
+## Docker Sandbox
+
+Run agents in isolated Docker containers:
+
+```yaml
+stages:
+  build:
+    sandbox: docker
+```
+
+Containers get 2GB memory, 2 CPUs, 256 PIDs by default. Requires Docker installed.
 
 ## Running the Pipeline
 
@@ -392,6 +529,14 @@ Superseded can import GitHub issues as tickets:
 
 The `github_url` field in the ticket frontmatter records the original issue URL.
 
+## Bulk Operations
+
+Select multiple issues on the dashboard and retry all paused issues at once.
+
+## File-Level Review Approval
+
+During the Review stage, individual changed files can be approved or rejected. All files must be approved before the stage advances.
+
 ## The .superseded Directory
 
 Superseded stores all runtime data in `.superseded/` within your repository:
@@ -410,6 +555,7 @@ Superseded stores all runtime data in `.superseded/` within your repository:
       questions.md      # Agent questions (if awaiting input)
       answers.md        # User answers (if answered)
   worktrees/           # Isolated git worktrees per issue
+  checkpoints/         # Stage progress for crash recovery
   state.db             # SQLite state cache (derived from markdown)
 ```
 

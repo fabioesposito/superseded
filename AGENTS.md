@@ -38,6 +38,10 @@ npx playwright test                # Run Playwright browser tests (UI validation
 - `src/superseded/db.py` — SQLite async operations
 - `src/superseded/agents/` — Agent adapters (Claude Code, OpenCode)
 - `src/superseded/pipeline/` — Pipeline engine, stage definitions, prompts
+- `src/superseded/harness/` — Harness class, checkpoint, context, lifecycle, verification
+- `src/superseded/notifications.py` — NotificationService (ntfy.sh, Slack, webhook)
+- `src/superseded/cli.py` — `superseded init` command
+- `src/superseded/validation.py` — Input validation
 - `src/superseded/routes/` — FastAPI route handlers
 - `templates/` — Jinja2 + HTMX templates
 
@@ -102,6 +106,16 @@ Superseded is now an agent harness, not just a linear pipeline:
 - **Quality enforcement**: Review findings that are critical/important loop back to BUILD. `.superseded/rules.md` is injected into every prompt.
 - **Iteration history**: Every harness attempt is tracked in the database and shown in the UI.
 - **Multi-repo support**: Tickets can target multiple repositories. Set `repos: [frontend, backend]` in ticket frontmatter. Available repos are defined in `.superseded/config.yaml` under the `repos` key. SPEC/PLAN run once (primary repo). BUILD/VERIFY/REVIEW fan out per target repo. SHIP creates a PR per repo. See `docs/architecture/multi-repo.md`.
+- **Verification engine**: Validates stage outputs — artifact section validation, review severity parsing, test result parsing. Configurable per stage.
+- **Health monitoring**: `/health` endpoint reports status, running issues, and active stages. Silent agents (>5 min no output) flagged in logs.
+- **Checkpoints and crash recovery**: Stage progress saved to `.superseded/checkpoints/`. Server resumes from last checkpoint on restart. Checkpoints cleared on stage success.
+- **Notifications**: Push notifications via ntfy.sh, Slack webhooks, and generic HTTP webhooks on stage completion, failure, and approval requests.
+- **Docker sandboxing**: Run agents in isolated Docker containers with configurable resource limits (2GB memory, 2 CPUs, 256 PIDs default).
+- **Resource limits**: Per-stage caps on max tokens, wall time, and cost. Exceeded limits fail the stage with a clear error.
+- **File-level review approval**: Individual changed files can be approved or rejected during Review. All files must be approved before advancing.
+- **Bulk retry**: Select multiple paused issues on the dashboard and retry them all at once.
+- **Auto-advance**: Skip manual stage transitions when verification passes. Approval-requiring stages still pause for human input.
+- **Graceful shutdown**: `/health` reports `shutting-down` status. Running stages complete before the process exits.
 
 ## RTK Integration
 
