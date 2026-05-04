@@ -8,12 +8,19 @@ import yaml
 from pydantic import BaseModel, Field
 
 
+class VerificationConfig(BaseModel):
+    required_sections: list[str] = Field(default_factory=list)
+    max_critical_findings: int = 0
+    max_important_findings: int = 10
+
+
 class StageAgentConfig(BaseModel):
     cli: str = "opencode"
     model: str = ""
     sandbox: Literal["host", "docker"] = "host"
     require_approval: bool = False
     rtk: bool = False
+    verify: VerificationConfig = Field(default_factory=VerificationConfig)
 
 
 class RepoEntry(BaseModel):

@@ -192,3 +192,49 @@ def test_load_config_with_rtk():
         write_yaml_config(config_path, {"rtk": True})
         config = load_config(Path(tmp))
         assert config.rtk is True
+
+
+def test_verification_config_defaults():
+    from superseded.config import VerificationConfig
+
+    cfg = VerificationConfig()
+    assert cfg.required_sections == []
+    assert cfg.max_critical_findings == 0
+    assert cfg.max_important_findings == 10
+
+
+def test_stage_agent_config_with_verification():
+    from superseded.config import VerificationConfig
+
+    cfg = StageAgentConfig(
+        cli="opencode",
+        verify=VerificationConfig(required_sections=["Problem", "Solution"]),
+    )
+    assert cfg.verify.required_sections == ["Problem", "Solution"]
+
+
+def test_config_stages_with_verification():
+    from superseded.config import VerificationConfig
+
+    cfg = SupersededConfig(
+        stages={
+            "spec": StageAgentConfig(
+                cli="opencode",
+                verify=VerificationConfig(
+                    required_sections=["Problem", "Solution", "Requirements"],
+                ),
+            ),
+            "review": StageAgentConfig(
+                cli="opencode",
+                verify=VerificationConfig(
+                    max_critical_findings=0, max_important_findings=3
+                ),
+            ),
+        }
+    )
+    assert cfg.stages["spec"].verify.required_sections == [
+        "Problem",
+        "Solution",
+        "Requirements",
+    ]
+    assert cfg.stages["review"].verify.max_critical_findings == 0
