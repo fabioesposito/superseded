@@ -24,6 +24,7 @@ def test_init_creates_default_config():
         with open(repo / ".superseded" / "config.yaml") as f:
             config = yaml.safe_load(f)
         assert config["default_agent"] == "opencode"
+        assert config["port"] == 8000
 
 
 def test_init_creates_rules_template():
