@@ -40,7 +40,7 @@ async def settings_page(request: Request, deps: Deps = Depends(get_deps)):
             "anthropic_api_key": deps.config.anthropic_api_key,
             "opencode_api_key": deps.config.opencode_api_key,
             "notifications": deps.config.notifications,
-            "cce": deps.config.cce,
+            "crg": deps.config.crg,
             "host": deps.config.host,
             "port": deps.config.port,
         },
@@ -316,27 +316,24 @@ async def setup_wizard(request: Request, deps: Deps = Depends(get_deps)):
     )
 
 
-@router.get("/settings/cce", response_class=HTMLResponse)
-async def get_cce_settings(request: Request, deps: Deps = Depends(get_deps)):
-    return get_templates().TemplateResponse(
-        request, "_cce_field.html", {"cce": deps.config.cce}
-    )
+@router.get("/settings/crg", response_class=HTMLResponse)
+async def get_crg_settings(request: Request, deps: Deps = Depends(get_deps)):
+    return get_templates().TemplateResponse(request, "_crg_field.html", {"crg": deps.config.crg})
 
 
-@router.post("/settings/cce", response_class=HTMLResponse)
-async def update_cce_settings(request: Request, deps: Deps = Depends(get_deps)):
+@router.post("/settings/crg", response_class=HTMLResponse)
+async def update_crg_settings(request: Request, deps: Deps = Depends(get_deps)):
     form = await get_form_data(request)
     config = deps.config
-    config.cce.enabled = bool(form.get("enabled"))
-    config.cce.auto_index = bool(form.get("auto_index"))
-    stale = str(form.get("index_stale_minutes", "60")).strip()
+    config.crg.enabled = bool(form.get("enabled"))
+    config.crg.auto_build = bool(form.get("auto_build"))
+    stale = str(form.get("graph_stale_minutes", "60")).strip()
     if stale.isdigit():
-        config.cce.index_stale_minutes = int(stale)
-    config.cce.compression_level = str(form.get("compression_level", "standard"))
+        config.crg.graph_stale_minutes = int(stale)
     save_config(config, Path(config.repo_path))
     _reload_pipeline(request.app, config)
     return get_templates().TemplateResponse(
-        request, "_cce_field.html", {"cce": config.cce, "success": True}
+        request, "_crg_field.html", {"crg": config.crg, "success": True}
     )
 
 

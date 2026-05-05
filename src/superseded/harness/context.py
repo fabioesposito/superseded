@@ -140,27 +140,23 @@ class ContextAssembler:
             )
         return f"## Stage Instructions: {stage.value.upper()}\n\n{prompt}{repo_context}"
 
-    def _build_cce_search_layer(self, query: str, results: list) -> str | None:
-        if not results:
-            return None
-        parts = [f"## Code Search Results: \"{query}\"\n"]
-        for r in results:
-            parts.append(f"### {r.file} (score: {r.score:.2f})\n```\n{r.compressed}\n```")
-        return "\n\n".join(parts)
-
-    def _build_cce_tools_layer(self) -> str:
+    def _build_crg_tools_layer(self) -> str:
         return (
-            "## Code Context Tools\n\n"
-            "You have access to code search via the CCE MCP server:\n\n"
-            "- `context_search(query)` — Search the codebase for relevant code chunks. "
-            "Use this INSTEAD of reading entire files.\n"
-            "- `expand_chunk(chunk_id)` — Get full source for a compressed result.\n"
-            "- `related_context(file)` — Find code via graph edges (calls, imports).\n"
-            "- `session_recall(topic)` — Recall decisions from past sessions.\n"
-            "- `record_decision(decision, reason)` — Save a decision for future sessions.\n"
-            "- `record_code_area(file, description)` — Record which files you're working in.\n\n"
-            "Use `context_search` to find relevant code before reading files. "
-            "This saves tokens and finds the right code faster."
+            "## Code Review Graph Tools\n\n"
+            "You have access to code analysis via the CRG MCP server:\n\n"
+            "- `get_minimal_context_tool(query)` — Ultra-compact context (~100 tokens). "
+            "Call this first.\n"
+            "- `semantic_search_nodes_tool(query)` — Search code entities by name or meaning.\n"
+            "- `query_graph_tool(node, query_type)` — Query callers, callees, tests, imports, "
+            "inheritance.\n"
+            "- `get_impact_radius_tool(files)` — Blast radius of changed files.\n"
+            "- `get_review_context_tool()` — Token-optimised review context with structural summary.\n"
+            "- `traverse_graph_tool(node, depth, token_budget)` — BFS/DFS traversal from any node.\n"
+            "- `detect_changes_tool()` — Risk-scored change impact analysis.\n"
+            "- `list_communities_tool()` — List detected code communities.\n"
+            "- `get_architecture_overview_tool()` — Architecture overview from community structure.\n\n"
+            "Use `get_minimal_context_tool` or `semantic_search_nodes_tool` to find relevant code "
+            "before reading entire files. This saves tokens and finds the right code faster."
         )
 
     def _build_session_history_layer(
@@ -215,8 +211,8 @@ class ContextAssembler:
         iteration: int = 0,
         session_turns: list[dict] | None = None,
         target_repo: str | None = None,
-        cce_search_results: list | None = None,
-        cce_enabled: bool = False,
+        crg_search_results: list | None = None,
+        crg_enabled: bool = False,
     ) -> str:
         layers: list[str] = []
         previous_errors = previous_errors or []
@@ -225,10 +221,9 @@ class ContextAssembler:
         if agents_md:
             layers.append(agents_md)
 
-        if cce_enabled and cce_search_results:
-            cce_layer = self._build_cce_search_layer("codebase", cce_search_results)
-            if cce_layer:
-                layers.append(cce_layer)
+        if crg_enabled:
+            crg_tools = self._build_crg_tools_layer()
+            layers.append(crg_tools)
         else:
             docs_index = self._build_docs_index_layer()
             if docs_index:
@@ -256,10 +251,7 @@ class ContextAssembler:
         if answers:
             layers.append(answers)
 
-        if cce_enabled:
-            cce_tools = self._build_cce_tools_layer()
-            layers.append(cce_tools)
-        else:
+        if not crg_enabled:
             session_history = self._build_session_history_layer(stage, session_turns)
             if session_history:
                 layers.append(session_history)

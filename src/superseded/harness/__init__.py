@@ -10,9 +10,9 @@ from superseded.agents.base import AgentAdapter
 from superseded.agents.factory import AgentFactory
 from superseded.config import RepoEntry, StageAgentConfig, SupersededConfig
 from superseded.db import Database
-from superseded.harness.cce import CCEClient
 from superseded.harness.checkpoint import Checkpoint, CheckpointManager
 from superseded.harness.context import ContextAssembler
+from superseded.harness.crg import CRGClient
 from superseded.harness.lifecycle import LifecycleManager
 from superseded.harness.verification import VerificationEngine
 from superseded.models import (
@@ -56,17 +56,17 @@ class Harness:
         self.checkpoint_manager = CheckpointManager(repo_path)
         self.lifecycle_manager = LifecycleManager()
         self.worktree_manager = WorktreeManager(repo_path)
-        self.cce_client = CCEClient(repo_path)
+        self.crg_client = CRGClient(repo_path)
 
-    async def _ensure_cce_indexed(self) -> None:
-        if not self.cce_client.available:
+    async def _ensure_crg_built(self) -> None:
+        if not self.crg_client.available:
             return
-        if not self.cce_client.is_indexed():
-            logger.info("CCE index not found, indexing %s", self.repo_path)
-            await self.cce_client.index()
-        elif self.cce_client.is_stale():
-            logger.info("CCE index stale, re-indexing %s", self.repo_path)
-            await self.cce_client.reindex()
+        if not self.crg_client.is_built():
+            logger.info("CRG graph not found, building %s", self.repo_path)
+            await self.crg_client.build()
+        elif self.crg_client.is_stale():
+            logger.info("CRG graph stale, updating %s", self.repo_path)
+            await self.crg_client.update()
 
     def resolve_agent(self, stage: Stage) -> AgentAdapter:
         config = self.stage_configs.get(stage.value)
@@ -252,11 +252,9 @@ class Harness:
                 f"Continue from where you left off.\n"
             )
 
-        cce_results = None
-        cce_enabled = self.cce_client.available
-        if cce_enabled:
-            await self._ensure_cce_indexed()
-            cce_results = await self.cce_client.search(issue.title, top_k=10)
+        crg_enabled = self.crg_client.available
+        if crg_enabled:
+            await self._ensure_crg_built()
 
         prompt = self.context_assembler.build(
             stage=stage,
@@ -265,8 +263,7 @@ class Harness:
             previous_errors=previous_errors,
             iteration=0,
             target_repo=repo,
-            cce_search_results=cce_results,
-            cce_enabled=cce_enabled,
+            crg_enabled=crg_enabled,
         )
         if resume_context:
             prompt += resume_context

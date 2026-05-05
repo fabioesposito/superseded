@@ -302,18 +302,17 @@ def test_approvers_config_set():
     assert cfg.approvers == ["alice", "bob"]
 
 
-def test_cce_config_defaults():
-    from superseded.config import CCEConfig
+def test_crg_config_defaults():
+    from superseded.config import CRGConfig
 
-    cfg = CCEConfig()
+    cfg = CRGConfig()
     assert cfg.enabled is False
-    assert cfg.auto_index is True
-    assert cfg.index_stale_minutes == 60
-    assert cfg.compression_level == "standard"
+    assert cfg.auto_build is True
+    assert cfg.graph_stale_minutes == 60
 
 
-def test_superseded_config_with_cce():
-    from superseded.config import CCEConfig
+def test_superseded_config_with_crg():
+    from superseded.config import CRGConfig
 
-    cfg = SupersededConfig(cce=CCEConfig(enabled=True))
-    assert cfg.cce.enabled is True
+    cfg = SupersededConfig(crg=CRGConfig(enabled=True))
+    assert cfg.crg.enabled is True

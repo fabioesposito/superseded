@@ -20,11 +20,10 @@ class ResourceLimitsConfig(BaseModel):
     max_cost_usd: float = 0.0
 
 
-class CCEConfig(BaseModel):
+class CRGConfig(BaseModel):
     enabled: bool = False
-    auto_index: bool = True
-    index_stale_minutes: int = 60
-    compression_level: str = "standard"
+    auto_build: bool = True
+    graph_stale_minutes: int = 60
 
 
 class StageAgentConfig(BaseModel):
@@ -91,7 +90,7 @@ class SupersededConfig(BaseModel):
     base_url: str = ""
     stages: dict[str, StageAgentConfig] = Field(default_factory=dict)
     notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
-    cce: CCEConfig = Field(default_factory=CCEConfig)
+    crg: CRGConfig = Field(default_factory=CRGConfig)
     approvers: list[str] = Field(default_factory=list)
 
 

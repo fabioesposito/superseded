@@ -1,0 +1,37 @@
+<div id="crg-config">
+    {% if success %}
+    <div class="mb-4 px-5 py-3 text-sm text-olive-400 bg-olive-900/20 rounded-lg border border-olive-800/30">
+        CRG settings saved successfully.
+    </div>
+    {% endif %}
+    <div class="card rounded-xl p-6">
+        <form hx-post="/settings/crg" hx-target="#crg-config" hx-swap="outerHTML">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="enabled" {% if crg.enabled %}checked{% endif %}
+                               class="rounded border-shell-700 bg-shell-900 text-neon-500 focus:ring-neon-500">
+                        <span class="text-sm text-shell-200">Enable CRG</span>
+                    </label>
+                    <p class="text-shell-500 text-xs mt-1">Code Review Graph for token-efficient code search</p>
+                </div>
+                <div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" name="auto_build" {% if crg.auto_build %}checked{% endif %}
+                               class="rounded border-shell-700 bg-shell-900 text-neon-500 focus:ring-neon-500">
+                        <span class="text-sm text-shell-200">Auto-build</span>
+                    </label>
+                    <p class="text-shell-500 text-xs mt-1">Build graph before stages run</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-sand-500 mb-1.5">Graph stale after (minutes)</label>
+                    <input type="number" name="graph_stale_minutes" value="{{ crg.graph_stale_minutes }}"
+                           class="w-full bg-shell-900 border border-shell-700 rounded-lg px-3 py-2 text-shell-200 text-sm focus:outline-none focus:border-neon-500 transition-colors">
+                </div>
+            </div>
+            <button type="submit" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                Save CRG Settings
+            </button>
+        </form>
+    </div>
+</div>

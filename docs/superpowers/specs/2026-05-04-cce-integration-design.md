@@ -1,4 +1,4 @@
-# CCE Integration Design: Context Engineering for Superseded
+# CRG Integration Design: Context Engineering for Superseded
 
 **Date:** 2026-05-04
 **Status:** Approved for implementation
@@ -9,27 +9,28 @@ Superseded's ContextAssembler builds prompts with a docs index layer that reads 
 
 ## Solution
 
-Integrate [Code Context Engine (CCE)](https://github.com/elara-labs/code-context-engine) as the context engineering layer. CCE provides:
-- AST-indexed codebase search (tree-sitter)
-- Hybrid vector + BM25 retrieval (94% token savings)
-- Cross-session memory (`record_decision` / `session_recall`)
-- Chunk compression (signatures + docstrings)
+Integrate [Code Review Graph (CRG)](https://github.com/tirth8205/code-review-graph) as the context engineering layer. CRG provides:
+- AST-indexed codebase search (tree-sitter, 23 languages)
+- Blast-radius analysis (impact of changes across dependency graph)
+- Incremental graph updates (< 2 seconds on file changes)
+- 8.2x average token reduction across real repositories
+- 28 MCP tools for code search, traversal, and review
 
 ## Architecture
 
 ### Integration Point
 
-CCE runs as a CLI tool (`cce`). The harness calls it via subprocess, same pattern as agent adapters. No Python library dependency — just the `cce` binary in `$PATH`.
+CRG runs as a CLI tool (`code-review-graph`). The harness calls it via subprocess, same pattern as agent adapters. No Python library dependency — just the `code-review-graph` binary in `$PATH`.
 
 ### Flow
 
 ```
 1. Harness.run_stage() called
-2. Harness._ensure_indexed(repo_path) → runs `cce index` if not indexed
-3. ContextAssembler.build() called with CCE-enhanced layers
-4. Agent receives prompt with CCE MCP tool descriptions
-5. Agent calls context_search, record_decision, session_recall as needed
-6. On stage completion, harness calls record_decision with stage outcome
+2. Harness._ensure_graph_built(repo_path) → runs `code-review-graph build` if not built
+3. ContextAssembler.build() called with CRG-enhanced layers
+4. Agent receives prompt with CRG MCP tool descriptions
+5. Agent calls query_graph, semantic_search_nodes, get_impact_radius as needed
+6. On stage completion, harness records stage outcome in session
 ```
 
 ### ContextAssembler Changes
@@ -38,14 +39,14 @@ Replace two layers:
 
 | Layer | Before | After |
 |---|---|---|
-| Docs index | Reads all `docs/**/*.md` | CCE `context_search("project architecture")` results |
-| Session history | Replays past turns from DB | CCE `session_recall()` results |
+| Docs index | Reads all `docs/**/*.md` | CRG `semantic_search_nodes` + `get_review_context` results |
+| Session history | Replays past turns from DB | CRG `get_minimal_context` structural summary |
 
 Add one layer:
 
 | New Layer | Content |
 |---|---|
-| CCE tools | MCP tool descriptions injected so agents know they can search |
+| CRG tools | MCP tool descriptions injected so agents know they can search |
 
 Keep unchanged:
 - AGENTS.md layer
@@ -59,41 +60,35 @@ Keep unchanged:
 
 ### Auto-Indexing
 
-`Harness._ensure_indexed(repo_path)` checks if CCE index exists:
-- If not: runs `cce index --quiet` (creates `.context-engine/` in repo)
-- If yes: skips (index persists across runs)
-- Re-index: runs `cce reindex --quiet` if index is stale (> 1 hour old)
+`Harness._ensure_graph_built(repo_path)` checks if CRG graph exists:
+- If not: runs `code-review-graph build` (creates `.code-review-graph/` in repo)
+- If yes: skips (graph persists across runs)
+- Re-index: runs `code-review-graph update` if graph is stale (> 1 hour old)
 
 ### Cross-Session Memory
 
-After each stage completes, the harness calls:
-```
-cce record-decision "Stage {stage} completed for {issue_id}" --reason "{summary}"
-```
+After each stage completes, the harness records the stage outcome in the session context for the next stage.
 
-Before each stage, the ContextAssembler calls:
-```
-cce session-recall
-```
-and injects results as the session history layer.
-
-### CCE Tools Layer
+### CRG Tools Layer
 
 New layer in ContextAssembler that injects:
 
 ```
-## Code Context Tools
+## Code Review Graph Tools
 
-You have access to the following code search tools via the CCE MCP server:
+You have access to the following code analysis tools via the CRG MCP server:
 
-- `context_search(query)` — Search the codebase for relevant code chunks. Use this instead of reading entire files.
-- `expand_chunk(chunk_id)` — Get full source for a compressed result.
-- `related_context(file)` — Find code via graph edges (calls, imports).
-- `session_recall()` — Recall decisions from past sessions.
-- `record_decision(decision, reason)` — Save a decision for future sessions.
-- `record_code_area(file)` — Record which files you're working in.
+- `get_minimal_context_tool(query)` — Ultra-compact context (~100 tokens). Call this first.
+- `semantic_search_nodes_tool(query)` — Search code entities by name or meaning.
+- `query_graph_tool(node, query_type)` — Query callers, callees, tests, imports, inheritance.
+- `get_impact_radius_tool(files)` — Blast radius of changed files.
+- `get_review_context_tool()` — Token-optimised review context with structural summary.
+- `traverse_graph_tool(node, depth, token_budget)` — BFS/DFS traversal from any node.
+- `detect_changes_tool()` — Risk-scored change impact analysis.
+- `list_communities_tool()` — List detected code communities.
+- `get_architecture_overview_tool()` — Architecture overview from community structure.
 
-Use `context_search` to find relevant code before reading files. This saves tokens and finds the right code faster.
+Use `get_minimal_context_tool` or `semantic_search_nodes_tool` to find relevant code before reading entire files. This saves tokens and finds the right code faster.
 ```
 
 ### Config
@@ -101,36 +96,34 @@ Use `context_search` to find relevant code before reading files. This saves toke
 Add to `SupersededConfig`:
 
 ```python
-class CCEConfig(BaseModel):
+class CRGConfig(BaseModel):
     enabled: bool = False
-    auto_index: bool = True
-    index_stale_minutes: int = 60
-    compression_level: str = "standard"  # off, lite, standard, max
+    auto_build: bool = True
+    graph_stale_minutes: int = 60
 ```
 
 Add to `SupersededConfig`:
 ```python
-cce: CCEConfig = Field(default_factory=CCEConfig)
+crg: CRGConfig = Field(default_factory=CRGConfig)
 ```
 
 Config example:
 ```yaml
-cce:
+crg:
   enabled: true
-  auto_index: true
-  index_stale_minutes: 60
-  compression_level: standard
+  auto_build: true
+  graph_stale_minutes: 60
 ```
 
 ### Agent Detection
 
-On startup, check if `cce` is available:
+On startup, check if `code-review-graph` is available:
 ```python
 import shutil
-cce_available = shutil.which("cce") is not None
+crg_available = shutil.which("code-review-graph") is not None
 ```
 
-If `cce.enabled: true` but `cce` not found, log a warning and fall back to the old context assembly.
+If `crg.enabled: true` but `code-review-graph` not found, log a warning and fall back to the old context assembly.
 
 ## Implementation
 
@@ -138,16 +131,16 @@ If `cce.enabled: true` but `cce` not found, log a warning and fall back to the o
 
 | File | Change |
 |---|---|
-| `src/superseded/config.py` | Add `CCEConfig` model |
-| `src/superseded/harness/cce.py` | New — CCE wrapper (index, search, record, recall) |
-| `src/superseded/harness/context.py` | Replace docs index + session history layers with CCE |
-| `src/superseded/harness/__init__.py` | Call `_ensure_indexed()` before stages, record decisions after |
-| `templates/settings.html` | Add CCE config section |
-| `templates/_cce_field.html` | CCE settings partial |
-| `tests/test_cce.py` | Tests for CCE wrapper |
-| `tests/test_context.py` | Update for CCE-enhanced context assembly |
+| `src/superseded/config.py` | Add `CRGConfig` model |
+| `src/superseded/harness/crg.py` | New — CRG wrapper (build, update, search) |
+| `src/superseded/harness/context.py` | Replace docs index + session history layers with CRG |
+| `src/superseded/harness/__init__.py` | Call `_ensure_graph_built()` before stages |
+| `templates/settings.html` | Add CRG config section |
+| `templates/_crg_field.html` | CRG settings partial |
+| `tests/test_crg.py` | Tests for CRG wrapper |
+| `tests/test_context.py` | Update for CRG-enhanced context assembly |
 
-### New file: `src/superseded/harness/cce.py`
+### New file: `src/superseded/harness/crg.py`
 
 ```python
 from __future__ import annotations
@@ -156,6 +149,7 @@ import asyncio
 import json
 import logging
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -163,93 +157,77 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class CCESearchResult:
+class CRGSearchResult:
     file: str
-    chunk: str
+    node: str
     score: float
-    compressed: str
+    context: str
 
 
-class CCEClient:
-    def __init__(self, repo_path: str) -> None:
+class CRGClient:
+    def __init__(self, repo_path: str, crg_bin: str = "code-review-graph") -> None:
         self.repo_path = Path(repo_path)
-        self._available = shutil.which("cce") is not None
+        self.crg_bin = crg_bin
+        self._available = shutil.which(crg_bin) is not None
 
     @property
     def available(self) -> bool:
         return self._available
 
-    async def _run(self, *args: str) -> str:
-        proc = await asyncio.create_subprocess_exec(
-            "cce", *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(self.repo_path),
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            logger.warning("cce %s failed: %s", args[0], stderr.decode())
-            return ""
-        return stdout.decode()
-
-    async def index(self) -> bool:
-        result = await self._run("index", "--quiet")
-        return bool(result)
-
-    async def reindex(self) -> bool:
-        result = await self._run("reindex", "--quiet")
-        return bool(result)
-
-    async def search(self, query: str, top_k: int = 10) -> list[CCESearchResult]:
-        result = await self._run("search", query, "--top-k", str(top_k), "--json")
-        if not result:
-            return []
+    async def _run(self, *args: str, timeout: float = 60.0) -> str:
         try:
-            data = json.loads(result)
-            return [
-                CCESearchResult(
-                    file=item.get("file", ""),
-                    chunk=item.get("chunk", ""),
-                    score=item.get("score", 0.0),
-                    compressed=item.get("compressed", ""),
-                )
-                for item in data
-            ]
-        except json.JSONDecodeError:
-            return []
+            proc = await asyncio.create_subprocess_exec(
+                self.crg_bin, *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=str(self.repo_path),
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            if proc.returncode != 0:
+                logger.warning("crg %s failed: %s", args[0], stderr.decode()[:200])
+                return ""
+            return stdout.decode()
+        except TimeoutError:
+            logger.warning("crg %s timed out after %ds", args[0], int(timeout))
+            return ""
+        except FileNotFoundError:
+            logger.warning("crg binary not found: %s", self.crg_bin)
+            return ""
 
-    async def record_decision(self, decision: str, reason: str = "") -> None:
-        args = ["record-decision", decision]
-        if reason:
-            args.extend(["--reason", reason])
-        await self._run(*args)
+    async def build(self) -> bool:
+        result = await self._run("build", timeout=120.0)
+        return bool(result)
 
-    async def session_recall(self) -> str:
-        return await self._run("session-recall")
+    async def update(self) -> bool:
+        result = await self._run("update", timeout=120.0)
+        return bool(result)
 
-    async def is_indexed(self) -> bool:
-        index_dir = self.repo_path / ".context-engine"
-        return index_dir.exists()
+    async def status(self) -> str:
+        return await self._run("status", timeout=30.0)
 
-    async def is_stale(self, max_age_minutes: int = 60) -> bool:
-        index_dir = self.repo_path / ".context-engine"
-        if not index_dir.exists():
+    async def detect_changes(self) -> str:
+        return await self._run("detect-changes", timeout=30.0)
+
+    def is_built(self) -> bool:
+        graph_dir = self.repo_path / ".code-review-graph"
+        return graph_dir.exists()
+
+    def is_stale(self, max_age_minutes: int = 60) -> bool:
+        graph_dir = self.repo_path / ".code-review-graph"
+        if not graph_dir.exists():
             return True
-        db_file = index_dir / "index.db"
+        db_file = graph_dir / "graph.db"
         if not db_file.exists():
             return True
-        import time
-        age = time.time() - db_file.stat().st_mtime
-        return age > max_age_minutes * 60
+        return (time.time() - db_file.stat().st_mtime) > max_age_minutes * 60
 ```
 
 ## Success Criteria
 
-1. `cce.enabled: true` in config → agents get CCE tools and search results
-2. `cce.enabled: false` (default) → old behavior preserved
-3. Auto-indexing creates `.context-engine/` on first run
-4. `context_search` results replace docs index layer
-5. `session_recall` results replace session history layer
-6. `record_decision` called after each stage completion
-7. Fallback to old behavior if `cce` not installed
-8. Settings UI shows CCE config section
+1. `crg.enabled: true` in config → agents get CRG tools and search results
+2. `crg.enabled: false` (default) → old behavior preserved
+3. Auto-building creates `.code-review-graph/` on first run
+4. `semantic_search` results replace docs index layer
+5. `get_minimal_context` replaces session history layer
+6. Fallback to old behavior if `code-review-graph` not installed
+7. Settings UI shows CRG config section
