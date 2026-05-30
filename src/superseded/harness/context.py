@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 
 import yaml
 
@@ -35,6 +36,15 @@ def parse_frontmatter(content: str) -> tuple[dict, str]:
 
 
 class ContextAssembler:
+    _STAGE_CATEGORIES: ClassVar[dict[Stage, list[str]]] = {
+        Stage.SPEC: ["architecture", "guides"],
+        Stage.PLAN: ["architecture", "guides", "adrs"],
+        Stage.BUILD: ["architecture", "guides"],
+        Stage.VERIFY: ["architecture", "guides"],
+        Stage.REVIEW: ["architecture", "guides", "adrs"],
+        Stage.SHIP: ["guides", "operations"],
+    }
+
     def __init__(self, repo_path: str) -> None:
         self.repo_path = Path(repo_path)
         self._repo_registry: dict[str, Path] = {}
@@ -68,11 +78,13 @@ class ContextAssembler:
             return f"## {label} Guide (AGENTS.md)\n\n{content}"
         return None
 
-    def _build_docs_index_layer(self, repo: str | None = None) -> str | None:
+    def _build_docs_index_layer(self, repo: str | None = None, stage: Stage | None = None) -> str | None:
         repo_path = self._get_repo_path(repo)
         docs_dir = repo_path / "docs"
         if not docs_dir.exists():
             return None
+
+        relevant = set(self._STAGE_CATEGORIES.get(stage, [])) if stage else None
 
         categories: dict[str, list[tuple[str, str]]] = {}
         uncategorized: list[tuple[str, str]] = []
@@ -87,6 +99,8 @@ class ContextAssembler:
                 summary = content.split("\n")[0].strip("# ").strip()
 
             category = meta.get("category", "").strip()
+            if relevant and category and category not in relevant:
+                continue
             if category and category in ("architecture", "guides", "adrs", "operations"):
                 categories.setdefault(category, []).append((str(rel), summary))
             else:
@@ -264,7 +278,7 @@ class ContextAssembler:
         if crg_enabled:
             _add_layer("CRG tools", self._build_crg_tools_layer())
         else:
-            docs_index = self._build_docs_index_layer()
+            docs_index = self._build_docs_index_layer(stage=stage)
             if docs_index:
                 _add_layer("docs index", docs_index)
 
@@ -274,7 +288,7 @@ class ContextAssembler:
             target_agents_md = self._build_agents_md_layer(target_repo)
             if target_agents_md:
                 _add_layer(f"AGENTS.md ({target_repo})", target_agents_md)
-            target_docs = self._build_docs_index_layer(target_repo)
+            target_docs = self._build_docs_index_layer(target_repo, stage=stage)
             if target_docs:
                 _add_layer(f"docs ({target_repo})", target_docs)
             target_rules = self._build_rules_layer(target_repo)

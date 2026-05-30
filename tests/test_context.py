@@ -311,3 +311,26 @@ def test_session_history_limits_total_turns(tmp_path):
     assert prompt is not None
     turn_count = prompt.count("turn ")
     assert turn_count <= 6  # 5 turns + maybe header
+
+
+def test_docs_index_filters_by_stage_relevance(tmp_path):
+    """Docs index only includes docs relevant to the current stage."""
+    docs_dir = tmp_path / "docs"
+    arch = docs_dir / "architecture"
+    guides = docs_dir / "guides"
+    ops = docs_dir / "operations"
+    for d in (arch, guides, ops):
+        d.mkdir(parents=True)
+
+    (arch / "pipeline.md").write_text("---\ncategory: architecture\nsummary: Pipeline design\n---\n# Pipeline")
+    (guides / "setup.md").write_text("---\ncategory: guides\nsummary: Setup guide\n---\n# Setup")
+    (ops / "runbook.md").write_text("---\ncategory: operations\nsummary: Ops runbook\n---\n# Ops")
+
+    assembler = ContextAssembler(str(tmp_path))
+
+    # BUILD stage should include architecture and guides, not operations
+    prompt = assembler._build_docs_index_layer(stage=Stage.BUILD)
+    assert "pipeline.md" in prompt or "Pipeline" in prompt
+    assert "setup.md" in prompt or "Setup" in prompt
+    assert "runbook.md" not in prompt
+    assert "Ops" not in prompt
