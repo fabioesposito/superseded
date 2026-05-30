@@ -35,6 +35,35 @@ MAX_SESSION_TURN_CONTENT_LENGTH = 2000
 MIN_OUTPUT_CHARS = 50
 
 
+def _analyze_output_quality(output: str, stage: Stage) -> str | None:
+    if not output.strip():
+        return "Agent produced empty output"
+
+    if stage == Stage.BUILD:
+        code_indicators = [
+            "def ", "class ", "function ", "import ", "from ",
+            "async def", "return ", "if ", "for ", "while ",
+            "```", "elif", "except", "try:", "with ",
+        ]
+        has_code = any(indicator in output for indicator in code_indicators)
+        if not has_code and len(output.strip()) < 200:
+            return (
+                "BUILD output lacks substantive code. The agent should have "
+                "written or modified code files. Output appears to be commentary only."
+            )
+
+    if stage == Stage.VERIFY:
+        test_indicators = ["passed", "failed", "PASS", "FAIL", "test", "assert", "error"]
+        has_tests = any(indicator in output for indicator in test_indicators)
+        if not has_tests:
+            return (
+                "VERIFY output lacks test results. The agent should have "
+                "run tests and reported results."
+            )
+
+    return None
+
+
 class Harness:
     def __init__(
         self,
@@ -396,6 +425,18 @@ class Harness:
                             f"(minimum: {MIN_OUTPUT_CHARS}). The agent may not have "
                             f"actually performed the stage work."
                         ),
+                        artifacts=[],
+                        started_at=datetime.datetime.now(datetime.UTC),
+                        finished_at=datetime.datetime.now(datetime.UTC),
+                    )
+
+                quality_error = _analyze_output_quality(stdout, stage)
+                if quality_error:
+                    return StageResult(
+                        stage=stage,
+                        passed=False,
+                        output=stdout,
+                        error=quality_error,
                         artifacts=[],
                         started_at=datetime.datetime.now(datetime.UTC),
                         finished_at=datetime.datetime.now(datetime.UTC),

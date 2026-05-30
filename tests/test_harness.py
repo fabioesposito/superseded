@@ -102,7 +102,7 @@ async def test_harness_passes_on_success():
 
 async def test_harness_multi_repo_fan_out():
     """run_stage_multi_repo runs once per target repo."""
-    mock_agent = _make_mock_agent(exit_code=0, stdout="build succeeded")
+    mock_agent = _make_mock_agent(exit_code=0, stdout="def build():\n    return 'succeeded'")
 
     with tempfile.TemporaryDirectory() as tmp:
         db = Database(str(Path(tmp) / "state.db"))
@@ -302,6 +302,44 @@ async def test_harness_auto_retries_on_failure():
         )
         assert result.passed is True
         assert call_count == 2
+        await db.close()
+
+
+async def test_harness_detects_low_quality_output():
+    """Harness fails stage when output has no substantive code for BUILD."""
+    mock_agent = AsyncMock()
+
+    async def empty_stream(prompt, context):
+        yield AgentEvent(
+            event_type="stdout",
+            content="I looked at the code but didn't make any changes. Everything looks fine.",
+            stage=Stage.BUILD,
+        )
+        yield AgentEvent(
+            event_type="status", content="", stage=Stage.BUILD,
+            metadata={"exit_code": 0, "duration_ms": 100},
+        )
+
+    mock_agent.run_streaming = empty_stream
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+        )
+        artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
+        artifacts_path.mkdir(parents=True)
+        result = await runner.run_stage(
+            issue=_make_issue(),
+            stage=Stage.BUILD,
+            artifacts_path=str(artifacts_path),
+        )
+        assert result.passed is False
+        assert "code" in result.error.lower() or "quality" in result.error.lower() or "substantive" in result.error.lower()
         await db.close()
 
 
