@@ -356,3 +356,20 @@ def test_context_includes_plan_progress_for_build(tmp_path):
         artifacts_path=str(artifacts_dir),
     )
     assert "1 of 3" in prompt or "1/3" in prompt or "Setup" in prompt
+
+
+def test_context_carries_forward_spec_quality_signal(tmp_path):
+    """When SPEC was verified, BUILD context includes a quality signal."""
+    artifacts_dir = tmp_path / ".superseded" / "artifacts" / "SUP-001"
+    artifacts_dir.mkdir(parents=True)
+    (artifacts_dir / "spec.md").write_text(
+        "# Spec\n\n## Requirements\nDetailed requirements.\n\n## Architecture\nWell-defined architecture."
+    )
+    assembler = ContextAssembler(str(tmp_path))
+    prompt = assembler.build(
+        stage=Stage.BUILD,
+        issue=Issue(id="SUP-001", title="Test", filepath="test.md"),
+        artifacts_path=str(artifacts_dir),
+        verified_stages=["spec"],
+    )
+    assert "verified" in prompt.lower() or "quality" in prompt.lower()

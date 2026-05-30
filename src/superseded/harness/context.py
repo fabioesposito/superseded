@@ -276,6 +276,7 @@ class ContextAssembler:
         target_repo: str | None = None,
         crg_search_results: list | None = None,
         crg_enabled: bool = False,
+        verified_stages: list[str] | None = None,
     ) -> str:
         layers: list[str] = []
         self.layer_tokens = {}
@@ -331,6 +332,18 @@ class ContextAssembler:
             _add_layer("rules", rules)
 
         _add_layer("skill prompt", self._build_skill_layer(stage, target_repo=target_repo))
+
+        if verified_stages:
+            quality_notes = []
+            if "spec" in verified_stages:
+                quality_notes.append("- SPEC was verified — requirements are well-defined. Focus on implementation accuracy.")
+            if "plan" in verified_stages:
+                quality_notes.append("- PLAN was verified — task breakdown is solid. Follow the plan closely.")
+            if "build" in verified_stages and stage in (Stage.VERIFY, Stage.REVIEW):
+                quality_notes.append("- BUILD was verified — code compiles and basic checks pass.")
+            if quality_notes:
+                quality_layer = "## Stage Quality Signals\n\n" + "\n".join(quality_notes)
+                _add_layer("quality signals", quality_layer)
 
         if previous_errors:
             _add_layer("error context", self._build_error_layer(previous_errors, iteration))
