@@ -1151,6 +1151,12 @@
         <!-- Arrow: Pipeline → Worktree -->
         <line x1="385" y1="195" x2="445" y2="130" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-cyan)" stroke-dasharray="4 3"/>
 
+        <!-- Cross-stage quality signal -->
+        <g transform="translate(390, 145)">
+          <rect width="50" height="18" rx="9" fill="#0d0d18" stroke="#00e5cc" stroke-width="0.75" opacity="0.7"/>
+          <text x="25" y="12" text-anchor="middle" fill="#00e5cc" font-family="JetBrains Mono, monospace" font-size="6">quality</text>
+        </g>
+
         <!-- Arrow: Pipeline → Docker -->
         <line x1="385" y1="245" x2="445" y2="260" stroke="#2a2a55" stroke-width="1.5" marker-end="url(#arrow-amber)" stroke-dasharray="4 3"/>
 
@@ -1184,7 +1190,7 @@
           <text x="75" y="64" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="8">Claude Code</text>
           <text x="75" y="78" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="8">OpenCode</text>
           <text x="75" y="92" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="8">Codex</text>
-          <text x="75" y="106" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">extensible adapters</text>
+          <text x="75" y="106" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">quality-gated output</text>
         </g>
 
         <!-- RTK -->
@@ -1229,7 +1235,7 @@
           <rect width="130" height="70" rx="2" fill="#0d0d18" stroke="#1a1a35" stroke-width="1" stroke-dasharray="4 3"/>
           <text x="65" y="24" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="9" font-weight="500">STATE</text>
           <text x="65" y="42" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">SQLite cache</text>
-          <text x="65" y="56" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">iteration tracking</text>
+          <text x="65" y="56" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">checkpoints · iterations</text>
         </g>
 
         <!-- Arrow: Tickets → State -->
@@ -1251,7 +1257,13 @@
         <g transform="translate(675, 400)">
           <rect width="130" height="50" rx="2" fill="#0d0d18" stroke="#00e5cc" stroke-width="1" stroke-dasharray="4 3"/>
           <text x="65" y="22" text-anchor="middle" fill="#00e5cc" font-family="JetBrains Mono, monospace" font-size="9" font-weight="500">HITL CHECKPOINT</text>
-          <text x="65" y="38" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">approve | reject</text>
+          <text x="65" y="38" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">approve | reject | retry</text>
+        </g>
+
+        <!-- Structured Verification badge -->
+        <g transform="translate(500, 440)">
+          <rect width="130" height="30" rx="2" fill="#0d0d18" stroke="#ffab40" stroke-width="0.75" stroke-dasharray="3 2"/>
+          <text x="65" y="20" text-anchor="middle" fill="#ffab40" font-family="JetBrains Mono, monospace" font-size="7">structured verification</text>
         </g>
       </svg>
     </div>
