@@ -160,6 +160,32 @@ async def test_worktree_pop_stash_none_ref():
         await wm.pop_stash(None)
 
 
+async def test_worktree_merge(tmp_path):
+    """WorktreeManager merges worktree changes back to main branch."""
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=str(repo), capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=str(repo), capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=str(repo), capture_output=True)
+    (repo / "README.md").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=str(repo), capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=str(repo), capture_output=True)
+
+    manager = WorktreeManager(str(repo))
+    wt_path = await manager.create("SUP-001")
+
+    (wt_path / "new_file.txt").write_text("new content")
+    subprocess.run(["git", "add", "."], cwd=str(wt_path), capture_output=True)
+    subprocess.run(["git", "commit", "-m", "add file"], cwd=str(wt_path), capture_output=True)
+
+    success = await manager.merge("SUP-001")
+    assert success is True
+    assert (repo / "new_file.txt").exists()
+    assert (repo / "new_file.txt").read_text() == "new content"
+
+
 async def test_worktree_create_reuses_existing_branch():
     """create falls back to existing branch if branch already exists."""
     with tempfile.TemporaryDirectory() as tmp:

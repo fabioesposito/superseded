@@ -127,7 +127,26 @@ class WorktreeManager:
                 )
         return worktree_path
 
-    async def cleanup(self, issue_id: str, repo: str | None = None) -> None:
+    async def merge(self, issue_id: str, repo: str | None = None) -> bool:
+        """Merge worktree branch back into the target branch. Returns True on success."""
+        repo_path = self._get_repo_path(repo)
+        branch_name = self._branch_name(issue_id, repo)
+
+        current = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(repo_path))
+        target_branch = current.stdout.strip()
+
+        result = await self._run_git(
+            "merge", branch_name, "--no-ff", "-m", f"Merge {branch_name} for {issue_id}",
+            cwd=str(repo_path),
+        )
+        return result.returncode == 0
+
+    async def cleanup(self, issue_id: str, repo: str | None = None, merge: bool = False) -> bool:
+        """Cleanup worktree. If merge=True, merge changes first."""
+        success = True
+        if merge:
+            success = await self.merge(issue_id, repo)
+
         repo_path = self._get_repo_path(repo)
         worktree_path = self._worktree_path(issue_id, repo)
         branch_name = self._branch_name(issue_id, repo)
@@ -136,6 +155,7 @@ class WorktreeManager:
                 "worktree", "remove", str(worktree_path), "--force", cwd=str(repo_path)
             )
         await self._run_git("branch", "-D", branch_name, cwd=str(repo_path))
+        return success
 
     def get_path(self, issue_id: str, repo: str | None = None) -> Path:
         return self._worktree_path(issue_id, repo)
