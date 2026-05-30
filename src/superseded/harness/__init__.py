@@ -413,6 +413,22 @@ class Harness:
                         stage.value, stdout, artifact_contents, verify_config
                     )
                     if not verification.passed:
+                        if stage == Stage.REVIEW:
+                            from superseded.harness.verification import parse_review_findings
+                            findings = parse_review_findings(stdout)
+                            if findings.get("critical", 0) > 0:
+                                return StageResult(
+                                    stage=stage,
+                                    passed=False,
+                                    output=stdout,
+                                    error=(
+                                        f"Review found {findings['critical']} critical findings. "
+                                        f"Loop back to BUILD to address these issues before re-reviewing."
+                                    ),
+                                    artifacts=[],
+                                    started_at=datetime.datetime.now(datetime.UTC),
+                                    finished_at=datetime.datetime.now(datetime.UTC),
+                                )
                         return StageResult(
                             stage=stage,
                             passed=False,
