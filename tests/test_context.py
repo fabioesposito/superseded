@@ -3,6 +3,7 @@ from pathlib import Path
 
 from superseded.models import Issue, Stage
 from superseded.pipeline.context import ContextAssembler
+from superseded.pipeline.plan import PlanTask, write_plan
 
 
 def _make_issue() -> Issue:
@@ -334,3 +335,24 @@ def test_docs_index_filters_by_stage_relevance(tmp_path):
     assert "setup.md" in prompt or "Setup" in prompt
     assert "runbook.md" not in prompt
     assert "Ops" not in prompt
+
+
+def test_context_includes_plan_progress_for_build(tmp_path):
+    artifacts_dir = tmp_path / ".superseded" / "artifacts" / "SUP-001"
+    artifacts_dir.mkdir(parents=True)
+    write_plan(
+        str(artifacts_dir / "plan.md"),
+        "My Plan", "Build stuff",
+        [
+            PlanTask(title="Setup", status="complete"),
+            PlanTask(title="Implement", status="in-progress"),
+            PlanTask(title="Test", status="pending"),
+        ],
+    )
+    assembler = ContextAssembler(str(tmp_path))
+    prompt = assembler.build(
+        stage=Stage.BUILD,
+        issue=Issue(id="SUP-001", title="Test", filepath="test.md"),
+        artifacts_path=str(artifacts_dir),
+    )
+    assert "1 of 3" in prompt or "1/3" in prompt or "Setup" in prompt

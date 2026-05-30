@@ -252,6 +252,19 @@ class ContextAssembler:
             return f"## Human Answers to Your Questions\n\n{content}"
         return None
 
+    def _build_plan_progress_layer(self, artifacts_path: str) -> str | None:
+        from superseded.pipeline.plan import read_plan
+
+        plan = read_plan(str(Path(artifacts_path) / "plan.md"))
+        if not plan.tasks:
+            return None
+        progress = f"{plan.completed_count} of {plan.total_count} tasks complete"
+        lines = [f"## Plan Progress ({progress})\n"]
+        for i, task in enumerate(plan.tasks, 1):
+            icon = {"complete": "[x]", "in-progress": "[ ]", "skipped": "[~]"}.get(task.status, "[ ]")
+            lines.append(f"- Task {i}: {icon} {task.title} — {task.status}")
+        return "\n".join(lines)
+
     def build(
         self,
         stage: Stage,
@@ -298,6 +311,11 @@ class ContextAssembler:
         artifacts = self._build_artifacts_layer(artifacts_path)
         if artifacts:
             _add_layer("artifacts", artifacts)
+
+        if stage in (Stage.BUILD, Stage.VERIFY, Stage.REVIEW):
+            plan_progress = self._build_plan_progress_layer(artifacts_path)
+            if plan_progress:
+                _add_layer("plan progress", plan_progress)
 
         answers = self._build_answers_layer(artifacts_path)
         if answers:
