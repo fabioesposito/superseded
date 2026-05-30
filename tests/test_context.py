@@ -247,3 +247,23 @@ def test_context_assembler_reports_layer_tokens(tmp_path):
     assert len(assembler.layer_tokens) >= 2
     assert any("AGENTS.md" in k for k in assembler.layer_tokens)
     assert any("rules" in k.lower() for k in assembler.layer_tokens)
+
+
+def test_context_assembler_drops_low_priority_layers_when_over_budget(tmp_path):
+    """When max_tokens is set, low-priority layers are dropped to fit."""
+    (tmp_path / "AGENTS.md").write_text("# Guide\nEssential content here.")
+    assembler = ContextAssembler(str(tmp_path))
+    assembler.max_tokens = 500  # Tight budget
+    prompt = assembler.build(
+        stage=Stage.BUILD,
+        issue=Issue(id="SUP-001", title="Test", filepath="test.md"),
+        artifacts_path=str(tmp_path / "artifacts"),
+        session_turns=[
+            {"stage": "spec", "attempt": 0, "role": "assistant", "content": "x " * 2000},
+            {"stage": "plan", "attempt": 0, "role": "assistant", "content": "y " * 2000},
+        ],
+    )
+    # Should still contain essential layers
+    assert "Guide" in prompt
+    # Session history should be dropped or heavily truncated
+    assert assembler.last_token_estimate <= 600  # Some slack for truncation

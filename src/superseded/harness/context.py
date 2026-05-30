@@ -40,6 +40,7 @@ class ContextAssembler:
         self._repo_registry: dict[str, Path] = {}
         self.last_token_estimate: int = 0
         self.layer_tokens: dict[str, int] = {}
+        self.max_tokens: int = 0  # 0 = unlimited
 
     def register_repo(self, name: str, repo_path: str) -> None:
         self._repo_registry[name] = Path(repo_path)
@@ -48,6 +49,11 @@ class ContextAssembler:
         if repo and repo in self._repo_registry:
             return self._repo_registry[repo]
         return self.repo_path
+
+    def _fits_budget(self, layers: list[str]) -> bool:
+        if self.max_tokens <= 0:
+            return True
+        return _estimate_tokens("\n\n---\n\n".join(layers)) <= self.max_tokens
 
     def _read_if_exists(self, path: Path) -> str | None:
         if path.exists() and path.is_file():
@@ -273,6 +279,18 @@ class ContextAssembler:
 
         if previous_errors:
             _add_layer("error context", self._build_error_layer(previous_errors, iteration))
+
+        if self.max_tokens > 0:
+            drop_order = ["session history", "docs index", "skill prompt"]
+            for drop_name in drop_order:
+                if self._fits_budget(layers):
+                    break
+                keys = list(self.layer_tokens.keys())
+                for i, name in enumerate(keys):
+                    if name == drop_name and i < len(layers):
+                        layers.pop(i)
+                        del self.layer_tokens[name]
+                        break
 
         prompt = "\n\n---\n\n".join(layers)
         result = sanitize_agent_prompt(prompt)
