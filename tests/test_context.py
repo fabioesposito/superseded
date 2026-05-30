@@ -267,3 +267,22 @@ def test_context_assembler_drops_low_priority_layers_when_over_budget(tmp_path):
     assert "Guide" in prompt
     # Session history should be dropped or heavily truncated
     assert assembler.last_token_estimate <= 600  # Some slack for truncation
+
+
+def test_error_layer_deduplicates_and_prioritizes(tmp_path):
+    """Error layer deduplicates similar errors and puts most recent first."""
+    assembler = ContextAssembler(str(tmp_path))
+    errors = [
+        "Build failed: syntax error in main.py",
+        "Build failed: syntax error in main.py",  # duplicate
+        "Tests failed: 2 assertions failed",
+        "Build failed: syntax error in main.py",  # duplicate
+    ]
+    prompt = assembler._build_error_layer(errors, iteration=2)
+    # Should deduplicate
+    assert prompt.count("syntax error in main.py") == 1
+    # Should indicate attempt number
+    assert "attempt 3" in prompt
+    # Most frequent errors should appear first
+    lines = [l for l in prompt.split("\n") if l.startswith("- ")]
+    assert "syntax error" in lines[0]  # most frequent = most important

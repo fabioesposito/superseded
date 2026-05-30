@@ -201,10 +201,24 @@ class ContextAssembler:
         return "## Previous Session History\n\n" + "\n\n".join(parts)
 
     def _build_error_layer(self, previous_errors: list[str], iteration: int) -> str:
-        error_lines = "\n".join(f"- {err}" for err in previous_errors)
+        from collections import Counter
+
+        seen: set[str] = set()
+        unique: list[str] = []
+        for err in previous_errors:
+            normalized = err.strip().lower()
+            if normalized not in seen:
+                seen.add(normalized)
+                unique.append(err)
+
+        freq = Counter(err.strip().lower() for err in previous_errors)
+        unique.sort(key=lambda e: -freq[e.strip().lower()])
+
+        error_lines = "\n".join(f"- {err}" for err in unique)
         return (
             f"## Retry Context (attempt {iteration + 1})\n\n"
-            f"The previous attempt failed. Fix the following errors:\n\n{error_lines}\n\n"
+            f"The previous attempt(s) failed. Fix the following {len(unique)} distinct error(s):\n\n"
+            f"{error_lines}\n\n"
             f"Address each error. Do not repeat the same mistakes."
         )
 
