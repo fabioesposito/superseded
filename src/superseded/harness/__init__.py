@@ -51,6 +51,8 @@ class Harness:
         self.event_manager = event_manager or PipelineEventManager()
         self.db = db
         self.notification_service = notification_service
+        self.auto_retry = False
+        self.max_auto_retries = 1
 
         self.context_assembler = ContextAssembler(repo_path)
         self.verification_engine = VerificationEngine()
@@ -300,145 +302,163 @@ class Harness:
             SessionTurn(role="user", content=prompt, stage=stage, attempt=0),
         )
 
-        em.start(issue.id)
-        stdout_parts: list[str] = []
-        exit_code = -1
-        duration_ms = 0
-        stream_start = _time.monotonic()
+        max_attempts = self.max_auto_retries + 1 if self.auto_retry else 1
+        last_result: StageResult | None = None
 
-        try:
-            async for event in self.resolve_agent(stage).run_streaming(prompt, context):
-                await self.db.save_agent_event(issue.id, event)
-                await em.publish(issue.id, event)
+        for attempt in range(max_attempts):
+            em.start(issue.id)
+            stdout_parts: list[str] = []
+            exit_code = -1
+            duration_ms = 0
+            stream_start = _time.monotonic()
 
-                if event.event_type == "stdout":
-                    stdout_parts.append(event.content)
-                    if len(stdout_parts) % 10 == 0:
-                        self.checkpoint_manager.save(Checkpoint(
-                            issue_id=issue.id,
-                            stage=stage.value,
-                            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
-                            completed_tasks=[],
-                            current_task=f"Processing... ({len(stdout_parts)} outputs received)",
-                        ))
-                elif event.event_type == "status":
-                    exit_code = event.metadata.get("exit_code", -1)
-                    duration_ms = event.metadata.get("duration_ms", 0)
+            try:
+                async for event in self.resolve_agent(stage).run_streaming(prompt, context):
+                    await self.db.save_agent_event(issue.id, event)
+                    await em.publish(issue.id, event)
 
-                if resource_limits:
-                    elapsed = _time.monotonic() - stream_start
-                    limit_error = self.lifecycle_manager.check_resource_limits(
-                        resource_limits, wall_time=elapsed
-                    )
-                    if limit_error:
-                        logger.warning("Resource limit exceeded for %s: %s", issue.id, limit_error)
-                        break
-        finally:
-            em.stop(issue.id)
+                    if event.event_type == "stdout":
+                        stdout_parts.append(event.content)
+                        if len(stdout_parts) % 10 == 0:
+                            self.checkpoint_manager.save(Checkpoint(
+                                issue_id=issue.id,
+                                stage=stage.value,
+                                timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
+                                completed_tasks=[],
+                                current_task=f"Processing... ({len(stdout_parts)} outputs received)",
+                            ))
+                    elif event.event_type == "status":
+                        exit_code = event.metadata.get("exit_code", -1)
+                        duration_ms = event.metadata.get("duration_ms", 0)
 
-        stdout = "\n".join(stdout_parts)
+                    if resource_limits:
+                        elapsed = _time.monotonic() - stream_start
+                        limit_error = self.lifecycle_manager.check_resource_limits(
+                            resource_limits, wall_time=elapsed
+                        )
+                        if limit_error:
+                            logger.warning("Resource limit exceeded for %s: %s", issue.id, limit_error)
+                            break
+            finally:
+                em.stop(issue.id)
 
-        await self.db.save_session_turn(
-            issue.id,
-            SessionTurn(
-                role="assistant",
-                content=stdout[:MAX_SESSION_TURN_CONTENT_LENGTH],
-                stage=stage,
-                attempt=0,
-                metadata={"exit_code": exit_code, "duration_ms": duration_ms},
-            ),
-        )
+            stdout = "\n".join(stdout_parts)
 
-        passed = exit_code == 0
-
-        if passed:
-            if stage in (Stage.SPEC, Stage.PLAN):
-                artifact_file = Path(artifacts_path) / f"{stage.value}.md"
-                artifact_file.parent.mkdir(parents=True, exist_ok=True)
-                artifact_file.write_text(stdout, encoding="utf-8")
-
-            questions_file = Path(artifacts_path) / "questions.md"
-            approval_file = Path(artifacts_path) / "approval.md"
-            if questions_file.exists():
-                return StageResult(
+            await self.db.save_session_turn(
+                issue.id,
+                SessionTurn(
+                    role="assistant",
+                    content=stdout[:MAX_SESSION_TURN_CONTENT_LENGTH],
                     stage=stage,
-                    passed=False,
-                    output=stdout,
-                    error="awaiting-input",
-                    artifacts=[],
-                    started_at=datetime.datetime.now(datetime.UTC),
-                    finished_at=datetime.datetime.now(datetime.UTC),
-                )
-            if approval_file.exists():
-                return StageResult(
-                    stage=stage,
-                    passed=False,
-                    output=stdout,
-                    error="approval-required",
-                    artifacts=[],
-                    started_at=datetime.datetime.now(datetime.UTC),
-                    finished_at=datetime.datetime.now(datetime.UTC),
-                )
+                    attempt=attempt,
+                    metadata={"exit_code": exit_code, "duration_ms": duration_ms},
+                ),
+            )
 
-            if len(stdout.strip()) < MIN_OUTPUT_CHARS:
-                return StageResult(
-                    stage=stage,
-                    passed=False,
-                    output=stdout,
-                    error=(
-                        f"Agent produced only {len(stdout.strip())} chars of output "
-                        f"(minimum: {MIN_OUTPUT_CHARS}). The agent may not have "
-                        f"actually performed the stage work."
-                    ),
-                    artifacts=[],
-                    started_at=datetime.datetime.now(datetime.UTC),
-                    finished_at=datetime.datetime.now(datetime.UTC),
-                )
+            passed = exit_code == 0
 
-            stage_config = self.stage_configs.get(stage.value)
-            if stage_config:
-                verify_config = stage_config.verify
-                artifact_contents = {}
-                artifact_dir = Path(artifacts_path)
-                if artifact_dir.exists():
-                    for f in artifact_dir.glob("*.md"):
-                        artifact_contents[f.name] = f.read_text(encoding="utf-8")
-                verification = self.verification_engine.verify(
-                    stage.value, stdout, artifact_contents, verify_config
-                )
-                if not verification.passed:
+            if passed:
+                if stage in (Stage.SPEC, Stage.PLAN):
+                    artifact_file = Path(artifacts_path) / f"{stage.value}.md"
+                    artifact_file.parent.mkdir(parents=True, exist_ok=True)
+                    artifact_file.write_text(stdout, encoding="utf-8")
+
+                questions_file = Path(artifacts_path) / "questions.md"
+                approval_file = Path(artifacts_path) / "approval.md"
+                if questions_file.exists():
                     return StageResult(
                         stage=stage,
                         passed=False,
                         output=stdout,
-                        error=self.verification_engine.format_errors_for_retry(verification),
+                        error="awaiting-input",
+                        artifacts=[],
+                        started_at=datetime.datetime.now(datetime.UTC),
+                        finished_at=datetime.datetime.now(datetime.UTC),
+                    )
+                if approval_file.exists():
+                    return StageResult(
+                        stage=stage,
+                        passed=False,
+                        output=stdout,
+                        error="approval-required",
                         artifacts=[],
                         started_at=datetime.datetime.now(datetime.UTC),
                         finished_at=datetime.datetime.now(datetime.UTC),
                     )
 
-            self.checkpoint_manager.clear(issue.id, stage.value)
+                if len(stdout.strip()) < MIN_OUTPUT_CHARS:
+                    return StageResult(
+                        stage=stage,
+                        passed=False,
+                        output=stdout,
+                        error=(
+                            f"Agent produced only {len(stdout.strip())} chars of output "
+                            f"(minimum: {MIN_OUTPUT_CHARS}). The agent may not have "
+                            f"actually performed the stage work."
+                        ),
+                        artifacts=[],
+                        started_at=datetime.datetime.now(datetime.UTC),
+                        finished_at=datetime.datetime.now(datetime.UTC),
+                    )
 
-            return StageResult(
+                stage_config = self.stage_configs.get(stage.value)
+                if stage_config:
+                    verify_config = stage_config.verify
+                    artifact_contents = {}
+                    artifact_dir = Path(artifacts_path)
+                    if artifact_dir.exists():
+                        for f in artifact_dir.glob("*.md"):
+                            artifact_contents[f.name] = f.read_text(encoding="utf-8")
+                    verification = self.verification_engine.verify(
+                        stage.value, stdout, artifact_contents, verify_config
+                    )
+                    if not verification.passed:
+                        return StageResult(
+                            stage=stage,
+                            passed=False,
+                            output=stdout,
+                            error=self.verification_engine.format_errors_for_retry(verification),
+                            artifacts=[],
+                            started_at=datetime.datetime.now(datetime.UTC),
+                            finished_at=datetime.datetime.now(datetime.UTC),
+                        )
+
+                self.checkpoint_manager.clear(issue.id, stage.value)
+
+                return StageResult(
+                    stage=stage,
+                    passed=True,
+                    output=stdout,
+                    error="",
+                    artifacts=[],
+                    started_at=datetime.datetime.now(datetime.UTC),
+                    finished_at=datetime.datetime.now(datetime.UTC),
+                )
+
+            error_msg = stdout if stdout else f"Agent exited with code {exit_code}"
+            last_result = StageResult(
                 stage=stage,
-                passed=True,
+                passed=False,
                 output=stdout,
-                error="",
+                error=error_msg,
                 artifacts=[],
                 started_at=datetime.datetime.now(datetime.UTC),
                 finished_at=datetime.datetime.now(datetime.UTC),
             )
 
-        error_msg = stdout if stdout else f"Agent exited with code {exit_code}"
-        return StageResult(
-            stage=stage,
-            passed=False,
-            output=stdout,
-            error=error_msg,
-            artifacts=[],
-            started_at=datetime.datetime.now(datetime.UTC),
-            finished_at=datetime.datetime.now(datetime.UTC),
-        )
+            if attempt < max_attempts - 1:
+                previous_errors_retry = [error_msg] if error_msg else []
+                prompt = self.context_assembler.build(
+                    stage=stage,
+                    issue=issue,
+                    artifacts_path=artifacts_path,
+                    previous_errors=previous_errors_retry,
+                    iteration=attempt + 1,
+                    target_repo=repo,
+                    crg_enabled=crg_enabled,
+                )
+
+        return last_result
 
     async def _send_notifications(
         self, issue: Issue, stage: Stage, result: StageResult, config: SupersededConfig

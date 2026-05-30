@@ -72,6 +72,8 @@ class SupersededConfig(BaseModel):
     default_agent: str = "opencode"
     stage_timeout_seconds: int = 600
     auto_advance: bool = False
+    auto_retry: bool = False
+    max_auto_retries: int = 1
     repo_path: str = ""
     repos: dict[str, RepoEntry] = Field(default_factory=dict)
     port: int = 8000

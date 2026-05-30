@@ -255,6 +255,56 @@ async def test_harness_approval_required_updates_status():
         await db.close()
 
 
+async def test_harness_auto_retries_on_failure():
+    """Harness automatically retries once on failure when auto_retry is enabled."""
+    call_count = 0
+    mock_agent = AsyncMock()
+
+    async def flaky_stream(prompt, context):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            yield AgentEvent(
+                event_type="stderr", content="lint error on line 5", stage=Stage.BUILD,
+            )
+            yield AgentEvent(
+                event_type="status", content="", stage=Stage.BUILD,
+                metadata={"exit_code": 1, "duration_ms": 100},
+            )
+        else:
+            yield AgentEvent(
+                event_type="stdout", content="Build succeeded with enough output content here for test", stage=Stage.BUILD,
+            )
+            yield AgentEvent(
+                event_type="status", content="", stage=Stage.BUILD,
+                metadata={"exit_code": 0, "duration_ms": 100},
+            )
+
+    mock_agent.run_streaming = flaky_stream
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+            auto_retry=True,
+            max_auto_retries=1,
+        )
+        artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
+        artifacts_path.mkdir(parents=True)
+        result = await runner.run_stage(
+            issue=_make_issue(),
+            stage=Stage.BUILD,
+            artifacts_path=str(artifacts_path),
+        )
+        assert result.passed is True
+        assert call_count == 2
+        await db.close()
+
+
 async def test_harness_enforces_resource_limits():
     """Harness checks resource limits during execution."""
     from superseded.harness.lifecycle import ResourceLimits

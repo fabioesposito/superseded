@@ -25,6 +25,8 @@ class HarnessRunner:
         stage_configs: dict[str, StageAgentConfig] | None = None,
         event_manager: PipelineEventManager | None = None,
         db: Database | None = None,
+        auto_retry: bool = False,
+        max_auto_retries: int = 1,
     ) -> None:
         self._harness = Harness(
             repo_path=repo_path,
@@ -33,6 +35,8 @@ class HarnessRunner:
             event_manager=event_manager,
             db=db,
         )
+        self._harness.auto_retry = auto_retry
+        self._harness.max_auto_retries = max_auto_retries
         self.agent_factory = self._harness.agent_factory
         self.stage_configs = self._harness.stage_configs
         self.event_manager = self._harness.event_manager
