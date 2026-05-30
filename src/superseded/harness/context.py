@@ -9,6 +9,11 @@ from superseded.pipeline.prompts import get_prompt_for_stage
 from superseded.validation import sanitize_agent_prompt
 
 
+def _estimate_tokens(text: str) -> int:
+    """Approximate token count: words / 0.75."""
+    return max(1, len(text.split()) * 4 // 3)
+
+
 def parse_frontmatter(content: str) -> tuple[dict, str]:
     """Parse YAML frontmatter from markdown content.
 
@@ -33,6 +38,8 @@ class ContextAssembler:
     def __init__(self, repo_path: str) -> None:
         self.repo_path = Path(repo_path)
         self._repo_registry: dict[str, Path] = {}
+        self.last_token_estimate: int = 0
+        self.layer_tokens: dict[str, int] = {}
 
     def register_repo(self, name: str, repo_path: str) -> None:
         self._repo_registry[name] = Path(repo_path)
@@ -215,55 +222,59 @@ class ContextAssembler:
         crg_enabled: bool = False,
     ) -> str:
         layers: list[str] = []
+        self.layer_tokens = {}
         previous_errors = previous_errors or []
 
-        agents_md = self._build_agents_md_layer()
-        if agents_md:
-            layers.append(agents_md)
+        def _add_layer(name: str, content: str | None) -> None:
+            if content:
+                layers.append(content)
+                self.layer_tokens[name] = _estimate_tokens(content)
+
+        _add_layer("AGENTS.md", self._build_agents_md_layer())
 
         if crg_enabled:
-            crg_tools = self._build_crg_tools_layer()
-            layers.append(crg_tools)
+            _add_layer("CRG tools", self._build_crg_tools_layer())
         else:
             docs_index = self._build_docs_index_layer()
             if docs_index:
-                layers.append(docs_index)
+                _add_layer("docs index", docs_index)
 
-        layers.append(self._build_issue_layer(issue))
+        _add_layer("issue ticket", self._build_issue_layer(issue))
 
-        # Target repo context (if different from primary)
         if target_repo:
             target_agents_md = self._build_agents_md_layer(target_repo)
             if target_agents_md:
-                layers.append(target_agents_md)
+                _add_layer(f"AGENTS.md ({target_repo})", target_agents_md)
             target_docs = self._build_docs_index_layer(target_repo)
             if target_docs:
-                layers.append(target_docs)
+                _add_layer(f"docs ({target_repo})", target_docs)
             target_rules = self._build_rules_layer(target_repo)
             if target_rules:
-                layers.append(target_rules)
+                _add_layer(f"rules ({target_repo})", target_rules)
 
         artifacts = self._build_artifacts_layer(artifacts_path)
         if artifacts:
-            layers.append(artifacts)
+            _add_layer("artifacts", artifacts)
 
         answers = self._build_answers_layer(artifacts_path)
         if answers:
-            layers.append(answers)
+            _add_layer("answers", answers)
 
         if not crg_enabled:
             session_history = self._build_session_history_layer(stage, session_turns)
             if session_history:
-                layers.append(session_history)
+                _add_layer("session history", session_history)
 
         rules = self._build_rules_layer()
         if rules:
-            layers.append(rules)
+            _add_layer("rules", rules)
 
-        layers.append(self._build_skill_layer(stage, target_repo=target_repo))
+        _add_layer("skill prompt", self._build_skill_layer(stage, target_repo=target_repo))
 
         if previous_errors:
-            layers.append(self._build_error_layer(previous_errors, iteration))
+            _add_layer("error context", self._build_error_layer(previous_errors, iteration))
 
         prompt = "\n\n---\n\n".join(layers)
-        return sanitize_agent_prompt(prompt)
+        result = sanitize_agent_prompt(prompt)
+        self.last_token_estimate = _estimate_tokens(result)
+        return result

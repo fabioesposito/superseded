@@ -218,3 +218,32 @@ def test_context_skill_layer_includes_repo_info(tmp_path):
     assert "Target Repository: frontend" in prompt_with_repo
     assert str(frontend) in prompt_with_repo
     assert "gh pr create" in prompt_with_repo
+
+
+def test_context_assembler_counts_tokens(tmp_path):
+    """ContextAssembler tracks approximate token count per layer."""
+    (tmp_path / "AGENTS.md").write_text("# Guide\n" + "word " * 500)
+    assembler = ContextAssembler(str(tmp_path))
+    assembler.build(
+        stage=Stage.SPEC,
+        issue=Issue(id="SUP-001", title="Test", filepath="test.md"),
+        artifacts_path=str(tmp_path / "artifacts"),
+    )
+    assert assembler.last_token_estimate > 0
+    assert assembler.last_token_estimate > 400
+
+
+def test_context_assembler_reports_layer_tokens(tmp_path):
+    """ContextAssembler exposes per-layer token breakdown."""
+    (tmp_path / "AGENTS.md").write_text("# Guide\n" + "word " * 200)
+    (tmp_path / ".superseded").mkdir()
+    (tmp_path / ".superseded" / "rules.md").write_text("Rules\n" + "rule " * 100)
+    assembler = ContextAssembler(str(tmp_path))
+    assembler.build(
+        stage=Stage.BUILD,
+        issue=Issue(id="SUP-001", title="Test", filepath="test.md"),
+        artifacts_path=str(tmp_path / "artifacts"),
+    )
+    assert len(assembler.layer_tokens) >= 2
+    assert any("AGENTS.md" in k for k in assembler.layer_tokens)
+    assert any("rules" in k.lower() for k in assembler.layer_tokens)
