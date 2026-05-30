@@ -172,6 +172,9 @@ class ContextAssembler:
             "before reading entire files. This saves tokens and finds the right code faster."
         )
 
+    MAX_SESSION_HISTORY_TURNS = 5
+    MAX_TURN_CONTENT_LENGTH = 500
+
     def _build_session_history_layer(
         self, current_stage: Stage, session_turns: list[dict] | None = None
     ) -> str | None:
@@ -182,9 +185,11 @@ class ContextAssembler:
         if not prior_turns:
             return None
 
+        recent_turns = prior_turns[-self.MAX_SESSION_HISTORY_TURNS :]
+
         parts: list[str] = []
         current_section = None
-        for turn in prior_turns:
+        for turn in recent_turns:
             section = f"{turn['stage']} (attempt {turn['attempt'] + 1})"
             if section != current_section:
                 current_section = section
@@ -192,13 +197,17 @@ class ContextAssembler:
 
             role_label = "You asked" if turn["role"] == "user" else "Agent responded"
             content = turn["content"]
-            if len(content) > 2000:
-                content = content[:2000] + "... [truncated]"
+            if len(content) > self.MAX_TURN_CONTENT_LENGTH:
+                content = (
+                    content[:200]
+                    + f"\n\n[... {len(content) - 400} chars omitted ...]\n\n"
+                    + content[-200:]
+                )
             parts.append(f"**{role_label}:**\n{content}")
 
         if not parts:
             return None
-        return "## Previous Session History\n\n" + "\n\n".join(parts)
+        return "## Previous Session History (summarized)\n\n" + "\n\n".join(parts)
 
     def _build_error_layer(self, previous_errors: list[str], iteration: int) -> str:
         from collections import Counter

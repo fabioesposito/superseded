@@ -286,3 +286,28 @@ def test_error_layer_deduplicates_and_prioritizes(tmp_path):
     # Most frequent errors should appear first
     lines = [l for l in prompt.split("\n") if l.startswith("- ")]
     assert "syntax error" in lines[0]  # most frequent = most important
+
+
+def test_session_history_summarizes_long_turns(tmp_path):
+    """Session history truncates long turns more aggressively."""
+    assembler = ContextAssembler(str(tmp_path))
+    long_content = "This is a detailed response. " * 500  # ~1500 words
+    turns = [
+        {"stage": "spec", "attempt": 0, "role": "assistant", "content": long_content},
+    ]
+    prompt = assembler._build_session_history_layer(Stage.BUILD, turns)
+    # Should be summarized, not raw 2000-char truncation
+    assert len(prompt) < len(long_content)
+    assert "spec" in prompt.lower()
+
+
+def test_session_history_limits_total_turns(tmp_path):
+    """Session history includes at most the last N turns across all stages."""
+    assembler = ContextAssembler(str(tmp_path))
+    turns = [
+        {"stage": "spec", "attempt": 0, "role": "user", "content": f"turn {i}"} for i in range(20)
+    ]
+    prompt = assembler._build_session_history_layer(Stage.BUILD, turns)
+    assert prompt is not None
+    turn_count = prompt.count("turn ")
+    assert turn_count <= 6  # 5 turns + maybe header
