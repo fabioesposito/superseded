@@ -13,12 +13,21 @@ class PlanTask(BaseModel):
     verification: str = ""
     dependencies: list[str] = Field(default_factory=list)
     scope: str = "Medium"
+    status: str = "pending"
 
 
 class Plan(BaseModel):
     title: str
     context: str = ""
     tasks: list[PlanTask] = Field(default_factory=list)
+
+    @property
+    def completed_count(self) -> int:
+        return sum(1 for t in self.tasks if t.status == "complete")
+
+    @property
+    def total_count(self) -> int:
+        return len(self.tasks)
 
 
 def write_plan(path: str, title: str, context: str, tasks: list[PlanTask]) -> None:
@@ -34,6 +43,8 @@ def write_plan(path: str, title: str, context: str, tasks: list[PlanTask]) -> No
         deps = ", ".join(task.dependencies) if task.dependencies else "none"
         lines.append(f"- **Dependencies:** {deps}")
         lines.append(f"- **Scope:** {task.scope}")
+        status_icon = {"complete": "x", "in-progress": " ", "skipped": "~"}.get(task.status, " ")
+        lines.append(f"- **Status:** [{status_icon}] {task.status}")
         lines.append("")
     p.write_text("\n".join(lines), encoding="utf-8")
 
@@ -60,6 +71,7 @@ def read_plan(path: str) -> Plan:
         verify_match = re.search(r"\*\*Verification:\*\*\s*(.+)", block)
         deps_match = re.search(r"\*\*Dependencies:\*\*\s*(.+)", block)
         scope_match = re.search(r"\*\*Scope:\*\*\s*(.+)", block)
+        status_match = re.search(r"\*\*Status:\*\*\s*\[.\]\s*(\S+)", block)
 
         criteria_str = criteria_match.group(1).strip() if criteria_match else ""
         criteria = (
@@ -79,7 +91,17 @@ def read_plan(path: str) -> Plan:
                 verification=verify_match.group(1).strip() if verify_match else "",
                 dependencies=deps,
                 scope=scope_match.group(1).strip() if scope_match else "Medium",
+                status=status_match.group(1) if status_match else "pending",
             )
         )
 
     return Plan(title=title, context=context, tasks=tasks)
+
+
+def update_task_status(path: str, task_title: str, status: str) -> None:
+    plan = read_plan(path)
+    for task in plan.tasks:
+        if task.title == task_title:
+            task.status = status
+            break
+    write_plan(path, plan.title, plan.context, plan.tasks)

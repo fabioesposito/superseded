@@ -1,7 +1,7 @@
 import tempfile
 from pathlib import Path
 
-from superseded.pipeline.plan import PlanTask, read_plan, write_plan
+from superseded.pipeline.plan import PlanTask, read_plan, update_task_status, write_plan
 
 SAMPLE_PLAN = """# Plan: Add rate limiting
 
@@ -81,3 +81,28 @@ def test_read_roundtrip():
     assert plan.title == "Setup project"
     assert len(plan.tasks) == 1
     assert plan.tasks[0].title == "Setup DB"
+
+
+def test_plan_task_status_tracking(tmp_path):
+    tasks = [
+        PlanTask(title="Setup DB", description="Create database schema"),
+        PlanTask(title="Add API", description="Implement REST endpoints"),
+        PlanTask(title="Write tests", description="Add test coverage"),
+    ]
+    plan_path = str(tmp_path / "plan.md")
+    write_plan(plan_path, "My Plan", "Build a REST API", tasks)
+    update_task_status(plan_path, "Setup DB", "complete")
+    plan = read_plan(plan_path)
+    assert plan.tasks[0].status == "complete"
+    assert plan.tasks[1].status == "pending"
+
+
+def test_plan_progress_summary(tmp_path):
+    tasks = [PlanTask(title="Task A"), PlanTask(title="Task B"), PlanTask(title="Task C")]
+    plan_path = str(tmp_path / "plan.md")
+    write_plan(plan_path, "My Plan", "Context", tasks)
+    update_task_status(plan_path, "Task A", "complete")
+    update_task_status(plan_path, "Task B", "complete")
+    plan = read_plan(plan_path)
+    assert plan.completed_count == 2
+    assert plan.total_count == 3
