@@ -131,7 +131,39 @@ class VerificationEngine:
         """Format verification failures as structured error text for retry prompt."""
         if result.passed:
             return ""
-        lines = ["The previous attempt failed verification. Fix these specific issues:"]
-        for i, failure in enumerate(result.failures, 1):
-            lines.append(f"  {i}. {failure}")
+
+        missing_sections = [f for f in result.failures if f.startswith("Missing required section")]
+        test_failures = [f for f in result.failures if "Tests failed" in f or "test" in f.lower()]
+        review_findings = [f for f in result.failures if "finding" in f.lower() or "Critical" in f]
+        other = [f for f in result.failures if f not in missing_sections + test_failures + review_findings]
+
+        lines = ["The previous attempt failed verification. Fix these specific issues:\n"]
+
+        if missing_sections:
+            lines.append("### Missing Artifact Sections")
+            lines.append("Add these required sections to your output artifact:\n")
+            for f in missing_sections:
+                section = f.replace("Missing required section: ", "")
+                lines.append(f"- `{section}` — add this heading with substantive content beneath it")
+            lines.append("")
+
+        if test_failures:
+            lines.append("### Test Failures")
+            lines.append("Fix the failing tests:\n")
+            for f in test_failures:
+                lines.append(f"- {f}")
+            lines.append("")
+
+        if review_findings:
+            lines.append("### Review Findings")
+            lines.append("Address these review findings:\n")
+            for f in review_findings:
+                lines.append(f"- {f}")
+            lines.append("")
+
+        if other:
+            lines.append("### Other Issues")
+            for f in other:
+                lines.append(f"- {f}")
+
         return "\n".join(lines)

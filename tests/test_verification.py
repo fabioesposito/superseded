@@ -161,3 +161,36 @@ class TestVerificationEngine:
         output = "===== 50 passed in 8.2s ====="
         result = engine.verify("verify", output, {}, config)
         assert result.passed is True
+
+
+def test_format_errors_includes_file_hints():
+    from superseded.harness.verification import VerificationEngine, VerificationResult
+    engine = VerificationEngine()
+    result = VerificationResult(
+        passed=False,
+        failures=[
+            "Missing required section: ## Architecture",
+            "Tests failed: 2 failed, 10 passed.",
+        ],
+    )
+    formatted = engine.format_errors_for_retry(result)
+    assert "## Architecture" in formatted
+    assert "Tests failed" in formatted
+    assert "Fix" in formatted or "fix" in formatted or "address" in formatted.lower()
+
+
+def test_format_errors_groups_by_type():
+    from superseded.harness.verification import VerificationEngine, VerificationResult
+    engine = VerificationEngine()
+    result = VerificationResult(
+        passed=False,
+        failures=[
+            "Missing required section: ## Architecture",
+            "Missing required section: ## Tasks",
+            "Tests failed: 2 failed, 10 passed.",
+        ],
+    )
+    formatted = engine.format_errors_for_retry(result)
+    arch_idx = formatted.find("Architecture")
+    tasks_idx = formatted.find("Tasks")
+    assert arch_idx < tasks_idx
