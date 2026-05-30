@@ -132,9 +132,6 @@ class WorktreeManager:
         repo_path = self._get_repo_path(repo)
         branch_name = self._branch_name(issue_id, repo)
 
-        current = await self._run_git("rev-parse", "--abbrev-ref", "HEAD", cwd=str(repo_path))
-        target_branch = current.stdout.strip()
-
         result = await self._run_git(
             "merge", branch_name, "--no-ff", "-m", f"Merge {branch_name} for {issue_id}",
             cwd=str(repo_path),

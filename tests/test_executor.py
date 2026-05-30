@@ -103,7 +103,7 @@ async def test_executor_spec_stage_no_worktree(executor_setup):
 async def test_executor_build_stage_creates_worktree(executor_setup):
     executor, db, config, _mock_runner, _, repo_path, ticket_path = executor_setup
 
-    result = StageResult(stage=Stage.BUILD, passed=True, output="built")
+    result = StageResult(stage=Stage.BUILD, passed=True, output="built def main(): return True")
     mock_agent = _make_mock_agent(result)
     executor._harness.resolve_agent = lambda stage: mock_agent
 
