@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 from superseded.agents.factory import AgentFactory
 from superseded.db import Database
+from superseded.harness import Harness
 from superseded.models import AgentEvent, Issue, Stage
 from superseded.pipeline.events import PipelineEventManager
 from superseded.pipeline.harness import HarnessRunner
@@ -170,6 +171,37 @@ async def test_streaming_runs_once_on_failure():
         assert result.passed is False
         assert "error on build" in result.error
 
+        await db.close()
+
+
+async def test_harness_saves_checkpoint_during_execution():
+    """Harness saves checkpoint periodically during long-running stages."""
+    mock_agent = AsyncMock()
+
+    async def long_stream(prompt, context):
+        for i in range(5):
+            yield AgentEvent(
+                event_type="stdout",
+                content=f"Task {i} completed with enough content to pass minimum",
+                stage=Stage.BUILD,
+            )
+        yield AgentEvent(
+            event_type="status", content="", stage=Stage.BUILD,
+            metadata={"exit_code": 0, "duration_ms": 500},
+        )
+
+    mock_agent.run_streaming = long_stream
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        harness = Harness(
+            repo_path="/tmp/testrepo",
+            agent_factory=_mock_factory(mock_agent),
+            db=db,
+        )
+        assert not harness.checkpoint_manager.has_checkpoint("SUP-001", "build")
         await db.close()
 
 

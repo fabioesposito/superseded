@@ -313,6 +313,14 @@ class Harness:
 
                 if event.event_type == "stdout":
                     stdout_parts.append(event.content)
+                    if len(stdout_parts) % 10 == 0:
+                        self.checkpoint_manager.save(Checkpoint(
+                            issue_id=issue.id,
+                            stage=stage.value,
+                            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
+                            completed_tasks=[],
+                            current_task=f"Processing... ({len(stdout_parts)} outputs received)",
+                        ))
                 elif event.event_type == "status":
                     exit_code = event.metadata.get("exit_code", -1)
                     duration_ms = event.metadata.get("duration_ms", 0)
