@@ -113,9 +113,9 @@ async def test_session_history_truncates_long_output():
             session_turns=turns,
         )
 
-        # Should be truncated to 2000 chars
-        assert "x" * 2001 not in result
-        assert "truncated" in result.lower() or "x" * 2000 in result
+        # Should be truncated (head/tail with omitted marker)
+        assert "x" * 501 not in result
+        assert "omitted" in result.lower() or "truncated" in result.lower()
 
         await db.close()
 
