@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import logging
 import os
+import time as _time
 from pathlib import Path
 
 from superseded.agents.base import AgentAdapter
@@ -13,7 +14,7 @@ from superseded.db import Database
 from superseded.harness.checkpoint import Checkpoint, CheckpointManager
 from superseded.harness.context import ContextAssembler
 from superseded.harness.crg import CRGClient
-from superseded.harness.lifecycle import LifecycleManager
+from superseded.harness.lifecycle import LifecycleManager, ResourceLimits
 from superseded.harness.verification import VerificationEngine
 from superseded.models import (
     AgentContext,
@@ -86,9 +87,21 @@ class Harness:
         issue: Issue,
         stage: Stage,
         config: SupersededConfig,
+        resource_limits: ResourceLimits | None = None,
     ) -> StageResult:
         artifacts_path = str(Path(config.repo_path) / config.artifacts_dir / issue.id)
         Path(artifacts_path).mkdir(parents=True, exist_ok=True)
+
+        if resource_limits is None:
+            stage_config = self.stage_configs.get(stage.value)
+            if stage_config and stage_config.resource_limits:
+                rl = stage_config.resource_limits
+                if rl.max_tokens or rl.max_wall_time_seconds or rl.max_cost_usd:
+                    resource_limits = ResourceLimits(
+                        max_tokens=rl.max_tokens,
+                        max_wall_time_seconds=rl.max_wall_time_seconds,
+                        max_cost_usd=rl.max_cost_usd,
+                    )
 
         needs_worktree = stage in (Stage.BUILD, Stage.VERIFY, Stage.REVIEW)
         if stage == Stage.PLAN and issue.repos:
@@ -101,7 +114,8 @@ class Harness:
 
         for repo_name in target_repos:
             result = await self._run_single_repo(
-                issue, stage, artifacts_path, repo_name, needs_worktree
+                issue, stage, artifacts_path, repo_name, needs_worktree,
+                resource_limits=resource_limits,
             )
             combined_output.append(f"[{repo_name or 'primary'}] {result.output or result.error}")
             if not result.passed:
@@ -134,6 +148,7 @@ class Harness:
         artifacts_path: str,
         repo_name: str | None,
         needs_worktree: bool,
+        resource_limits: ResourceLimits | None = None,
     ) -> StageResult:
         effective_repo = repo_name or "primary"
         repo_artifacts = str(Path(artifacts_path) / effective_repo)
@@ -197,6 +212,7 @@ class Harness:
             artifacts_path=repo_artifacts,
             previous_errors=repo_previous_errors if repo_previous_errors else None,
             repo=repo_name,
+            resource_limits=resource_limits,
         )
 
         if not result.passed:
@@ -236,6 +252,7 @@ class Harness:
         artifacts_path: str,
         previous_errors: list[str] | None = None,
         repo: str | None = None,
+        resource_limits: ResourceLimits | None = None,
     ) -> StageResult:
         em = self.event_manager
         worktree_path = ""
@@ -287,6 +304,7 @@ class Harness:
         stdout_parts: list[str] = []
         exit_code = -1
         duration_ms = 0
+        stream_start = _time.monotonic()
 
         try:
             async for event in self.resolve_agent(stage).run_streaming(prompt, context):
@@ -298,6 +316,15 @@ class Harness:
                 elif event.event_type == "status":
                     exit_code = event.metadata.get("exit_code", -1)
                     duration_ms = event.metadata.get("duration_ms", 0)
+
+                if resource_limits:
+                    elapsed = _time.monotonic() - stream_start
+                    limit_error = self.lifecycle_manager.check_resource_limits(
+                        resource_limits, wall_time=elapsed
+                    )
+                    if limit_error:
+                        logger.warning("Resource limit exceeded for %s: %s", issue.id, limit_error)
+                        break
         finally:
             em.stop(issue.id)
 

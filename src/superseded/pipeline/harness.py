@@ -7,6 +7,7 @@ from superseded.agents.factory import AgentFactory
 from superseded.config import RepoEntry, StageAgentConfig
 from superseded.db import Database
 from superseded.harness import Harness
+from superseded.harness.lifecycle import ResourceLimits
 from superseded.models import Issue, Stage, StageResult
 from superseded.pipeline.events import PipelineEventManager
 
@@ -62,6 +63,7 @@ class HarnessRunner:
         artifacts_path: str,
         previous_errors: list[str] | None = None,
         repo: str | None = None,
+        resource_limits: ResourceLimits | None = None,
     ) -> StageResult:
         return await self._harness._run_stage_streaming(
             issue=issue,
@@ -69,6 +71,7 @@ class HarnessRunner:
             artifacts_path=artifacts_path,
             previous_errors=previous_errors,
             repo=repo,
+            resource_limits=resource_limits,
         )
 
     async def run_stage_streaming(

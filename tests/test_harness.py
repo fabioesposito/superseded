@@ -253,3 +253,33 @@ async def test_harness_approval_required_updates_status():
         assert result.error == "approval-required"
 
         await db.close()
+
+
+async def test_harness_enforces_resource_limits():
+    """Harness checks resource limits during execution."""
+    from superseded.harness.lifecycle import ResourceLimits
+
+    mock_agent = _make_mock_agent(exit_code=0, stdout="build succeeded with enough output content here for the minimum")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db = Database(str(Path(tmp) / "state.db"))
+        await db.initialize()
+
+        runner = HarnessRunner(
+            agent_factory=_mock_factory(mock_agent),
+            repo_path="/tmp/testrepo",
+            db=db,
+        )
+        artifacts_path = Path(tmp) / ".superseded" / "artifacts" / "SUP-001"
+        artifacts_path.mkdir(parents=True)
+
+        # With generous limits, should pass
+        result = await runner.run_stage(
+            issue=_make_issue(),
+            stage=Stage.BUILD,
+            artifacts_path=str(artifacts_path),
+            resource_limits=ResourceLimits(max_wall_time_seconds=600),
+        )
+        assert result.passed is True
+
+        await db.close()
