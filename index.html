@@ -937,19 +937,19 @@
       <div class="feature-card">
         <span class="feature-icon">⇌</span>
         <h3>Feedback Loops</h3>
-        <p>Stages retry on failure with error context injected into re-prompts. Click Retry from the dashboard to re-run. No silent failures.</p>
+        <p>Stages retry on failure with error context injected into re-prompts. Auto-retry for transient failures. Critical review findings loop back to Build automatically. No silent failures.</p>
         <span class="feature-tag">Resilience</span>
       </div>
       <div class="feature-card">
         <span class="feature-icon">⊡</span>
         <h3>Execution Plans</h3>
-        <p>The Plan stage writes structured plan.md. Build, Verify, and Review stages consume it — full traceability from intent to shipped software.</p>
+        <p>The Plan stage writes structured plan.md with task status tracking. Build, Verify, and Review stages consume it with progress awareness. Full traceability from intent to shipped software.</p>
         <span class="feature-tag">Transparency</span>
       </div>
       <div class="feature-card">
         <span class="feature-icon">⊟</span>
         <h3>Worktree Isolation</h3>
-        <p>Build, Verify, Review run in isolated git worktrees. Changes merge on success, discard on failure. Your main branch stays clean.</p>
+        <p>Build, Verify, Review run in isolated git worktrees. Changes merge on success, discard on failure. Your main branch stays clean. Automatic branch merge on stage pass.</p>
         <span class="feature-tag">Safety</span>
       </div>
       <div class="feature-card">
@@ -967,13 +967,13 @@
       <div class="feature-card">
         <span class="feature-icon">◫</span>
         <h3>Progressive Context</h3>
-        <p>Agents receive context in layers: AGENTS.md → docs → ticket → artifacts → rules → skill prompt → error context. Just enough, never too much.</p>
+        <p>Agents receive context in layers: AGENTS.md → docs → ticket → artifacts → rules → skill prompt → error context. Token-aware with adaptive sizing — drops low-priority layers when over budget.</p>
         <span class="feature-tag">Intelligence</span>
       </div>
       <div class="feature-card">
         <span class="feature-icon">⟡</span>
         <h3>Quality Enforcement</h3>
-        <p>Critical review findings loop back to Build. Non-negotiable rules injected into every prompt. Shipping quality is not optional.</p>
+        <p>Critical review findings loop back to Build. Non-negotiable rules injected into every prompt. Output quality gates enforce code patterns in BUILD and test results in VERIFY.</p>
         <span class="feature-tag">Standards</span>
       </div>
       <div class="feature-card">
@@ -1011,6 +1011,24 @@
         <h3>RTK Token Compression</h3>
         <p>Optional integration with RTK filters and compresses verbose shell output before it hits the agent context window — saving 60–90% tokens on common commands.</p>
         <span class="feature-tag">Efficiency</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">⊞</span>
+        <h3>Plan Execution Tracking</h3>
+        <p>Plans track task status: pending, in-progress, complete. Progress ("2 of 5 tasks") injected into BUILD/VERIFY/REVIEW prompts. Full traceability from intent to shipped code.</p>
+        <span class="feature-tag">Transparency</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">⊘</span>
+        <h3>Structured Verification</h3>
+        <p>Failures grouped by type: missing artifact sections, test failures, review findings. Agents get actionable, structured feedback — not a flat error dump.</p>
+        <span class="feature-tag">Quality</span>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">◉</span>
+        <h3>Output Quality Gates</h3>
+        <p>BUILD output must contain code patterns. VERIFY output must contain test results. Commentary-only output fails the stage. Agents must do real work.</p>
+        <span class="feature-tag">Standards</span>
       </div>
     </div>
   </div>
@@ -1127,7 +1145,7 @@
           </g>
           <text x="80" y="120" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="7">spec → plan → build</text>
           <text x="80" y="132" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="7">verify → review → ship</text>
-          <text x="80" y="150" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">feedback loops · retries</text>
+          <text x="80" y="150" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">auto-retry · quality gates · merge</text>
         </g>
 
         <!-- Arrow: Pipeline → Worktree -->
@@ -1203,7 +1221,7 @@
           <text x="80" y="22" text-anchor="middle" fill="#6a6a8a" font-family="JetBrains Mono, monospace" font-size="9" font-weight="500">CONTEXT LAYERS</text>
           <text x="80" y="38" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">AGENTS.md → docs → ticket</text>
           <text x="80" y="50" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">→ artifacts → rules → skill</text>
-          <text x="80" y="62" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">→ error context</text>
+          <text x="80" y="62" text-anchor="middle" fill="#555575" font-family="JetBrains Mono, monospace" font-size="7">token-aware · adaptive sizing</text>
         </g>
 
         <!-- State box -->

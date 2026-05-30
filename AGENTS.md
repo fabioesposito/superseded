@@ -99,19 +99,23 @@ Located at `vendor/impeccable/source/skills/`. Design skill with 18 commands:
 
 Superseded is now an agent harness, not just a linear pipeline:
 
-- **Feedback loops**: Stages retry on failure with error context injected into re-prompts. Retry is manual — click Retry in the UI to re-run a failed stage.
-- **Execution plans**: The Plan stage writes structured `plan.md` to `.superseded/artifacts/{id}/plan.md`. Build/Verify/Review stages consume it.
-- **Progressive context**: Agents receive context in layers: AGENTS.md → docs/ index → ticket → previous artifacts → rules → skill prompt → error context.
-- **Worktree isolation**: BUILD/VERIFY/REVIEW stages run in isolated git worktrees. Changes merge on success, discard on failure.
-- **Quality enforcement**: Review findings that are critical/important loop back to BUILD. `.superseded/rules.md` is injected into every prompt.
+- **Feedback loops**: Stages retry on failure with error context injected into re-prompts. Auto-retry configurable for transient failures (`auto_retry: true` in config). Retry is also manual — click Retry in the UI.
+- **Execution plans**: The Plan stage writes structured `plan.md` to `.superseded/artifacts/{id}/plan.md`. Build/Verify/Review stages consume it. Plans track task status (pending/in-progress/complete) with progress injected into prompts.
+- **Progressive context**: Agents receive context in layers: AGENTS.md → docs/ index → ticket → previous artifacts → rules → skill prompt → error context. Token-aware with adaptive sizing — drops low-priority layers when over budget.
+- **Worktree isolation**: BUILD/VERIFY/REVIEW stages run in isolated git worktrees. Changes merge on success via `--no-ff`, discard on failure.
+- **Quality enforcement**: Review findings that are critical/important loop back to BUILD. `.superseded/rules.md` is injected into every prompt. Output quality gates enforce code patterns in BUILD and test results in VERIFY.
+- **Structured verification feedback**: Failures grouped by type (missing sections, test failures, review findings) for faster agent comprehension. Not a flat error dump.
+- **Cross-stage quality signals**: Verified stages inject quality context into downstream prompts ("SPEC was verified — focus on implementation accuracy").
+- **Curated error context**: Duplicate errors deduplicated and sorted by frequency. Agents see distinct, prioritized errors only.
+- **Selective docs loading**: Docs index filtered by stage relevance (BUILD gets architecture+guides, SHIP gets guides+operations).
 - **Iteration history**: Every harness attempt is tracked in the database and shown in the UI.
 - **Multi-repo support**: Tickets can target multiple repositories. Set `repos: [frontend, backend]` in ticket frontmatter. Available repos are defined in `.superseded/config.yaml` under the `repos` key. SPEC/PLAN run once (primary repo). BUILD/VERIFY/REVIEW fan out per target repo. SHIP creates a PR per repo. See `docs/architecture/multi-repo.md`.
 - **Verification engine**: Validates stage outputs — artifact section validation, review severity parsing, test result parsing. Configurable per stage.
 - **Health monitoring**: `/health` endpoint reports status, running issues, and active stages. Silent agents (>5 min no output) flagged in logs.
-- **Checkpoints and crash recovery**: Stage progress saved to `.superseded/checkpoints/`. Server resumes from last checkpoint on restart. Checkpoints cleared on stage success.
+- **Checkpoints and crash recovery**: Stage progress saved to `.superseded/checkpoints/` during execution. Server resumes from last checkpoint on restart. Checkpoints cleared on stage success.
 - **Notifications**: Push notifications via ntfy.sh, Slack webhooks, and generic HTTP webhooks on stage completion, failure, and approval requests.
 - **Docker sandboxing**: Run agents in isolated Docker containers with configurable resource limits (2GB memory, 2 CPUs, 256 PIDs default).
-- **Resource limits**: Per-stage caps on max tokens, wall time, and cost. Exceeded limits fail the stage with a clear error.
+- **Resource limits**: Per-stage caps on max tokens, wall time, and cost. Exceeded limits fail the stage with a clear error. Enforced during streaming execution.
 - **File-level review approval**: Individual changed files can be approved or rejected during Review. All files must be approved before advancing.
 - **Bulk retry**: Select multiple paused issues on the dashboard and retry them all at once.
 - **Auto-advance**: Skip manual stage transitions when verification passes. Approval-requiring stages still pause for human input.

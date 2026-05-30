@@ -6,9 +6,9 @@ Local-first agentic pipeline harness. Write a ticket in markdown, and Superseded
 
 - **Markdown tickets** — Issues live as `.md` files with YAML frontmatter in `.superseded/issues/`
 - **Six-stage pipeline** — Spec → Plan → Build → Verify → Review → Ship
-- **Agent harness with retry loops** — Stages retry on failure with error context injected into re-prompts
-- **Progressive context assembly** — Agents receive context in layers: AGENTS.md → docs/ index → ticket → previous artifacts → project rules → skill prompt
-- **Worktree isolation** — Build/Verify/Review stages run in isolated git worktrees
+- **Agent harness with retry loops** — Stages retry on failure with error context injected into re-prompts. Auto-retry for transient failures configurable per stage.
+- **Progressive context assembly** — Agents receive context in layers: AGENTS.md → docs/ index → ticket → previous artifacts → project rules → skill prompt. Token-aware with adaptive sizing — drops low-priority layers when over budget.
+- **Worktree isolation** — Build/Verify/Review stages run in isolated git worktrees. Changes merge back on success.
 - **Web UI** — FastAPI + HTMX + Alpine.js + Tailwind CSS dashboard with real-time SSE updates
 - **Three agent adapters** — Claude Code, OpenCode, and Codex, all run as local CLI subprocesses
 - **Per-stage agent selection** — Configure different CLIs and models per pipeline stage
@@ -20,7 +20,14 @@ Local-first agentic pipeline harness. Write a ticket in markdown, and Superseded
 - **Bulk operations** — Retry all paused issues at once from the dashboard
 - **Auto-advance** — Skip manual transitions when verification passes
 - **Notifications** — Push notifications via ntfy.sh, Slack, and webhooks
-- **Resource limits** — Per-stage caps on tokens, wall time, and cost
+- **Resource limits** — Per-stage caps on tokens, wall time, and cost. Enforced during execution.
+- **Plan execution tracking** — Plans track task status (pending/in-progress/complete). Progress injected into BUILD/VERIFY/REVIEW prompts.
+- **Structured verification feedback** — Failures grouped by type (missing sections, test failures, review findings) for faster agent comprehension.
+- **Cross-stage quality signals** — Verified stages inject quality context into downstream prompts ("SPEC was verified — focus on implementation accuracy").
+- **Curated error context** — Duplicate errors deduplicated and sorted by frequency. Agents see distinct, prioritized errors only.
+- **Selective docs loading** — Docs index filtered by stage relevance (BUILD gets architecture+guides, SHIP gets guides+operations).
+- **Output quality analysis** — BUILD output must contain code patterns. VERIFY output must contain test results. Commentary-only output fails.
+- **Review → Build feedback loop** — Critical review findings automatically loop back to BUILD stage.
 
 ## Quick Start
 
