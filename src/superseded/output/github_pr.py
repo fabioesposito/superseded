@@ -65,18 +65,14 @@ def _partition_comments(
         return set(), []
     if len(comments) == 1:
         try:
-            ids = _post_review_payload(
-                {**base_payload, "comments": [comments[0]]}, target_repo, pr
-            )
+            ids = _post_review_payload({**base_payload, "comments": [comments[0]]}, target_repo, pr)
             return set(), ids
         except subprocess.CalledProcessError:
             return {0}, []
 
     # Test the full batch before recursing
     try:
-        ids = _post_review_payload(
-            {**base_payload, "comments": comments}, target_repo, pr
-        )
+        ids = _post_review_payload({**base_payload, "comments": comments}, target_repo, pr)
         return set(), ids
     except subprocess.CalledProcessError:
         pass

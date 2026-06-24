@@ -93,6 +93,7 @@ class ReviewEngine:
             ]
 
         all_findings: list[list[Finding]] = []
+        warnings: list[str] = []
 
         with ThreadPoolExecutor(max_workers=max(1, len(passes))) as executor:
             future_to_pass = {}
@@ -114,9 +115,13 @@ class ReviewEngine:
                 try:
                     all_findings.append(future.result())
                 except Exception as err:
-                    logger.warning("Review pass '%s' failed and was skipped: %s", pass_name, err)
+                    msg = f"Review pass '{pass_name}' failed and was skipped: {err}"
+                    logger.warning(msg)
+                    warnings.append(msg)
 
-        return self.merge_findings(all_findings)
+        result = self.merge_findings(all_findings)
+        result.warnings = warnings
+        return result
 
     def merge_findings(self, finding_groups: list[list[Finding]]) -> ReviewResult:
         return merge_findings(finding_groups)

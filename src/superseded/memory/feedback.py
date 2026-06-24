@@ -23,12 +23,13 @@ def check_pr_feedback(pr: int, repo: str) -> list[dict]:
 
     comments = _parse_comment_lines(result.stdout)
 
-    owner, _, name = repo.partition("/")
-    resolved_ids = check_resolved_threads(pr=pr, owner=owner, repo=name)
-    if resolved_ids:
-        for c in comments:
-            if c.get("id") in resolved_ids:
-                c["resolved"] = True
+    if comments:
+        owner, _, name = repo.partition("/")
+        if owner and name:
+            resolved_ids = check_resolved_threads(pr=pr, owner=owner, repo=name)
+            for c in comments:
+                if c.get("id") in resolved_ids:
+                    c["resolved"] = True
 
     return comments
 
@@ -95,7 +96,7 @@ def check_resolved_threads(pr: int, owner: str, repo: str) -> set[int]:
             cmd.extend(["-f", f"cursor={cursor}"])
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
         except subprocess.CalledProcessError:
             return set()
 

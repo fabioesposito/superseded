@@ -240,8 +240,15 @@ Grouped by severity with inline code blocks and suggestions.
 ## Requirements
 
 - Python 3.14+
-- At least one AI CLI installed (claude-code, opencode, or codex)
-- `gh` CLI for GitHub PR interaction
+- **An AI CLI agent** (at least one required):
+  | Agent | Install | Auth |
+  |-------|---------|------|
+  | **claude-code** | `npm install -g @anthropic-ai/claude-code` | `ANTHROPIC_API_KEY` |
+  | **opencode** | `curl -fsSL https://opencode.ai/install.sh \| sh` | Provider-specific |
+  | **codex** | `pip install openai-codex` | `CODEX_API_KEY` |
+- **git** (required) — comes standard on most systems
+- **GitHub CLI (`gh`)** (required for `--pr` and `--post`): `gh auth login` must be authenticated
+- **gitleaks** (optional) — static analysis for secrets/hardcoded keys; runs automatically when on PATH. Install: `brew install gitleaks` or https://github.com/gitleaks/gitleaks
 
 ## Tests
 

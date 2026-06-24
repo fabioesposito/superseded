@@ -13,7 +13,10 @@ class OpenCodeAgent(Agent):
         return "opencode"
 
     def build_command(self, prompt: str) -> list[str]:
-        return ["opencode", "run", prompt]
+        cmd = ["opencode", "run", prompt]
+        if self._model:
+            cmd.extend(["--model", self._model])
+        return cmd
 
     def parse_output(self, raw: str, pass_name: str) -> list[dict]:
         return extract_findings(raw, pass_name)

@@ -166,6 +166,9 @@ def _run_review(
     else:
         click.echo(format_table(result))
 
+    for w in result.warnings:
+        click.echo(f"\nWarning: {w}", err=True)
+
     if store is not None and repo:
         asyncio.run(_persist_findings(store, result, repo))
 

@@ -12,9 +12,11 @@ SEVERITY_ICONS = {
 
 def format_table(result: ReviewResult) -> str:
     if not result.findings:
+        if result.warnings:
+            return "All review passes failed — see stderr for details."
         return "No issues found."
 
-    lines = []
+    lines: list[str] = []
     header = f"{'Sev':<12} {'Pass':<14} {'File':<30} {'Line':<6} {'Title'}"
     lines.append(header)
     lines.append("-" * len(header))

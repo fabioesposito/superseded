@@ -5,6 +5,8 @@ from superseded.models import ReviewResult
 
 def format_markdown(result: ReviewResult) -> str:
     if not result.findings:
+        if result.warnings:
+            return "# Code Review\n\nAll review passes failed — see stderr for details.\n"
         return "# Code Review\n\nNo issues found.\n"
 
     lines = ["# Code Review", ""]

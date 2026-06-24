@@ -31,6 +31,7 @@ class Finding(BaseModel):
 
 class ReviewResult(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
     @property
     def summary(self) -> dict[str, int]:
