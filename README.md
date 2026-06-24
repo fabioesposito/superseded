@@ -96,12 +96,18 @@ jobs:
 ### Feedback
 
 ```bash
-# Dismiss a finding (won't appear in future reviews)
-superseded feedback <comment-id> --dismiss
+# Review a PR and post findings (maps them for later feedback)
+superseded review --pr 123 --post
 
-# Mark as helpful
+# Pull reactions/resolutions on past comments and update memory
+superseded feedback --check --pr 123
+
+# Manually mark a finding (by its GitHub comment id)
+superseded feedback <comment-id> --dismiss
 superseded feedback <comment-id> --helpful
 ```
+
+Dismissed findings are injected into future review prompts so the tool avoids repeating rejected comments.
 
 ## Configuration
 
@@ -120,6 +126,10 @@ post_to_pr: false
 format: table
 memory: true
 ```
+
+Selection precedence for `agent`/`model`: **env vars > CLI flags > config**:
+
+- `SUPERSEDED_AGENT` / `SUPERSEDED_MODEL` — override config and CLI flags. Set these as GitHub Action secrets to configure the container without commit-side edits.
 
 ## Supported Agents
 

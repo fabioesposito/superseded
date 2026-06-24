@@ -1,0 +1,15 @@
+.git
+.gitignore
+.venv
+.pytest_cache
+.ruff_cache
+.code-review-graph
+.superseded
+.superseded.yaml
+docs
+tests
+**/__pycache__
+**/*.pyc
+*.md
+LICENSE
+node_modules

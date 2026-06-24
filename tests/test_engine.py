@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+import subprocess
+from unittest.mock import MagicMock, patch
 
-from superseded.models import Finding
+import pytest
+
+from superseded.models import Finding, ReviewResult
 from superseded.review.engine import ReviewEngine
 
 
@@ -50,3 +53,76 @@ def test_engine_selects_agent():
 
     engine = ReviewEngine.select("codex", model="m")
     assert isinstance(engine.agent, CodexAgent)
+
+
+def _make_completed(stdout="", stderr="", returncode=0):
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+def test_run_pass_raises_on_nonzero_exit():
+    agent = MagicMock()
+    agent.build_command.return_value = ["fakeclaude"]
+    agent.parse_output.return_value = []
+    engine = ReviewEngine(agent=agent, config=MagicMock())
+    with patch("superseded.review.engine.subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed(stderr="auth error", returncode=1)
+        with pytest.raises(RuntimeError, match="auth error"):
+            engine.run_pass("security", "prompt")
+
+
+@pytest.mark.asyncio
+async def test_review_continues_when_one_pass_fails():
+    engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
+    engine.config.is_pass_enabled = lambda name: True
+
+    good_finding = make_finding(severity="critical", line=5)
+
+    def fake_run_pass(pass_name, prompt):
+        if pass_name == "correctness":
+            raise RuntimeError("boom")
+        return [good_finding]
+
+    engine.run_pass = fake_run_pass  # type: ignore[method-assign]
+    result = engine.review(diff="diff", passes=["security", "correctness"])
+    assert isinstance(result, ReviewResult)
+    assert len(result.findings) == 1
+    assert result.findings[0] is good_finding
+
+
+def test_run_pass_skips_and_logs_malformed_findings(caplog):
+    import logging
+
+    engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
+    raw_items = [
+        {
+            "severity": "critical",
+            "file": "a.py",
+            "line": 1,
+            "end_line": 2,
+            "title": "t",
+            "description": "d",
+            "suggestion": "s",
+            "pass_name": "security",
+        },
+        {
+            "severity": "not-a-severity",
+            "file": "b.py",
+            "line": 1,
+            "end_line": 1,
+            "title": "bad",
+            "description": "d",
+            "suggestion": "s",
+            "pass_name": "security",
+        },
+    ]
+    mock_agent = MagicMock()
+    mock_agent.build_command.return_value = ["fake"]
+    mock_agent.parse_output.return_value = raw_items
+    engine.agent = mock_agent
+    with patch("superseded.review.engine.subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed(stdout="x")
+        with caplog.at_level(logging.WARNING, logger="superseded.review.engine"):
+            findings = engine.run_pass("security", "prompt")
+    assert len(findings) == 1
+    assert findings[0].file == "a.py"
+    assert "malformed" in caplog.text.lower() or "not-a-severity" in caplog.text

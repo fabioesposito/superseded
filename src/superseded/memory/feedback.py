@@ -12,7 +12,8 @@ def check_pr_feedback(pr: int, repo: str) -> list[dict]:
                 "api",
                 f"repos/{repo}/pulls/{pr}/comments",
                 "--jq",
-                ".[] | {id: .id, body: .body, path: .path, line: .line}",
+                ".[] | {id: .id, body: .body, path: .path, line: ..line, "
+                "reactions: .reactions, resolved: (._resolved // false)}",
             ],
             capture_output=True,
             text=True,
@@ -21,11 +22,27 @@ def check_pr_feedback(pr: int, repo: str) -> list[dict]:
     except subprocess.CalledProcessError:
         return []
 
-    comments = []
-    for line in result.stdout.strip().splitlines():
-        if line:
-            try:
-                comments.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return comments
+    return _parse_comment_lines(result.stdout)
+
+
+def _parse_comment_lines(stdout: str) -> list[dict]:
+    text = stdout.strip()
+    if not text:
+        return []
+    comments: list[dict] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            comments.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    if comments:
+        return comments
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(data, list):
+        return [c for c in data if isinstance(c, dict)]
+    return []

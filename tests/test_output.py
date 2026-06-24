@@ -27,12 +27,37 @@ def make_result():
     )
 
 
+def make_important_result():
+    return ReviewResult(
+        findings=[
+            Finding(
+                pass_name="correctness",
+                severity="important",
+                file="src/api.py",
+                line=10,
+                end_line=12,
+                title="Off-by-one",
+                description="desc",
+                suggestion="fix",
+            ),
+        ]
+    )
+
+
 def test_json_output():
     result = make_result()
     out = format_json(result)
     data = json.loads(out)
     assert len(data) == 1
     assert data[0]["severity"] == "critical"
+
+
+def test_json_output_includes_id():
+    result = make_result()
+    out = format_json(result)
+    data = json.loads(out)
+    assert "id" in data[0]
+    assert data[0]["id"].startswith("security-")
 
 
 def test_markdown_output():
@@ -77,3 +102,93 @@ def test_post_review_includes_pass_labels(mock_run):
     call_kwargs = mock_run.call_args[1]
     payload = json.loads(call_kwargs["input"])
     assert "Security Review" in payload["body"]
+
+
+@patch("subprocess.run")
+def test_post_review_important_triggers_request_changes(mock_run):
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    result = make_important_result()
+    post_review_to_pr(pr=123, result=result, repo="owner/repo")
+    call_kwargs = mock_run.call_args[1]
+    payload = json.loads(call_kwargs["input"])
+    assert payload["event"] == "REQUEST_CHANGES"
+
+
+@patch("subprocess.run")
+def test_post_review_suggestion_is_comment(mock_run):
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="style",
+                severity="suggestion",
+                file="x.py",
+                line=1,
+                end_line=1,
+                title="naming",
+                description="d",
+                suggestion="s",
+            )
+        ]
+    )
+    post_review_to_pr(pr=123, result=result, repo="owner/repo")
+    payload = json.loads(mock_run.call_args[1]["input"])
+    assert payload["event"] == "COMMENT"
+
+
+@patch("subprocess.run")
+def test_post_review_returns_comment_ids(mock_run):
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout='{"id": 777, "comments": [{"id": 9001}, {"id": 9002}]}',
+        stderr="",
+    )
+    result = make_result()
+    ids = post_review_to_pr(pr=123, result=result, repo="owner/repo")
+    assert ids == [9001, 9002]
+
+
+@patch("subprocess.run")
+def test_post_review_multiline_finding_has_start_line(mock_run):
+    mock_run.return_value = MagicMock(returncode=0, stdout='{"id": 1, "comments": []}', stderr="")
+    result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="auth.py",
+                line=40,
+                end_line=50,
+                title="multi",
+                description="d",
+                suggestion="s",
+            )
+        ]
+    )
+    post_review_to_pr(pr=1, result=result, repo="owner/repo")
+    payload = json.loads(mock_run.call_args[1]["input"])
+    comment = payload["comments"][0]
+    assert comment["start_line"] == 40
+    assert comment["line"] == 50
+
+
+@patch("subprocess.run")
+def test_post_review_single_line_finding_has_no_start_line(mock_run):
+    mock_run.return_value = MagicMock(returncode=0, stdout='{"id": 1, "comments": []}', stderr="")
+    result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="style",
+                severity="nit",
+                file="x.py",
+                line=5,
+                end_line=5,
+                title="naming",
+                description="d",
+                suggestion="s",
+            )
+        ]
+    )
+    post_review_to_pr(pr=1, result=result, repo="owner/repo")
+    payload = json.loads(mock_run.call_args[1]["input"])
+    assert "start_line" not in payload["comments"][0]

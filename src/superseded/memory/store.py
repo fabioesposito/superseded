@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS findings (
     title TEXT,
     description TEXT,
     dismissed BOOLEAN DEFAULT FALSE,
+    comment_id INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -37,6 +38,13 @@ class MemoryStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(self.db_path) as db:
             await db.executescript(SCHEMA)
+            await self._migrate(db)
+
+    async def _migrate(self, db: aiosqlite.Connection) -> None:
+        cursor = await db.execute("PRAGMA table_info(findings)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        if "comment_id" not in columns:
+            await db.execute("ALTER TABLE findings ADD COLUMN comment_id INTEGER")
 
     async def record_finding(
         self,
@@ -57,6 +65,24 @@ class MemoryStore:
             )
             await db.commit()
 
+    async def set_comment_id(self, finding_id: str, comment_id: int) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE findings SET comment_id = ? WHERE id = ?",
+                (comment_id, finding_id),
+            )
+            await db.commit()
+
+    async def get_finding_by_comment_id(self, comment_id: int) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM findings WHERE comment_id = ?",
+                (comment_id,),
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row is not None else None
+
     async def record_feedback(self, finding_id: str, action: str) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -69,6 +95,13 @@ class MemoryStore:
                     (finding_id,),
                 )
             await db.commit()
+
+    async def record_feedback_by_comment_id(self, comment_id: int, action: str) -> bool:
+        finding = await self.get_finding_by_comment_id(comment_id)
+        if finding is None:
+            return False
+        await self.record_feedback(finding["id"], action)
+        return True
 
     async def get_dismissed_findings(self, repo: str) -> list[dict]:
         async with aiosqlite.connect(self.db_path) as db:

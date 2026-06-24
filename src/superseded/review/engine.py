@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
@@ -14,6 +15,8 @@ from superseded.review.prompts import build_prompt
 
 if TYPE_CHECKING:
     from superseded.config import Config
+
+logger = logging.getLogger(__name__)
 
 AGENT_MAP: dict[str, type[Agent]] = {
     "claude-code": ClaudeCodeAgent,
@@ -49,13 +52,20 @@ class ReviewEngine:
         except subprocess.TimeoutExpired as err:
             raise RuntimeError(f"Agent timed out after 300 seconds for pass: {pass_name}") from err
 
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            raise RuntimeError(
+                f"Agent '{cmd[0]}' exited {result.returncode} for pass '{pass_name}'"
+                + (f": {stderr}" if stderr else "")
+            )
+
         raw_findings = self.agent.parse_output(result.stdout, pass_name)
         findings = []
         for item in raw_findings:
             try:
                 findings.append(Finding(**item))
-            except Exception:
-                continue
+            except Exception as err:
+                logger.warning("Skipping malformed finding item in pass %s: %s", pass_name, err)
         return findings
 
     def review(
@@ -75,7 +85,7 @@ class ReviewEngine:
 
         all_findings: list[list[Finding]] = []
 
-        with ThreadPoolExecutor(max_workers=len(passes)) as executor:
+        with ThreadPoolExecutor(max_workers=max(1, len(passes))) as executor:
             future_to_pass = {}
             for pass_name in passes:
                 prompt = build_prompt(
@@ -89,7 +99,11 @@ class ReviewEngine:
                 future_to_pass[future] = pass_name
 
             for future in as_completed(future_to_pass):
-                all_findings.append(future.result())
+                pass_name = future_to_pass[future]
+                try:
+                    all_findings.append(future.result())
+                except Exception as err:
+                    logger.warning("Review pass '%s' failed and was skipped: %s", pass_name, err)
 
         return self.merge_findings(all_findings)
 

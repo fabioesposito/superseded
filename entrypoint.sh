@@ -13,15 +13,15 @@ if [ -z "$PR_NUMBER" ]; then
     exit 1
 fi
 
-CMD="superseded review --pr $PR_NUMBER --agent $AGENT --passes $PASSES"
+CMD=(superseded review --pr "$PR_NUMBER" --agent "$AGENT" --passes "$PASSES")
 
 if [ -n "$MODEL" ]; then
-    CMD="$CMD --model $MODEL"
+    CMD+=(--model "$MODEL")
 fi
 
 if [ "$POST" = "true" ]; then
-    CMD="$CMD --post"
+    CMD+=(--post)
 fi
 
-echo "Running: $CMD"
-eval "$CMD"
+echo "Running: ${CMD[*]}"
+exec "${CMD[@]}"
