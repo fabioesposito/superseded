@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from superseded.cli import cli
+from superseded.cli import _run_review, cli
 from superseded.models import Finding, ReviewResult
 
 
@@ -230,3 +230,72 @@ def test_feedback_manual_unknown_comment_id_reports_error():
         result = runner.invoke(cli, ["feedback", "999", "--dismiss"])
     assert result.exit_code != 0
     assert "999" in result.output
+
+
+def test_context_enrichment_called(monkeypatch):
+    """Verify run_static_analysis and retrieve_usages are called and kwargs forwarded."""
+    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "diff --git a/x.py b/x.py\n+x")
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr("superseded.cli.compute_file_context", lambda d: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+
+    called_static = []
+    called_usage = []
+
+    def fake_static(changed_files, root):
+        called_static.append(True)
+        return "static output"
+
+    def fake_usage(diff, root):
+        called_usage.append(True)
+        return "usage output"
+
+    monkeypatch.setattr("superseded.cli.run_static_analysis", fake_static)
+    monkeypatch.setattr("superseded.cli.retrieve_usages", fake_usage)
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[])
+    monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
+
+    _run_review(
+        pr=None, diff_range="HEAD~1..HEAD", agent=None, model=None,
+        output_format="json", post=False, passes=None,
+    )
+
+    assert called_static
+    assert called_usage
+    call_kwargs = mock_engine.review.call_args
+    assert call_kwargs[1].get("static_signals") == "static output"
+    assert call_kwargs[1].get("usage_signals") == "usage output"
+
+
+def test_context_disabled_skips_enrichment(monkeypatch):
+    """When config disables enrichment, functions are not called."""
+    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "diff --git a/x.py b/x.py\n+x")
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr("superseded.cli.compute_file_context", lambda d: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+
+    called = []
+    monkeypatch.setattr(
+        "superseded.cli.run_static_analysis",
+        lambda *a, **kw: (called.append("static"), None)[1],
+    )
+    monkeypatch.setattr(
+        "superseded.cli.retrieve_usages",
+        lambda *a, **kw: (called.append("usage"), None)[1],
+    )
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[])
+    monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
+
+    from superseded.config import Config
+    monkeypatch.setattr("superseded.cli.load_config", lambda: Config(static_analysis=False, usage_retrieval=False))
+
+    _run_review(
+        pr=None, diff_range="HEAD~1..HEAD", agent=None, model=None,
+        output_format="json", post=False, passes=None,
+    )
+
+    assert not called

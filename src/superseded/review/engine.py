@@ -74,6 +74,8 @@ class ReviewEngine:
         pr_description: str | None = None,
         file_context: str | None = None,
         memory_context: str | None = None,
+        static_signals: str | None = None,
+        usage_signals: str | None = None,
         passes: list[str] | None = None,
     ) -> ReviewResult:
         if passes is None:
@@ -94,6 +96,8 @@ class ReviewEngine:
                     pr_description=pr_description,
                     file_context=file_context,
                     memory_context=memory_context,
+                    static_signals=static_signals,
+                    usage_signals=usage_signals,
                 )
                 future = executor.submit(self.run_pass, pass_name, prompt)
                 future_to_pass[future] = pass_name

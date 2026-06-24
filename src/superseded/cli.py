@@ -8,7 +8,15 @@ import sys
 import click
 
 from superseded.config import Config, load_config
-from superseded.diff import compute_file_context, fetch_diff, fetch_pr_description
+from superseded.context.static_analysis import run_static_analysis
+from superseded.context.usage_retrieval import retrieve_usages
+from superseded.diff import (
+    compute_file_context,
+    fetch_diff,
+    fetch_pr_description,
+    parse_diff_files,
+    repo_root,
+)
 from superseded.memory.feedback import check_pr_feedback
 from superseded.memory.store import MemoryStore
 from superseded.models import ReviewResult
@@ -111,6 +119,16 @@ def _run_review(
     file_context = compute_file_context(diff) or None
     pr_description = fetch_pr_description(pr) if pr is not None else None
 
+    root = repo_root()
+
+    static_signals: str | None = None
+    usage_signals: str | None = None
+    if config.static_analysis:
+        changed_files = [e["file"] for e in parse_diff_files(diff)]
+        static_signals = run_static_analysis(changed_files, root)
+    if config.usage_retrieval:
+        usage_signals = retrieve_usages(diff, root)
+
     repo = current_repo()
     memory_context: str | None = None
     store: MemoryStore | None = None
@@ -127,6 +145,8 @@ def _run_review(
         pr_description=pr_description,
         file_context=file_context,
         memory_context=memory_context,
+        static_signals=static_signals,
+        usage_signals=usage_signals,
         passes=pass_list,
     )
 
