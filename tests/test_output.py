@@ -330,3 +330,145 @@ def test_current_repo_returns_none_on_file_not_found():
         from superseded.output.github_pr import current_repo
 
         assert current_repo() is None
+
+
+def test_partition_comments_all_valid():
+    from superseded.output.github_pr import _partition_comments
+
+    payload = {"body": "test", "comments": [{"path": "a.py", "line": 1, "body": "x"}]}
+    with patch(
+        "superseded.output.github_pr.subprocess.run",
+        return_value=MagicMock(
+            returncode=0,
+            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stderr="",
+        ),
+    ):
+        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        assert bad == set()
+
+
+def test_partition_comments_one_bad():
+    from superseded.output.github_pr import _partition_comments
+
+    payload = {"body": "test", "comments": [{"path": "gone.py", "line": 999, "body": "x"}]}
+    with patch(
+        "superseded.output.github_pr.subprocess.run",
+        side_effect=subprocess.CalledProcessError(1, "gh"),
+    ):
+        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        assert bad == {0}
+
+
+def test_partition_comments_mixed():
+    from superseded.output.github_pr import _partition_comments
+
+    payload = {
+        "body": "test",
+        "comments": [
+            {"path": "a.py", "line": 1, "body": "good"},
+            {"path": "b.py", "line": 999, "body": "bad"},
+        ],
+    }
+
+    def side_effect(cmd, **kwargs):
+        input_json = json.loads(kwargs.get("input", "{}"))
+        comment_lines = [c["line"] for c in input_json.get("comments", [])]
+        if 999 in comment_lines:
+            raise subprocess.CalledProcessError(1, "gh")
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stderr="",
+        )
+
+    with patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect):
+        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        assert bad == {1}
+
+
+def test_partition_comments_empty():
+    from superseded.output.github_pr import _partition_comments
+
+    bad = _partition_comments([], {"body": "test"}, "r", 1)
+    assert bad == set()
+
+
+def test_partition_comments_all_valid_three():
+    from superseded.output.github_pr import _partition_comments
+
+    payload = {
+        "body": "test",
+        "comments": [
+            {"path": "a.py", "line": 1, "body": "c1"},
+            {"path": "b.py", "line": 2, "body": "c2"},
+            {"path": "c.py", "line": 3, "body": "c3"},
+        ],
+    }
+
+    with patch(
+        "superseded.output.github_pr.subprocess.run",
+        return_value=MagicMock(
+            returncode=0,
+            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stderr="",
+        ),
+    ):
+        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        assert bad == set()
+
+
+def test_partition_comments_one_bad_three():
+    from superseded.output.github_pr import _partition_comments
+
+    payload = {
+        "body": "test",
+        "comments": [
+            {"path": "a.py", "line": 1, "body": "c1"},
+            {"path": "b.py", "line": 999, "body": "c2"},
+            {"path": "c.py", "line": 3, "body": "c3"},
+        ],
+    }
+
+    def side_effect(cmd, **kwargs):
+        input_json = json.loads(kwargs.get("input", "{}"))
+        comment_lines = [c["line"] for c in input_json.get("comments", [])]
+        if 999 in comment_lines:
+            raise subprocess.CalledProcessError(1, "gh")
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stderr="",
+        )
+
+    with patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect):
+        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        assert bad == {1}
+
+
+def test_partition_comments_two_bad_three():
+    from superseded.output.github_pr import _partition_comments
+
+    payload = {
+        "body": "test",
+        "comments": [
+            {"path": "a.py", "line": 1, "body": "c1"},
+            {"path": "b.py", "line": 999, "body": "c2"},
+            {"path": "c.py", "line": 999, "body": "c3"},
+        ],
+    }
+
+    def side_effect(cmd, **kwargs):
+        input_json = json.loads(kwargs.get("input", "{}"))
+        comment_lines = [c["line"] for c in input_json.get("comments", [])]
+        if 999 in comment_lines:
+            raise subprocess.CalledProcessError(1, "gh")
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stderr="",
+        )
+
+    with patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect):
+        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        assert bad == {1, 2}
