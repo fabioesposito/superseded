@@ -92,9 +92,10 @@ jobs:
           post: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-The action is a Docker container running `superseded review --pr $PR_NUMBER --post`.
+The action is a Docker container running `superseded review --pr $PR_NUMBER --post`. Users must set the appropriate auth env vars for their chosen agent as GitHub Actions secrets.
 
 ## Review Passes
 
@@ -180,16 +181,42 @@ If no issues found, return: []
 
 The tool delegates to existing AI CLIs rather than calling LLM APIs directly.
 
-**Supported agents:**
-- `claude-code` — `claude --model {model} --print "{prompt}"`
-- `opencode` — `opencode run "{prompt}"`
-- `codex` — `codex "{prompt}"`
+### Supported Agents
 
-**Invocation:** Subprocess with prompt passed as argument. The tool checks that the CLI binary exists on `$PATH` before invoking it and fails with a clear error if not found.
+| Agent | Invocation | Notes |
+|-------|-----------|-------|
+| `claude-code` | `claude -p "{prompt}" --bare --model {model}` | `--bare` skips hooks/LSP for fast scripted calls |
+| `opencode` | `opencode run "{prompt}"` | Non-interactive mode |
+| `codex` | `codex exec "{prompt}" --json --model {model}` | JSON Lines output for parsing |
 
-**Output parsing:** Extract JSON array from AI response using regex. Fallback to markdown parsing if JSON extraction fails.
+The tool checks that the CLI binary exists on `$PATH` before invoking and fails with a clear error if not found.
 
-**Agent/model selection:**
+### Environment Variables
+
+Each agent requires its own auth env vars. The tool passes through the current shell's environment to the subprocess — users set these in their shell profile or CI secrets.
+
+**Claude Code:**
+- `ANTHROPIC_API_KEY` — API key auth
+- `ANTHROPIC_AUTH_TOKEN` — OAuth token (alternative)
+- 3P providers: `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, etc.
+
+**OpenCode:**
+- Provider-specific: `ANTHROPIC_API_KEY`, `NVIDIA_API_KEY`, `OPENAI_API_KEY`, etc.
+- Bedrock: `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` or `AWS_BEARER_TOKEN_BEDROCK`
+
+**Codex:**
+- `CODEX_API_KEY` — API key auth
+- `CODEX_ACCESS_TOKEN` — access token (alternative)
+- Bedrock: `AWS_BEARER_TOKEN_BEDROCK` + `AWS_REGION`
+
+Users are responsible for configuring auth for their chosen agent. The tool does not manage credentials.
+
+### Output Parsing
+
+Extract JSON array from AI response using regex. Fallback to markdown parsing if JSON extraction fails. For Codex (`--json`), parse JSON Lines stream and extract the final assistant message.
+
+### Agent/Model Selection
+
 - CLI: `--agent claude-code --model claude-sonnet-4-20250514`
 - Config: `agent: claude-code` + `model: claude-sonnet-4-20250514`
 - Env: `SUPERSEDED_AGENT` + `SUPERSEDED_MODEL`
