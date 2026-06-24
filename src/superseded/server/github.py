@@ -5,6 +5,7 @@ import hmac
 import time
 from pathlib import Path
 
+import httpx
 import jwt
 
 
@@ -21,6 +22,13 @@ class GitHubApp:
         actual = signature[len("sha256=") :]
         return hmac.compare_digest(expected, actual)
 
+    def _api_headers(self, token: str, accept: str = "application/vnd.github+json") -> dict:
+        return {
+            "Authorization": f"Bearer {token}",
+            "Accept": accept,
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
     def _sign_jwt(self) -> str:
         now = int(time.time())
         payload = {
@@ -31,32 +39,20 @@ class GitHubApp:
         return jwt.encode(payload, self._private_key, algorithm="RS256")
 
     async def get_installation_token(self, installation_id: int) -> str:
-        import httpx
-
         jwt_token = self._sign_jwt()
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"https://api.github.com/app/installations/{installation_id}/access_tokens",
-                headers={
-                    "Authorization": f"Bearer {jwt_token}",
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
+                headers=self._api_headers(jwt_token),
             )
             response.raise_for_status()
             return response.json()["token"]
 
     async def fetch_pr_diff(self, token: str, owner: str, repo: str, pr_number: int) -> str:
-        import httpx
-
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/vnd.github.v3.diff",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
+                headers=self._api_headers(token, accept="application/vnd.github.v3.diff"),
             )
             response.raise_for_status()
             return response.text
@@ -64,16 +60,10 @@ class GitHubApp:
     async def fetch_pr_description(
         self, token: str, owner: str, repo: str, pr_number: int
     ) -> str | None:
-        import httpx
-
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
+                headers=self._api_headers(token),
             )
             response.raise_for_status()
             data = response.json()
@@ -90,8 +80,6 @@ class GitHubApp:
         comments: list[dict],
         event: str,
     ) -> list[int]:
-        import httpx
-
         payload = {
             "event": event,
             "body": body,
@@ -100,11 +88,7 @@ class GitHubApp:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}/reviews",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
+                headers=self._api_headers(token),
                 json=payload,
             )
             response.raise_for_status()
@@ -123,25 +107,19 @@ class GitHubApp:
         title: str | None = None,
         summary: str | None = None,
     ) -> int:
-        import httpx
-
         payload: dict = {
             "name": name,
             "head_sha": head_sha,
             "status": status,
         }
-        if conclusion:
+        if conclusion is not None:
             payload["conclusion"] = conclusion
-        if title:
+        if title is not None:
             payload["output"] = {"title": title, "summary": summary or ""}
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"https://api.github.com/repos/{owner}/{repo}/check-runs",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
+                headers=self._api_headers(token),
                 json=payload,
             )
             response.raise_for_status()
