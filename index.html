@@ -626,6 +626,7 @@
                 <li><a href="#how">How it works</a></li>
                 <li><a href="#features">Features</a></li>
                 <li><a href="#agents">Agents</a></li>
+                <li><a href="#server">Server</a></li>
                 <li><a href="https://github.com/fabioesposito/superseded">Docs</a></li>
             </ul>
             <div class="nav-cta">
@@ -646,6 +647,7 @@
                 Multi-pass review powered by Claude, GPT, or local models.
                 Feeds grounded context from linters and cross-file usage into every pass.
                 Remembers what you dismiss — and why.
+                Runs as a CLI, GitHub Action, or self-hosted server.
             </p>
             <div class="hero-actions">
                 <a href="#get-started" class="btn btn-primary">Get Started</a>
@@ -761,7 +763,7 @@
             <div class="section-label">Features</div>
             <h2>Built for real workflows</h2>
             <p class="section-sub">
-                CLI for local dev. GitHub Actions for CI. Memory that improves over time.
+                CLI for local dev. GitHub Actions for CI. Self-hosted server for teams. Memory that improves over time.
             </p>
             <div class="features-grid">
                 <div class="feature">
@@ -793,6 +795,11 @@
                     <div class="feature-icon"> </div>
                     <h3>CI-native</h3>
                     <p>Docker-based GitHub Action. Runs on every PR. Configurable passes and agents. Results posted directly to the PR as review comments.</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon"> </div>
+                    <h3>Server mode</h3>
+                    <p>Run as a persistent GitHub App. Multiple repos install your app and get automatic reviews on every PR. Webhook-driven, configurable concurrency, status checks.</p>
                 </div>
                 <div class="feature">
                     <div class="feature-icon">⚡</div>
@@ -844,12 +851,59 @@
         <div class="container">
             <h2>Start reviewing</h2>
             <p>Install, configure, and run your first review in under a minute.</p>
-            <div class="install-cmd" style="margin-bottom: 32px;">
+            <div class="install-cmd" style="margin-bottom: 24px;">
                 <span>$</span>
                 <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync</code>
             </div>
             <br>
-            <a href="https://github.com/fabioesposito/superseded" class="btn btn-primary">Read the docs</a>
+            <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                <a href="https://github.com/fabioesposito/superseded" class="btn btn-primary">Read the docs</a>
+                <a href="#server" class="btn btn-ghost">Server mode</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="how" id="server" style="padding: 80px 0; border-top: 1px solid var(--border-subtle);">
+        <div class="container">
+            <div class="section-label">Server mode</div>
+            <h2>Self-hosted for teams</h2>
+            <p class="section-sub">
+                Run Superseded as a GitHub App on your own server. Multiple repos install it and get automatic reviews on every PR.
+            </p>
+            <div class="flow">
+                <div class="flow-step">
+                    <div class="flow-icon"> </div>
+                    <div class="flow-content">
+                        <h3>Create a GitHub App</h3>
+                        <p>Set up a GitHub App with webhook URL pointing to your server. Subscribe to PR and installation events.</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-icon"> </div>
+                    <div class="flow-content">
+                        <h3>Install on repos</h3>
+                        <p>Other repos install your app with one click. The server tracks installations automatically.</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-icon">⚡</div>
+                    <div class="flow-content">
+                        <h3>Webhook triggers review</h3>
+                        <p>PR opened or updated — webhook arrives, job queued, review runs in background. Results posted as PR comments and status checks.</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-icon"> </div>
+                    <div class="flow-content">
+                        <h3>Configurable concurrency</h3>
+                        <p>Control how many reviews run in parallel. Jobs queue when at capacity. Each review gets its own shallow clone and agent subprocess.</p>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 40px; padding: 20px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--text-muted);">
+                <div><span style="color: var(--accent);">$</span> superseded serve --port 8000</div>
+                <div style="color: var(--text-dim);">Starting Superseded server on 0.0.0.0:8000</div>
+            </div>
         </div>
     </section>
 

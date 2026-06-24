@@ -93,6 +93,64 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
+### Server Mode
+
+Run Superseded as a persistent service that receives GitHub App webhooks. Multiple repos install your app and get automatic reviews on every PR.
+
+```bash
+# Install server dependencies
+uv pip install -e ".[server]"
+
+# Set environment variables
+export SUPERSEDED_APP_ID=12345
+export SUPERSEDED_WEBHOOK_SECRET=whsec_...
+export SUPERSEDED_PRIVATE_KEY_PATH=/path/to/private-key.pem
+
+# Start the server
+superseded serve --port 8000
+```
+
+Or with a config file:
+
+```bash
+superseded serve --config /etc/superseded/server.yaml
+```
+
+**Server config file** (`/etc/superseded/server.yaml`):
+
+```yaml
+app_id: 12345
+webhook_secret: whsec_...
+private_key_path: /path/to/key.pem
+max_concurrent_reviews: 3
+temp_dir: /tmp/superseded
+log_level: info
+
+defaults:
+  agent: claude-code
+  model: claude-sonnet-4-20250514
+  passes: [security, correctness, performance, style, architecture]
+```
+
+**GitHub App setup:**
+
+1. Create a GitHub App at https://github.com/settings/apps
+2. Set webhook URL to `https://your-server.com/webhook`
+3. Subscribe to `pull_request` and `installation` events
+4. Grant permissions: `pull_requests: write`, `checks: write`, `contents: read`
+5. Install the app on your repos
+
+**Environment variables:**
+
+| Variable | Purpose |
+|----------|---------|
+| `SUPERSEDED_APP_ID` | GitHub App ID |
+| `SUPERSEDED_PRIVATE_KEY_PATH` | Path to private key PEM |
+| `SUPERSEDED_WEBHOOK_SECRET` | Webhook signature secret |
+| `SUPERSEDED_MAX_CONCURRENT` | Max parallel reviews (default: 3) |
+| `SUPERSEDED_PORT` | Server port (default: 8000) |
+| `SUPERSEDED_HOST` | Server host (default: 0.0.0.0) |
+
 ### Feedback
 
 ```bash
