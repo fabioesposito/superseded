@@ -30,6 +30,7 @@ Return ONLY a JSON array. No explanation text before or after.
 [
   {
     "severity": "critical|important|suggestion|nit",
+    "confidence": "high|medium|low",
     "file": "path/to/file.py",
     "line": 42,
     "end_line": 45,

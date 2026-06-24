@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
 from superseded.agents.base import Agent
@@ -8,12 +9,11 @@ from superseded.agents.claude_code import ClaudeCodeAgent
 from superseded.agents.codex import CodexAgent
 from superseded.agents.opencode import OpenCodeAgent
 from superseded.models import Finding, ReviewResult
+from superseded.review.merger import merge_findings
 from superseded.review.prompts import build_prompt
 
 if TYPE_CHECKING:
     from superseded.config import Config
-
-SEVERITY_ORDER = {"critical": 0, "important": 1, "suggestion": 2, "nit": 3}
 
 AGENT_MAP: dict[str, type[Agent]] = {
     "claude-code": ClaudeCodeAgent,
@@ -74,25 +74,24 @@ class ReviewEngine:
             ]
 
         all_findings: list[list[Finding]] = []
-        for pass_name in passes:
-            prompt = build_prompt(
-                pass_name=pass_name,
-                diff=diff,
-                pr_description=pr_description,
-                file_context=file_context,
-                memory_context=memory_context,
-            )
-            findings = self.run_pass(pass_name, prompt)
-            all_findings.append(findings)
+
+        with ThreadPoolExecutor(max_workers=len(passes)) as executor:
+            future_to_pass = {}
+            for pass_name in passes:
+                prompt = build_prompt(
+                    pass_name=pass_name,
+                    diff=diff,
+                    pr_description=pr_description,
+                    file_context=file_context,
+                    memory_context=memory_context,
+                )
+                future = executor.submit(self.run_pass, pass_name, prompt)
+                future_to_pass[future] = pass_name
+
+            for future in as_completed(future_to_pass):
+                all_findings.append(future.result())
 
         return self.merge_findings(all_findings)
 
     def merge_findings(self, finding_groups: list[list[Finding]]) -> ReviewResult:
-        seen: dict[str, Finding] = {}
-        for group in finding_groups:
-            for f in group:
-                if f.id not in seen:
-                    seen[f.id] = f
-
-        sorted_findings = sorted(seen.values(), key=lambda f: SEVERITY_ORDER.get(f.severity, 99))
-        return ReviewResult(findings=sorted_findings)
+        return merge_findings(finding_groups)

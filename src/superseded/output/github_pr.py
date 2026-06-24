@@ -23,7 +23,12 @@ def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) ->
 
     event = "REQUEST_CHANGES" if result.summary.get("critical", 0) > 0 else "COMMENT"
 
+    passes_used = sorted({f.pass_name for f in result.findings})
+    pass_labels = ", ".join(p.replace("_", " ").title() + " Review" for p in passes_used)
+
     body = "## Superseded Code Review\n\n"
+    if pass_labels:
+        body += f"**Passes:** {pass_labels}\n\n"
     for sev, count in result.summary.items():
         body += f"- **{sev}:** {count}\n"
 

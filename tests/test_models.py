@@ -62,3 +62,32 @@ def test_review_result_from_findings():
     assert len(result.findings) == 2
     assert result.summary["critical"] == 1
     assert result.summary["nit"] == 1
+
+
+def test_finding_confidence_default():
+    f = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        end_line=2,
+        title="t",
+        description="d",
+        suggestion="s",
+    )
+    assert f.confidence == "high"
+
+
+def test_finding_confidence_custom():
+    f = Finding(
+        pass_name="performance",
+        severity="suggestion",
+        file="a.py",
+        line=1,
+        end_line=2,
+        title="t",
+        description="d",
+        suggestion="s",
+        confidence="medium",
+    )
+    assert f.confidence == "medium"

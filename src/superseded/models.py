@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 Severity = Literal["critical", "important", "suggestion", "nit"]
 PassName = Literal["security", "correctness", "performance", "style", "architecture"]
+Confidence = Literal["high", "medium", "low"]
 
 
 class Finding(BaseModel):
@@ -18,6 +19,7 @@ class Finding(BaseModel):
     title: str
     description: str
     suggestion: str
+    confidence: Confidence = "high"
     id: str = Field(default="")
 
     def model_post_init(self, __context) -> None:

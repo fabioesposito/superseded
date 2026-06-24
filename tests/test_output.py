@@ -66,3 +66,14 @@ def test_post_review_to_pr(mock_run):
     args = mock_run.call_args[0][0]
     assert "gh" in args
     assert "api" in args
+
+
+@patch("subprocess.run")
+def test_post_review_includes_pass_labels(mock_run):
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    result = make_result()
+    post_review_to_pr(pr=123, result=result, repo="owner/repo")
+    # Check the JSON payload passed via stdin
+    call_kwargs = mock_run.call_args[1]
+    payload = json.loads(call_kwargs["input"])
+    assert "Security Review" in payload["body"]
