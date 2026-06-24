@@ -25,7 +25,16 @@ class FakeStore:
         return [self.findings[fid] for fid in self._dismissed if self.findings[fid]["repo"] == repo]
 
     async def record_finding(
-        self, finding_id, repo, pass_name, severity, file, line, title, description
+        self,
+        finding_id,
+        repo,
+        pass_name,
+        severity,
+        file,
+        line,
+        title,
+        description,
+        reasoning="",
     ):
         self.findings[finding_id] = {
             "id": finding_id,
@@ -36,6 +45,7 @@ class FakeStore:
             "line": line,
             "title": title,
             "description": description,
+            "reasoning": reasoning,
         }
 
     async def set_comment_id(self, finding_id, comment_id):

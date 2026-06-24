@@ -245,9 +245,11 @@ def test_pr_comment_includes_reasoning_when_present():
             stderr="",
         )
 
-    with patch("superseded.output.github_pr.subprocess.run", side_effect=fake_run):
-        with patch("superseded.output.github_pr._repo", return_value="owner/repo"):
-            post_review_to_pr(pr=1, result=result)
+    with (
+        patch("superseded.output.github_pr.subprocess.run", side_effect=fake_run),
+        patch("superseded.output.github_pr._repo", return_value="owner/repo"),
+    ):
+        post_review_to_pr(pr=1, result=result)
 
     assert payloads
     body = payloads[0]["comments"][0]["body"]
@@ -268,9 +270,11 @@ def test_pr_comment_excludes_reasoning_when_empty():
             stderr="",
         )
 
-    with patch("superseded.output.github_pr.subprocess.run", side_effect=fake_run):
-        with patch("superseded.output.github_pr._repo", return_value="owner/repo"):
-            post_review_to_pr(pr=1, result=result)
+    with (
+        patch("superseded.output.github_pr.subprocess.run", side_effect=fake_run),
+        patch("superseded.output.github_pr._repo", return_value="owner/repo"),
+    ):
+        post_review_to_pr(pr=1, result=result)
 
     body = payloads[0]["comments"][0]["body"]
     assert "<details>" not in body
