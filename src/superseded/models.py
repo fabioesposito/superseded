@@ -20,6 +20,7 @@ class Finding(BaseModel):
     description: str
     suggestion: str
     confidence: Confidence = "high"
+    reasoning: str = Field(default="")
     id: str = Field(default="")
 
     def model_post_init(self, __context) -> None:
