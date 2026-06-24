@@ -196,7 +196,7 @@ class GitleaksTool:
 
         try:
             data = json.loads(stdout)
-        except json.JSONDecodeError, ValueError:
+        except (json.JSONDecodeError, ValueError):
             return ""
         findings = []
         for item in data:

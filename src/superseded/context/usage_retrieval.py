@@ -171,7 +171,7 @@ def retrieve_usages(diff: str, root: Path) -> str | None:
                 text=True,
                 timeout=15,
             )
-        except FileNotFoundError, subprocess.TimeoutExpired:
+        except (FileNotFoundError, subprocess.TimeoutExpired):
             logger.warning("ripgrep not on PATH or timed out, skipping usage retrieval")
             return None
 

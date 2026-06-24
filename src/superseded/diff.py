@@ -43,7 +43,7 @@ def fetch_pr_description(pr: int) -> str | None:
             text=True,
             check=True,
         )
-    except subprocess.CalledProcessError, FileNotFoundError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return None
     body = result.stdout.strip()
     return body or None
@@ -78,7 +78,7 @@ def compute_file_context(diff: str, context_padding: int = DEFAULT_CONTEXT_PADDI
         new_starts = sorted({int(m.group(2)) for m in hunks})
         try:
             lines = _read_file_lines(file_path)
-        except FileNotFoundError, OSError:
+        except (FileNotFoundError, OSError):
             continue
         snippets: list[str] = []
         for start in new_starts:
@@ -102,5 +102,5 @@ def repo_root() -> Path:
             check=True,
         )
         return Path(result.stdout.strip())
-    except subprocess.CalledProcessError, FileNotFoundError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return Path.cwd()
