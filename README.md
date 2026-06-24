@@ -40,6 +40,9 @@ Each pass sends a targeted prompt to your chosen agent (Claude Code, OpenCode, o
 git clone https://github.com/fabioesposito/superseded
 cd superseded
 uv sync
+
+# Optional: install globally as a CLI tool
+uv tool install .
 ```
 
 ## Usage
@@ -52,6 +55,10 @@ superseded review --pr 123
 
 # Review a local diff
 superseded review --diff HEAD~3..HEAD
+
+# Review a branch (passes any git range to `git diff`)
+superseded review --diff main..feature-branch
+superseded review --diff origin/main..HEAD
 
 # Choose agent + model
 superseded review --pr 123 --agent claude-code --model claude-sonnet-4-20250514

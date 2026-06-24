@@ -655,8 +655,8 @@
             </div>
             <div class="install-cmd">
                 <span>$</span>
-                <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync</code>
-                <button class="copy" onclick="navigator.clipboard.writeText('git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync')" title="Copy"> Copy</button>
+                <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
+                <button class="copy" onclick="navigator.clipboard.writeText('git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .')" title="Copy"> Copy</button>
             </div>
         </div>
     </section>
@@ -672,6 +672,7 @@
                 </div>
                 <div class="terminal-body">
                     <div><span class="prompt">$ </span><span class="cmd">superseded review --pr 42 --agent claude-code</span></div>
+                    <div style="margin-top: 4px;"><span class="prompt">$ </span><span class="cmd">superseded review --diff main..feature-branch</span></div>
                     <div class="output">&nbsp;</div>
                     <div class="output">Fetching diff...</div>
                     <div class="output">Gathering context...</div>
@@ -853,7 +854,7 @@
             <p>Install, configure, and run your first review in under a minute.</p>
             <div class="install-cmd" style="margin-bottom: 24px;">
                 <span>$</span>
-                <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync</code>
+                <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
             </div>
             <br>
             <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
