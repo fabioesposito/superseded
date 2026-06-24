@@ -107,7 +107,7 @@ def test_rg_missing_returns_none(monkeypatch, caplog):
 
 def test_budget_truncation(monkeypatch):
     big_match = "file.py:{}: call_to_sym()\n"
-    matches = "".join(big_match.format(i) for i in range(200))
+    matches = "".join(big_match.format(i) for i in range(400))
 
     def fake_run(cmd, **kwargs):
         if "rg" in cmd[0]:

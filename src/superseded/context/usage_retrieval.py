@@ -7,7 +7,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-USAGE_BUDGET = 2000
+USAGE_BUDGET = 6000
 MAX_SYMBOLS = 25
 
 _PYTHON_SYMBOL_RE = re.compile(
@@ -171,7 +171,7 @@ def retrieve_usages(diff: str, root: Path) -> str | None:
                 text=True,
                 timeout=15,
             )
-        except FileNotFoundError, subprocess.TimeoutExpired:
+        except (FileNotFoundError, subprocess.TimeoutExpired):
             logger.warning("ripgrep not on PATH or timed out, skipping usage retrieval")
             return None
 
