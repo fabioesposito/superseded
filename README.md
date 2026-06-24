@@ -4,25 +4,35 @@ Multi-pass AI code review tool. Reviews PRs and diffs by delegating to AI CLIs (
 
 ## How It Works
 
+Superseded runs **5 focused review passes in parallel**, each powered by an AI agent:
+
 ```
-PR or diff
-    │
-    ▼
-5 parallel review passes
-├── Security     — injection, auth bypass, secrets, XSS
-├── Correctness  — logic bugs, edge cases, error handling
-├── Performance  — N+1 queries, blocking I/O, algorithmic issues
-├── Style        — naming, dead code, complexity
-└── Architecture — coupling, API contracts, separation of concerns
-    │
-    ▼
-Structured findings (JSON / markdown / table)
-    │
-    ▼
-Optional: post as GitHub PR review comments
+ PR or local diff
+       │
+       ▼
+ ┌─────────────────────────────────────────────┐
+ │  concurrent review passes (ThreadPool)      │
+ │                                             │
+ │  security      injection, auth, secrets, XSS│
+ │  correctness   logic bugs, edge cases       │
+ │  performance   N+1 queries, blocking I/O    │
+ │  style         naming, dead code, complexity│
+ │  architecture  coupling, API contracts      │
+ └─────────────────────────────────────────────┘
+       │
+       ▼
+ merge + deduplicate findings
+       │
+       ▼
+ structured output (table / JSON / markdown)
+       │
+       ▼
+ optional: post as GitHub PR review comments
 ```
 
-The tool learns from feedback — it tracks which review comments humans dismiss and adjusts future reviews.
+Each pass sends a targeted prompt to your chosen agent (Claude Code, OpenCode, or Codex). The agent returns structured JSON findings — severity, file, line, description, fix suggestion — which get merged and deduplicated.
+
+**Feedback loop**: dismiss a finding once and it won't appear in future reviews. Superseded tracks dismissed comments per-repo via a local SQLite store and injects them as negative context into subsequent runs.
 
 ## Install
 
