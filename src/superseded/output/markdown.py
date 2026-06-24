@@ -28,6 +28,13 @@ def format_markdown(result: ReviewResult) -> str:
             lines.append("")
             lines.append(f.description)
             lines.append("")
+            if f.reasoning:
+                lines.append("<details><summary>Reasoning</summary>")
+                lines.append("")
+                lines.append(f.reasoning)
+                lines.append("")
+                lines.append("</details>")
+                lines.append("")
             lines.append(f"**Suggestion:** {f.suggestion}")
             lines.append("")
         lines.append("---")

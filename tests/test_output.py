@@ -192,3 +192,41 @@ def test_post_review_single_line_finding_has_no_start_line(mock_run):
     post_review_to_pr(pr=1, result=result, repo="owner/repo")
     payload = json.loads(mock_run.call_args[1]["input"])
     assert "start_line" not in payload["comments"][0]
+
+
+def _finding(**overrides):
+    defaults = dict(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        end_line=2,
+        title="bad",
+        description="desc",
+        suggestion="fix",
+    )
+    defaults.update(overrides)
+    return Finding(**defaults)
+
+
+def test_reasoning_renders_when_present():
+    f = _finding(reasoning="Suspicious input from user request")
+    result = format_markdown(ReviewResult(findings=[f]))
+    assert "<details>" in result
+    assert "Suspicious input from user request" in result
+    assert "Reasoning" in result
+
+
+def test_reasoning_absent_when_empty():
+    f = _finding(reasoning="")
+    result = format_markdown(ReviewResult(findings=[f]))
+    assert "<details>" not in result
+
+
+def test_reasoning_in_correct_position():
+    f = _finding(reasoning="because X")
+    result = format_markdown(ReviewResult(findings=[f]))
+    desc_pos = result.index("desc")
+    details_pos = result.index("<details>")
+    suggestion_pos = result.index("**Suggestion:**")
+    assert desc_pos < details_pos < suggestion_pos
