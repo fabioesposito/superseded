@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+import subprocess
+from typing import TYPE_CHECKING
+
+from superseded.agents.base import Agent
+from superseded.agents.claude_code import ClaudeCodeAgent
+from superseded.agents.codex import CodexAgent
+from superseded.agents.opencode import OpenCodeAgent
+from superseded.models import Finding, ReviewResult
+from superseded.review.prompts import build_prompt
+
+if TYPE_CHECKING:
+    from superseded.config import Config
+
+SEVERITY_ORDER = {"critical": 0, "important": 1, "suggestion": 2, "nit": 3}
+
+AGENT_MAP: dict[str, type[Agent]] = {
+    "claude-code": ClaudeCodeAgent,
+    "opencode": OpenCodeAgent,
+    "codex": CodexAgent,
+}
+
+
+class ReviewEngine:
+    def __init__(self, agent: Agent, config: Config) -> None:
+        self.agent = agent
+        self.config = config
+
+    @classmethod
+    def select(cls, agent_name: str, model: str | None) -> ReviewEngine:
+        from superseded.config import Config
+
+        agent_cls = AGENT_MAP.get(agent_name)
+        if agent_cls is None:
+            raise ValueError(f"Unknown agent: {agent_name}. Choose from: {list(AGENT_MAP)}")
+        agent = agent_cls(model=model)
+        return cls(agent=agent, config=Config())
+
+    def run_pass(self, pass_name: str, prompt: str) -> list[Finding]:
+        cmd = self.agent.build_command(prompt)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        except FileNotFoundError as err:
+            raise RuntimeError(
+                f"Agent CLI '{cmd[0]}' not found on PATH. "
+                f"Install it or choose a different agent with --agent."
+            ) from err
+        except subprocess.TimeoutExpired as err:
+            raise RuntimeError(f"Agent timed out after 300 seconds for pass: {pass_name}") from err
+
+        raw_findings = self.agent.parse_output(result.stdout, pass_name)
+        findings = []
+        for item in raw_findings:
+            try:
+                findings.append(Finding(**item))
+            except Exception:
+                continue
+        return findings
+
+    def review(
+        self,
+        diff: str,
+        pr_description: str | None = None,
+        file_context: str | None = None,
+        memory_context: str | None = None,
+        passes: list[str] | None = None,
+    ) -> ReviewResult:
+        if passes is None:
+            passes = [
+                n
+                for n in ["security", "correctness", "performance", "style", "architecture"]
+                if self.config.is_pass_enabled(n)
+            ]
+
+        all_findings: list[list[Finding]] = []
+        for pass_name in passes:
+            prompt = build_prompt(
+                pass_name=pass_name,
+                diff=diff,
+                pr_description=pr_description,
+                file_context=file_context,
+                memory_context=memory_context,
+            )
+            findings = self.run_pass(pass_name, prompt)
+            all_findings.append(findings)
+
+        return self.merge_findings(all_findings)
+
+    def merge_findings(self, finding_groups: list[list[Finding]]) -> ReviewResult:
+        seen: dict[str, Finding] = {}
+        for group in finding_groups:
+            for f in group:
+                if f.id not in seen:
+                    seen[f.id] = f
+
+        sorted_findings = sorted(seen.values(), key=lambda f: SEVERITY_ORDER.get(f.severity, 99))
+        return ReviewResult(findings=sorted_findings)
