@@ -691,28 +691,28 @@
             <div class="section-label">How it works</div>
             <h2>Five passes, one command</h2>
             <p class="section-sub">
-                Each review pass focuses on a specific concern. They run in parallel for speed, then findings are merged and deduplicated.
+                Each pass sends a targeted prompt to an AI agent in parallel. Findings come back as structured JSON — merged, deduplicated, and sorted by severity.
             </p>
             <div class="flow">
                 <div class="flow-step">
                     <div class="flow-icon"> Diff</div>
                     <div class="flow-content">
                         <h3>Fetch the diff</h3>
-                        <p>Pull from a GitHub PR via <code>gh</code> or a local git range.</p>
+                        <p>Pull from a GitHub PR via <code>gh</code> or a local <code>git diff</code> range.</p>
                     </div>
                 </div>
                 <div class="flow-step">
                     <div class="flow-icon"> Feedback</div>
                     <div class="flow-content">
-                        <h3>Check past feedback</h3>
-                        <p>Look for reactions on past review comments. Inject dismissed findings into prompts.</p>
+                        <h3>Load feedback memory</h3>
+                        <p>Query the local SQLite store for previously dismissed findings. Inject them as negative context so the agent avoids repeating patterns you've already flagged.</p>
                     </div>
                 </div>
                 <div class="flow-step">
                     <div class="flow-icon"> Review</div>
                     <div class="flow-content">
-                        <h3>Run review passes</h3>
-                        <p>Five focused passes, each with a specialized prompt. Run in parallel.</p>
+                        <h3>Run 5 passes in parallel</h3>
+                        <p>Each pass focuses on one concern with a domain-specific prompt. All five run concurrently via ThreadPool.</p>
                         <div class="passes">
                             <span class="pass-tag security">security</span>
                             <span class="pass-tag correctness">correctness</span>
@@ -726,14 +726,14 @@
                     <div class="flow-icon"> Merge</div>
                     <div class="flow-content">
                         <h3>Merge and deduplicate</h3>
-                        <p>Combine findings across passes. Sort by severity. Remove duplicates.</p>
+                        <p>Combine findings across all passes. Sort by severity. Drop duplicates found by multiple passes.</p>
                     </div>
                 </div>
                 <div class="flow-step">
                     <div class="flow-icon"> Output</div>
                     <div class="flow-content">
                         <h3>Output results</h3>
-                        <p>JSON, markdown, or terminal table. Optionally post as GitHub PR review comments.</p>
+                        <p>Terminal table for quick scanning, JSON for piping, or markdown for docs. Optionally post inline review comments to the GitHub PR.</p>
                     </div>
                 </div>
             </div>
