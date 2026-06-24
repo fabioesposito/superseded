@@ -37,12 +37,6 @@ Each pass sends a targeted prompt to your chosen agent (Claude Code, OpenCode, o
 ## Install
 
 ```bash
-pip install superseded
-```
-
-Or from source:
-
-```bash
 git clone https://github.com/fabioesposito/superseded
 cd superseded
 uv sync
