@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class ServerConfig(BaseModel):
@@ -16,6 +16,18 @@ class ServerConfig(BaseModel):
     max_concurrent_reviews: int = 3
     temp_dir: Path = Path("/tmp/superseded")
     log_level: str = "info"
+
+    @model_validator(mode="after")
+    def _validate_required_fields(self) -> ServerConfig:
+        if self.app_id == 0:
+            return self
+        if self.app_id < 0:
+            raise ValueError("app_id must be a positive integer")
+        if not self.webhook_secret:
+            raise ValueError("webhook_secret must not be empty")
+        if not self.private_key_path.exists():
+            raise ValueError(f"private_key_path does not exist: {self.private_key_path}")
+        return self
 
     @classmethod
     def from_env(cls) -> ServerConfig:
@@ -29,10 +41,14 @@ class ServerConfig(BaseModel):
                 "SUPERSEDED_PRIVATE_KEY_PATH are required"
             )
 
+        pkey = Path(private_key_path)
+        if not pkey.exists():
+            raise ValueError(f"private_key_path does not exist: {pkey}")
+
         kwargs: dict = {
             "app_id": int(app_id),
             "webhook_secret": webhook_secret,
-            "private_key_path": Path(private_key_path),
+            "private_key_path": pkey,
         }
 
         max_concurrent = os.environ.get("SUPERSEDED_MAX_CONCURRENT")
@@ -57,7 +73,10 @@ class ServerConfig(BaseModel):
     def from_yaml(cls, path: Path) -> ServerConfig:
         data = yaml.safe_load(path.read_text()) or {}
         if "private_key_path" in data:
-            data["private_key_path"] = Path(data["private_key_path"])
+            pkey = Path(data["private_key_path"])
+            if not pkey.exists():
+                raise ValueError(f"private_key_path does not exist: {pkey}")
+            data["private_key_path"] = pkey
         if "temp_dir" in data:
             data["temp_dir"] = Path(data["temp_dir"])
         return cls(**data)

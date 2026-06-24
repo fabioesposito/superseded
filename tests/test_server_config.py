@@ -40,11 +40,13 @@ def test_server_config_from_env_missing(monkeypatch):
 
 
 def test_server_config_from_yaml(tmp_path):
+    key_file = tmp_path / "key.pem"
+    key_file.write_text("fake-private-key")
     config_file = tmp_path / "server.yaml"
     config_file.write_text(
         "app_id: 99999\n"
         "webhook_secret: whsec_yaml\n"
-        "private_key_path: /etc/key.pem\n"
+        f"private_key_path: {key_file}\n"
         "max_concurrent_reviews: 10\n"
         "port: 3000\n"
         "host: 127.0.0.1\n"
