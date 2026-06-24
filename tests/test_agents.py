@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from superseded.agents.base import Agent
 from superseded.agents.claude_code import ClaudeCodeAgent
+from superseded.agents.codex import CodexAgent
+from superseded.agents.opencode import OpenCodeAgent
 
 
 def test_agent_is_abstract():
@@ -37,3 +39,30 @@ def test_claude_code_parse_output():
     assert len(findings) == 1
     assert findings[0]["severity"] == "critical"
     assert findings[0]["pass_name"] == "security"
+
+
+def test_opencode_agent_name():
+    agent = OpenCodeAgent()
+    assert agent.name == "opencode"
+
+
+def test_opencode_build_command():
+    agent = OpenCodeAgent()
+    cmd = agent.build_command("Review this code")
+    assert cmd[0] == "opencode"
+    assert "run" in cmd
+
+
+def test_codex_agent_name():
+    agent = CodexAgent(model="gpt-4o")
+    assert agent.name == "codex"
+
+
+def test_codex_build_command():
+    agent = CodexAgent(model="gpt-4o")
+    cmd = agent.build_command("Review this code")
+    assert cmd[0] == "codex"
+    assert "exec" in cmd
+    assert "--json" in cmd
+    assert "--model" in cmd
+    assert "gpt-4o" in cmd
