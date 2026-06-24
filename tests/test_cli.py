@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 
-from superseded.cli import cli, resolve_agent, resolve_model
+from superseded.cli import cli, format_memory_context, resolve_agent, resolve_model
 from superseded.config import Config
 
 
@@ -49,3 +49,73 @@ def test_resolve_model_env_overrides():
     with patch.dict("os.environ", {}, clear=True):
         assert resolve_model(None, Config(model="cfg-model")) == "cfg-model"
         assert resolve_model("flag-model", Config()) == "flag-model"
+
+
+def test_format_memory_context_with_reasoning():
+    dismissed = [
+        {
+            "pass": "performance",
+            "title": "N+1 query",
+            "reasoning": "Loops over 1000 rows; will hit DB N times per request.",
+        }
+    ]
+    result = format_memory_context(dismissed)
+    assert "N+1 query" in result
+    assert "Loops over 1000 rows" in result
+    assert "Rationale then was:" in result
+
+
+def test_format_memory_context_without_reasoning():
+    dismissed = [
+        {
+            "pass": "style",
+            "title": "unclear naming",
+            "reasoning": "",
+        }
+    ]
+    result = format_memory_context(dismissed)
+    assert "unclear naming" in result
+    assert "Rationale then was:" not in result
+
+
+def test_format_memory_context_truncates_long_reasoning():
+    dismissed = [
+        {
+            "pass": "security",
+            "title": "injection",
+            "reasoning": "x" * 500,
+        }
+    ]
+    result = format_memory_context(dismissed)
+    assert len(result) < 600
+    assert "\u2026" in result
+
+
+def test_persist_findings_passes_reasoning(monkeypatch):
+    from superseded.cli import _persist_findings
+    from superseded.models import Finding, ReviewResult
+
+    f = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        end_line=2,
+        title="bad",
+        description="d",
+        suggestion="s",
+        reasoning="suspicious input",
+    )
+    result = ReviewResult(findings=[f])
+
+    calls = []
+
+    async def async_record(**kwargs):
+        calls.append(kwargs)
+
+    mock_store = type("FakeStore", (), {})()
+    mock_store.record_finding = staticmethod(async_record)
+
+    _persist_findings(mock_store, result, "owner/repo")
+    assert len(calls) == 1
+    assert calls[0]["reasoning"] == "suspicious input"

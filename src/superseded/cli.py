@@ -47,7 +47,14 @@ def format_memory_context(dismissed: list[dict]) -> str | None:
     for f in dismissed:
         pass_name = f.get("pass") or f.get("pass_name") or "review"
         title = f.get("title", "")
-        lines.append(f'- {pass_name.title()} pass: "{title}" — dismissed by human feedback')
+        reasoning = f.get("reasoning", "")
+        line = f'- {pass_name.title()} pass: "{title}" — dismissed by human review.'
+        if reasoning:
+            truncated = reasoning[:300]
+            if len(reasoning) > 300:
+                truncated += f"\u2026 ({len(reasoning)} chars)"
+            line += f'\n  Rationale then was: "{truncated}"'
+        lines.append(line)
     return "\n".join(lines)
 
 
@@ -180,6 +187,7 @@ def _persist_findings(store: MemoryStore, result: ReviewResult, repo: str) -> No
                 line=f.line,
                 title=f.title,
                 description=f.description,
+                reasoning=f.reasoning,
             )
         )
 
