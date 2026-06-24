@@ -146,32 +146,47 @@ def retrieve_usages(diff: str, root: Path) -> str | None:
     for cf in changed_files:
         exclude_globs += ["--glob", f"!{cf}"]
 
+    alternation = "|".join(re.escape(s) for s in symbols)
+    pattern = rf"\b({alternation})\b"
+
+    try:
+        result = subprocess.run(
+            ["rg", "-n", "--max-count", "4", pattern, str(root), *exclude_globs],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except FileNotFoundError:
+        logger.warning("ripgrep not on PATH, skipping usage retrieval")
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("ripgrep timed out for batched symbols, skipping")
+        return None
+
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+
+    lines = result.stdout.strip().splitlines()
+    symbol_lines: dict[str, list[str]] = {s: [] for s in symbols}
+    for line in lines:
+        for sym in symbols:
+            if re.search(rf"\b{re.escape(sym)}\b", line):
+                symbol_lines[sym].append(line)
+                break
+
     blocks: list[str] = []
     total_chars = 0
-
     for sym in symbols:
-        try:
-            result = subprocess.run(
-                ["rg", "-n", "--max-count", "4", rf"\b{sym}\b", str(root), *exclude_globs],
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-        except FileNotFoundError:
-            logger.warning("ripgrep not on PATH, skipping usage retrieval")
-            return None
-        except subprocess.TimeoutExpired:
-            logger.warning("ripgrep timed out for symbol '%s', skipping", sym)
+        sym_lines = symbol_lines[sym]
+        if not sym_lines:
             continue
-
-        if result.returncode == 0 and result.stdout.strip():
-            block = f"### Usages of `{sym}`\n{result.stdout.strip()}"
-            if total_chars + len(block) > USAGE_BUDGET:
-                omitted = len(symbols) - len(blocks)
-                blocks.append(f"\u2026 ({omitted} more usages omitted by retrieval budget)")
-                break
-            blocks.append(block)
-            total_chars += len(block)
+        block = f"### Usages of `{sym}`\n" + "\n".join(sym_lines)
+        if total_chars + len(block) > USAGE_BUDGET:
+            omitted = len(symbols) - len(blocks)
+            blocks.append(f"\u2026 ({omitted} more usages omitted by retrieval budget)")
+            break
+        blocks.append(block)
+        total_chars += len(block)
 
     if not blocks:
         return None
