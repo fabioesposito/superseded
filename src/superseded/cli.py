@@ -198,10 +198,11 @@ async def _persist_findings(store: MemoryStore, result: ReviewResult, repo: str)
 
 
 async def _link_comment_ids(
-    store: MemoryStore, result: ReviewResult, comment_ids: list[int]
+    store: MemoryStore, result: ReviewResult, comment_ids: list[int | None]
 ) -> None:
     for finding, comment_id in zip(result.findings, comment_ids, strict=True):
-        await store.set_comment_id(finding.id, comment_id)
+        if comment_id is not None:
+            await store.set_comment_id(finding.id, comment_id)
 
 
 @cli.command()

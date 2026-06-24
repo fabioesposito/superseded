@@ -588,7 +588,7 @@ def test_post_review_fallback_mixed():
     assert final_payload["comments"] == []
     assert "## Out-of-range findings" in final_payload["body"]
     assert "bad.py:999" in final_payload["body"]
-    assert len(ids) == 1  # one valid comment
+    assert ids == [1, None]  # valid finding gets ID, out-of-range gets None
 
 
 def test_post_review_fallback_all_bad():
@@ -635,13 +635,14 @@ def test_post_review_fallback_all_bad():
         patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect),
         patch("superseded.output.github_pr._repo", return_value="owner/repo"),
     ):
-        post_review_to_pr(pr=1, result=result)
+        ids = post_review_to_pr(pr=1, result=result)
 
     final_payload = payloads[-1]
     assert final_payload["comments"] == []
     assert "## Out-of-range findings" in final_payload["body"]
     assert "a.py:999" in final_payload["body"]
     assert "b.py:999" in final_payload["body"]
+    assert ids == [None, None]  # all out-of-range, no valid IDs
 
 
 def test_post_review_no_comments_raises():

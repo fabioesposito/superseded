@@ -98,7 +98,7 @@ def _build_fallback_text(findings: list[Finding]) -> str:
     return "".join(lines)
 
 
-def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) -> list[int]:
+def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) -> list[int | None]:
     payload = build_review_payload(result)
     target_repo = repo if repo is not None else _repo()
 
@@ -120,7 +120,17 @@ def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) ->
         payload["comments"] = []
         _post_review_payload(payload, target_repo, pr)
 
-        return comment_ids
+        # Pad comment_ids with None for out-of-range findings so the result
+        # aligns with result.findings for _link_comment_ids (stored per-finding).
+        padded_ids: list[int | None] = []
+        ci = 0
+        for i in range(len(result.findings)):
+            if i in bad_indices:
+                padded_ids.append(None)
+            else:
+                padded_ids.append(comment_ids[ci])
+                ci += 1
+        return padded_ids
 
 
 def _extract_comment_ids(stdout: str) -> list[int]:
