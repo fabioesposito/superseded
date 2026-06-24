@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS findings (
     severity TEXT,
     file TEXT,
     line INTEGER,
+    reasoning TEXT DEFAULT '',
     title TEXT,
     description TEXT,
     dismissed BOOLEAN DEFAULT FALSE,
@@ -45,6 +46,8 @@ class MemoryStore:
         columns = {row[1] for row in await cursor.fetchall()}
         if "comment_id" not in columns:
             await db.execute("ALTER TABLE findings ADD COLUMN comment_id INTEGER")
+        if "reasoning" not in columns:
+            await db.execute("ALTER TABLE findings ADD COLUMN reasoning TEXT DEFAULT ''")
 
     async def record_finding(
         self,
@@ -56,12 +59,14 @@ class MemoryStore:
         line: int,
         title: str,
         description: str,
+        reasoning: str = "",
     ) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
-                "INSERT OR IGNORE INTO findings (id, repo, pass, severity, file, line, title, description) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (finding_id, repo, pass_name, severity, file, line, title, description),
+                "INSERT OR IGNORE INTO findings "
+                "(id, repo, pass, severity, file, line, title, description, reasoning) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (finding_id, repo, pass_name, severity, file, line, title, description, reasoning),
             )
             await db.commit()
 
