@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+import subprocess
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from superseded.diff import compute_file_context, parse_diff_files
 
@@ -77,3 +79,23 @@ def test_compute_file_context_handles_missing_files():
     with patch("superseded.diff._read_file_lines", side_effect=FileNotFoundError):
         ctx = compute_file_context(diff)
     assert "missing.py" in ctx or ctx == ""
+
+
+def test_repo_root_returns_path(monkeypatch):
+    from superseded.diff import repo_root
+
+    mock = MagicMock(returncode=0, stdout="/mock/repo\n")
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: mock)
+    result = repo_root()
+    assert result == Path("/mock/repo")
+
+
+def test_repo_root_falls_back_to_cwd(monkeypatch):
+    from superseded.diff import repo_root
+
+    def fail(*a, **kw):
+        raise subprocess.CalledProcessError(1, "git")
+
+    monkeypatch.setattr("subprocess.run", fail)
+    result = repo_root()
+    assert result == Path.cwd()

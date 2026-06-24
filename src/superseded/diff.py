@@ -43,7 +43,7 @@ def fetch_pr_description(pr: int) -> str | None:
             text=True,
             check=True,
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return None
     body = result.stdout.strip()
     return body or None
@@ -78,7 +78,7 @@ def compute_file_context(diff: str, context_padding: int = DEFAULT_CONTEXT_PADDI
         new_starts = sorted({int(m.group(2)) for m in hunks})
         try:
             lines = _read_file_lines(file_path)
-        except (FileNotFoundError, OSError):
+        except FileNotFoundError, OSError:
             continue
         snippets: list[str] = []
         for start in new_starts:
@@ -90,3 +90,17 @@ def compute_file_context(diff: str, context_padding: int = DEFAULT_CONTEXT_PADDI
         if snippets:
             blocks.append("\n\n".join(snippets))
     return "\n\n".join(blocks)
+
+
+def repo_root() -> Path:
+    """Return the git repo root, falling back to cwd."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(result.stdout.strip())
+    except subprocess.CalledProcessError, FileNotFoundError:
+        return Path.cwd()
