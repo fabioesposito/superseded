@@ -18,6 +18,13 @@ dev = [
     "ruff>=0.9.0",
 ]
 
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+    "pyjwt>=2.10.0",
+]
+
 [project.scripts]
 superseded = "superseded.cli:cli"
 
