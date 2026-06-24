@@ -644,7 +644,8 @@
             <h1>AI code review<br>that <span class="accent">learns</span></h1>
             <p class="hero-sub">
                 Multi-pass review powered by Claude, GPT, or local models.
-                Runs from your terminal or GitHub Actions. Remembers what you dismiss.
+                Feeds grounded context from linters and cross-file usage into every pass.
+                Remembers what you dismiss — and why.
             </p>
             <div class="hero-actions">
                 <a href="#get-started" class="btn btn-primary">Get Started</a>
@@ -671,6 +672,7 @@
                     <div><span class="prompt">$ </span><span class="cmd">superseded review --pr 42 --agent claude-code</span></div>
                     <div class="output">&nbsp;</div>
                     <div class="output">Fetching diff...</div>
+                    <div class="output">Gathering context...</div>
                     <div class="output">Running review with claude-code...</div>
                     <div class="output">&nbsp;</div>
                     <div class="output">Sev          Pass           File                           Line   Title</div>
@@ -691,7 +693,7 @@
             <div class="section-label">How it works</div>
             <h2>Five passes, one command</h2>
             <p class="section-sub">
-                Each pass sends a targeted prompt to an AI agent in parallel. Findings come back as structured JSON — merged, deduplicated, and sorted by severity.
+                Each pass sends a curated prompt to an AI agent in parallel — grounded in linter output, cross-file usage, and past feedback. Findings come back as structured JSON — merged, deduplicated, and sorted by severity.
             </p>
             <div class="flow">
                 <div class="flow-step">
@@ -705,7 +707,21 @@
                     <div class="flow-icon"> Feedback</div>
                     <div class="flow-content">
                         <h3>Load feedback memory</h3>
-                        <p>Query the local SQLite store for previously dismissed findings. Inject them as negative context so the agent avoids repeating patterns you've already flagged.</p>
+                        <p>Query the local SQLite store for previously dismissed findings — including why the agent flagged them. Inject as negative context so the agent avoids repeating patterns you've already flagged.</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-icon">⚡</div>
+                    <div class="flow-content">
+                        <h3>Run static analysis</h3>
+                        <p>Auto-detect linters and scanners (ruff, mypy, eslint, bandit, gitleaks, go vet, …) and run them over changed files. Deterministic signals injected as context before the AI sees the diff.</p>
+                    </div>
+                </div>
+                <div class="flow-step">
+                    <div class="flow-icon"> </div>
+                    <div class="flow-content">
+                        <h3>Retrieve cross-file usages</h3>
+                        <p>Extract symbols from changed code, then use ripgrep to find callers across the repository. Surfaces breakage risk that a human reviewer might miss.</p>
                     </div>
                 </div>
                 <div class="flow-step">
@@ -756,7 +772,7 @@
                 <div class="feature">
                     <div class="feature-icon"> </div>
                     <h3>Feedback memory</h3>
-                    <p>SQLite store tracks which findings humans dismiss. Future reviews avoid repeating dismissed patterns. The tool learns from your team.</p>
+                    <p>SQLite store tracks which findings humans dismiss — and why the agent flagged them. Future reviews learn from your team's decisions, not just labels.</p>
                 </div>
                 <div class="feature">
                     <div class="feature-icon"> </div>
@@ -777,6 +793,21 @@
                     <div class="feature-icon"> </div>
                     <h3>CI-native</h3>
                     <p>Docker-based GitHub Action. Runs on every PR. Configurable passes and agents. Results posted directly to the PR as review comments.</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Static analysis pre-pass</h3>
+                    <p>Auto-detects linters and security scanners from your repo config. Runs them over changed files before the AI sees the diff. Deterministic signals, zero config.</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon"> </div>
+                    <h3>Cross-file usage retrieval</h3>
+                    <p>Extracts symbols from changed code, then uses ripgrep to find callers across the repository. Surfaces breakage risk that a human reviewer might miss.</p>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon"> </div>
+                    <h3>Reasoning trail</h3>
+                    <p>Each finding includes the agent's rationale. When humans dismiss a finding, the reasoning is persisted and fed back as context. Collapsible details in markdown and PR comments.</p>
                 </div>
             </div>
         </div>
