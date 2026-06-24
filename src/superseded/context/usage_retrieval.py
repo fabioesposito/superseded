@@ -92,24 +92,20 @@ def extract_symbols(diff: str, lang: str) -> list[str]:
     seen: set[str] = set()
     symbols: list[str] = []
 
-    def add(name: str | None) -> bool:
+    def add(name: str | None) -> None:
         if name and name not in _KEYWORDS and name not in seen:
             seen.add(name)
             symbols.append(name)
-            return len(symbols) >= MAX_SYMBOLS
-        return False
 
     for m in primary_re.finditer(added_lines):
         name = next((g for g in m.groups() if g is not None), None)
-        if add(name):
-            break
+        add(name)
 
-    if primary_re is not _GENERIC_RE and len(symbols) < MAX_SYMBOLS:
+    if primary_re is not _GENERIC_RE:
         for m in _GENERIC_RE.finditer(added_lines):
-            if add(m.group(1)):
-                break
+            add(m.group(1))
 
-    return symbols
+    return symbols[-MAX_SYMBOLS:]
 
 
 def retrieve_usages(diff: str, root: Path) -> str | None:
@@ -129,10 +125,7 @@ def retrieve_usages(diff: str, root: Path) -> str | None:
                 if sym not in seen:
                     seen.add(sym)
                     symbols.append(sym)
-                    if len(symbols) >= MAX_SYMBOLS:
-                        break
-            if len(symbols) >= MAX_SYMBOLS:
-                break
+        symbols = symbols[-MAX_SYMBOLS:]
     else:
         changed_files = []
         symbols = extract_symbols(diff, "python")
