@@ -10,7 +10,7 @@ PassName = Literal["security", "correctness", "performance", "style", "architect
 
 
 class Finding(BaseModel):
-    pass_name: str
+    pass_name: PassName
     severity: Severity
     file: str
     line: int
@@ -27,7 +27,7 @@ class Finding(BaseModel):
 
 
 class ReviewResult(BaseModel):
-    findings: list[Finding] = []
+    findings: list[Finding] = Field(default_factory=list)
 
     @property
     def summary(self) -> dict[str, int]:
