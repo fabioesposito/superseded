@@ -43,7 +43,6 @@ def test_checkout_repo_calls_git_clone(mock_create):
             owner="octocat",
             repo="hello-world",
             ref="abc123",
-            base_ref="main",
             tmp_dir="/tmp/test/checkout",
         )
 
@@ -70,7 +69,6 @@ def test_checkout_repo_failure_raises(mock_create):
             owner="no",
             repo="such-repo",
             ref="abc",
-            base_ref="main",
             tmp_dir="/tmp/test/fail",
         )
 
@@ -98,7 +96,6 @@ def test_checkout_repo_does_not_use_branch_flag_for_sha(mock_create):
             owner="octocat",
             repo="hello-world",
             ref="abc123def456",
-            base_ref="main",
             tmp_dir="/tmp/test/checkout",
         )
 

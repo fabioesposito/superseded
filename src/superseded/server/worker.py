@@ -177,7 +177,6 @@ async def _run_review_for_job(
             owner=job.owner,
             repo=job.repo,
             ref=job.head_sha,
-            base_ref=job.base_sha,
             tmp_dir=str(tmp_dir),
         )
 

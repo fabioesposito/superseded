@@ -10,7 +10,6 @@ async def checkout_repo(
     owner: str,
     repo: str,
     ref: str,
-    base_ref: str,
     tmp_dir: str,
 ) -> Path:
     target = Path(tmp_dir)
