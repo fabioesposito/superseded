@@ -113,3 +113,9 @@ def test_nonzero_exit_still_parses(tmp_path, monkeypatch):
 def test_no_tools_detected_returns_none():
     result = run_static_analysis(["a.py"], Path("/nonexistent"), {"rust"})
     assert result is None
+
+
+def test_gitleaks_parse_output_invalid_json_returns_empty():
+    tool = GitleaksTool()
+    result = tool.parse_output("not valid json", "", Path("/repo"), ["a.py"])
+    assert result == ""

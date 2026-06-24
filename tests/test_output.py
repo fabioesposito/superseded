@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from unittest.mock import MagicMock, patch
 
 from superseded.models import Finding, ReviewResult
@@ -313,3 +314,19 @@ def test_pr_comment_excludes_reasoning_when_empty():
 
     body = payloads[0]["comments"][0]["body"]
     assert "<details>" not in body
+
+
+def test_current_repo_returns_none_on_called_process_error():
+    with patch(
+        "superseded.output.github_pr._repo", side_effect=subprocess.CalledProcessError(1, "gh")
+    ):
+        from superseded.output.github_pr import current_repo
+
+        assert current_repo() is None
+
+
+def test_current_repo_returns_none_on_file_not_found():
+    with patch("superseded.output.github_pr._repo", side_effect=FileNotFoundError):
+        from superseded.output.github_pr import current_repo
+
+        assert current_repo() is None
