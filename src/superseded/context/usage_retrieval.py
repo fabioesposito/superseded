@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import keyword
 import logging
 import re
 import subprocess
@@ -41,48 +42,10 @@ _GO_SYMBOL_RE = re.compile(
 _GENERIC_RE = re.compile(r"\b([A-Za-z_]\w{3,})\b")
 
 _KEYWORDS = frozenset(
-    {
+    set(keyword.kwlist)
+    | {
         "self",
         "cls",
-        "return",
-        "if",
-        "else",
-        "for",
-        "while",
-        "import",
-        "from",
-        "const",
-        "let",
-        "var",
-        "func",
-        "type",
-        "package",
-        "struct",
-        "interface",
-        "def",
-        "class",
-        "async",
-        "await",
-        "yield",
-        "with",
-        "as",
-        "try",
-        "except",
-        "finally",
-        "raise",
-        "pass",
-        "break",
-        "continue",
-        "elif",
-        "lambda",
-        "not",
-        "and",
-        "or",
-        "in",
-        "is",
-        "None",
-        "True",
-        "False",
         "print",
         "this",
         "new",
@@ -90,6 +53,10 @@ _KEYWORDS = frozenset(
         "typeof",
         "instanceof",
         "void",
+        "func",
+        "package",
+        "struct",
+        "interface",
     }
 )
 
