@@ -94,13 +94,15 @@ def test_dismissed_by_comment_id():
     asyncio.run(_test_dismissed_by_comment_id())
 
 
+@patch("superseded.memory.feedback.check_resolved_threads")
 @patch("subprocess.run")
-def test_check_pr_feedback_returns_reactions_and_resolution(mock_run):
+def test_check_pr_feedback_returns_reactions_and_resolution(mock_run, mock_resolved):
+    mock_resolved.return_value = set()
     mock_run.return_value = MagicMock(
         returncode=0,
         stdout=(
-            '{"id": 1, "body": "test", "path": "a.py", "line": 1, "reactions": {"+1": 0, "-1": 2}, "resolved": true}\n'
-            '{"id": 2, "body": "good", "path": "b.py", "line": 2, "reactions": {"+1": 3, "-1": 0}, "resolved": false}\n'
+            '{"id": 1, "body": "test", "path": "a.py", "line": 1, "reactions": {"+1": 0, "-1": 2}}\n'
+            '{"id": 2, "body": "good", "path": "b.py", "line": 2, "reactions": {"+1": 3, "-1": 0}}\n'
         ),
     )
     feedback = check_pr_feedback(pr=123, repo="owner/repo")
@@ -108,18 +110,21 @@ def test_check_pr_feedback_returns_reactions_and_resolution(mock_run):
     assert isinstance(feedback[0], dict)
     assert feedback[0]["id"] == 1
     assert feedback[0]["reactions"]["-1"] == 2
-    assert feedback[0]["resolved"] is True
     assert feedback[1]["reactions"]["+1"] == 3
 
 
+@patch("superseded.memory.feedback.check_resolved_threads")
 @patch("subprocess.run")
-def test_check_pr_feedback_empty(mock_run):
+def test_check_pr_feedback_empty(mock_run, mock_resolved):
+    mock_resolved.return_value = set()
     mock_run.return_value = MagicMock(returncode=0, stdout="")
     assert check_pr_feedback(pr=123, repo="owner/repo") == []
 
 
+@patch("superseded.memory.feedback.check_resolved_threads")
 @patch("subprocess.run")
-def test_check_pr_feedback_jq_uses_top_level_line(mock_run):
+def test_check_pr_feedback_jq_uses_top_level_line(mock_run, mock_resolved):
+    mock_resolved.return_value = set()
     mock_run.return_value = MagicMock(returncode=0, stdout="")
     check_pr_feedback(pr=123, repo="owner/repo")
     cmd = mock_run.call_args.args[0]
