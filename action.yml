@@ -1,0 +1,24 @@
+name: "Superseded Code Review"
+description: "Multi-pass AI code review on pull requests"
+inputs:
+  agent:
+    description: "AI CLI agent (claude-code, opencode, codex)"
+    required: false
+    default: "claude-code"
+  model:
+    description: "Model to use"
+    required: false
+    default: ""
+  passes:
+    description: "Comma-separated passes to run"
+    required: false
+    default: "security,correctness,performance,style,architecture"
+  post:
+    description: "Post review to GitHub PR"
+    required: false
+    default: "true"
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  env:
+    GITHUB_TOKEN: ${{ github.token }}

@@ -1,0 +1,11 @@
+agent: claude-code
+model: null
+passes:
+  security: true
+  correctness: true
+  performance: true
+  style: true
+  architecture: true
+post_to_pr: false
+format: table
+memory: true
