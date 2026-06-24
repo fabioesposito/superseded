@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import MagicMock, patch
 
 from superseded.models import Finding, ReviewResult
+from superseded.output.github_pr import post_review_to_pr
 from superseded.output.json_out import format_json
 from superseded.output.markdown import format_markdown
 from superseded.output.table import format_table
@@ -52,3 +54,15 @@ def test_empty_result():
     result = ReviewResult(findings=[])
     assert "No issues" in format_markdown(result).lower() or format_markdown(result).strip() != ""
     assert "No issues" in format_table(result).lower() or format_table(result).strip() != ""
+
+
+@patch("subprocess.run")
+def test_post_review_to_pr(mock_run):
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    result = make_result()
+    post_review_to_pr(pr=123, result=result, repo="owner/repo")
+    # Should call gh api to create a review
+    assert mock_run.called
+    args = mock_run.call_args[0][0]
+    assert "gh" in args
+    assert "api" in args
