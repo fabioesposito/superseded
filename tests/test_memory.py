@@ -138,18 +138,20 @@ def test_check_pr_feedback_jq_uses_top_level_line(mock_run, mock_resolved):
 def test_check_resolved_threads_empty(mock_run):
     mock_run.return_value = MagicMock(
         returncode=0,
-        stdout=json.dumps({
-            "data": {
-                "repository": {
-                    "pullRequest": {
-                        "reviewThreads": {
-                            "nodes": [],
-                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        stdout=json.dumps(
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "reviewThreads": {
+                                "nodes": [],
+                                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            }
                         }
                     }
                 }
             }
-        }),
+        ),
     )
     resolved = check_resolved_threads(pr=123, owner="o", repo="r")
     assert resolved == set()
@@ -159,27 +161,29 @@ def test_check_resolved_threads_empty(mock_run):
 def test_check_resolved_threads_finds_resolved(mock_run):
     mock_run.return_value = MagicMock(
         returncode=0,
-        stdout=json.dumps({
-            "data": {
-                "repository": {
-                    "pullRequest": {
-                        "reviewThreads": {
-                            "nodes": [
-                                {
-                                    "isResolved": True,
-                                    "comments": {"nodes": [{"databaseId": 9001}]},
-                                },
-                                {
-                                    "isResolved": False,
-                                    "comments": {"nodes": [{"databaseId": 9002}]},
-                                },
-                            ],
-                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        stdout=json.dumps(
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "reviewThreads": {
+                                "nodes": [
+                                    {
+                                        "isResolved": True,
+                                        "comments": {"nodes": [{"databaseId": 9001}]},
+                                    },
+                                    {
+                                        "isResolved": False,
+                                        "comments": {"nodes": [{"databaseId": 9002}]},
+                                    },
+                                ],
+                                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            }
                         }
                     }
                 }
             }
-        }),
+        ),
     )
     resolved = check_resolved_threads(pr=1, owner="o", repo="r")
     assert resolved == {9001}
@@ -190,43 +194,47 @@ def test_check_resolved_threads_pagination(mock_run):
     mock_run.side_effect = [
         MagicMock(
             returncode=0,
-            stdout=json.dumps({
-                "data": {
-                    "repository": {
-                        "pullRequest": {
-                            "reviewThreads": {
-                                "nodes": [
-                                    {
-                                        "isResolved": True,
-                                        "comments": {"nodes": [{"databaseId": 1}]},
-                                    }
-                                ],
-                                "pageInfo": {"hasNextPage": True, "endCursor": "c1"},
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "repository": {
+                            "pullRequest": {
+                                "reviewThreads": {
+                                    "nodes": [
+                                        {
+                                            "isResolved": True,
+                                            "comments": {"nodes": [{"databaseId": 1}]},
+                                        }
+                                    ],
+                                    "pageInfo": {"hasNextPage": True, "endCursor": "c1"},
+                                }
                             }
                         }
                     }
                 }
-            }),
+            ),
         ),
         MagicMock(
             returncode=0,
-            stdout=json.dumps({
-                "data": {
-                    "repository": {
-                        "pullRequest": {
-                            "reviewThreads": {
-                                "nodes": [
-                                    {
-                                        "isResolved": True,
-                                        "comments": {"nodes": [{"databaseId": 2}]},
-                                    }
-                                ],
-                                "pageInfo": {"hasNextPage": False, "endCursor": None},
+            stdout=json.dumps(
+                {
+                    "data": {
+                        "repository": {
+                            "pullRequest": {
+                                "reviewThreads": {
+                                    "nodes": [
+                                        {
+                                            "isResolved": True,
+                                            "comments": {"nodes": [{"databaseId": 2}]},
+                                        }
+                                    ],
+                                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                                }
                             }
                         }
                     }
                 }
-            }),
+            ),
         ),
     ]
     resolved = check_resolved_threads(pr=1, owner="o", repo="r")
@@ -249,3 +257,37 @@ def test_check_resolved_threads_invalid_json_returns_empty(mock_run):
     mock_run.return_value = MagicMock(returncode=0, stdout="not json")
     resolved = check_resolved_threads(pr=1, owner="o", repo="r")
     assert resolved == set()
+
+
+@patch("superseded.memory.feedback.check_resolved_threads")
+@patch("subprocess.run")
+def test_check_pr_feedback_merges_resolved_threads(mock_run, mock_resolved):
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout=(
+            '{"id": 1, "body": "x", "path": "a.py", "line": 1, "reactions": {"+1": 0, "-1": 0}}\n'
+            '{"id": 2, "body": "y", "path": "b.py", "line": 2, "reactions": {"+1": 0, "-1": 0}}\n'
+        ),
+    )
+    mock_resolved.return_value = {2}
+
+    feedback = check_pr_feedback(pr=1, repo="o/r")
+
+    assert len(feedback) == 2
+    assert feedback[0].get("resolved") is not True
+    assert feedback[1]["resolved"] is True
+
+
+@patch("superseded.memory.feedback.check_resolved_threads")
+@patch("subprocess.run")
+def test_check_pr_feedback_no_resolved_threads(mock_run, mock_resolved):
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout='{"id": 1, "body": "x", "path": "a.py", "line": 1, "reactions": {"+1": 0, "-1": 0}}\n',
+    )
+    mock_resolved.return_value = set()
+
+    feedback = check_pr_feedback(pr=1, repo="o/r")
+
+    assert len(feedback) == 1
+    assert feedback[0].get("resolved") is not True
