@@ -246,8 +246,64 @@ def _run_feedback_check(pr: int) -> None:
         ok = asyncio.run(store.record_feedback_by_comment_id(int(cid), action))
         if ok:
             recorded += 1
-            click.echo(f"Recorded {action} for comment {cid}.")
-    click.echo(f"Checked {len(comments)} comment(s); recorded feedback on {recorded}.")
+    click.echo(f"Recorded {action} for comment {cid}.")
+
+
+@cli.command()
+@click.option("--port", type=int, default=None, help="Server port")
+@click.option("--host", default=None, help="Server host")
+@click.option("--config", "config_path", default=None, help="Server config file path")
+def serve(port: int | None, host: str | None, config_path: str | None) -> None:
+    """Start the Superseded review server."""
+    from pathlib import Path
+
+    from superseded.server.config import ServerConfig
+    from superseded.server.github import GitHubApp
+    from superseded.server.repo_manager import RepoManager
+    from superseded.server.worker import ReviewWorker
+
+    config = ServerConfig.from_yaml(Path(config_path)) if config_path else ServerConfig.from_env()
+
+    if port is not None:
+        config.port = port
+    if host is not None:
+        config.host = host
+
+    github = GitHubApp(
+        app_id=config.app_id,
+        private_key_path=config.private_key_path,
+        webhook_secret=config.webhook_secret,
+    )
+    repo_manager = RepoManager(base_path=config.temp_dir)
+    worker = ReviewWorker(
+        github=github,
+        repo_manager=repo_manager,
+        max_concurrent=config.max_concurrent_reviews,
+    )
+
+    import uvicorn
+
+    from superseded.server.app import create_app
+    from superseded.server.lifecycle import ServerLifecycle
+
+    app = create_app(config=config, github=github, worker=worker)
+    lifecycle = ServerLifecycle(app=app, worker=worker)
+
+    @app.on_event("startup")
+    async def on_startup() -> None:
+        await lifecycle.startup()
+
+    @app.on_event("shutdown")
+    async def on_shutdown() -> None:
+        await lifecycle.shutdown()
+
+    logging.basicConfig(
+        level=getattr(logging, config.log_level.upper(), logging.INFO),
+        format="%(message)s",
+    )
+
+    click.echo(f"Starting Superseded server on {config.host}:{config.port}")
+    uvicorn.run(app, host=config.host, port=config.port, log_level=config.log_level)
 
 
 def _classify_feedback(comment: dict) -> str | None:
