@@ -81,8 +81,7 @@ def test_run_pass_raises_on_timeout():
             engine.run_pass("security", "prompt")
 
 
-@pytest.mark.asyncio
-async def test_review_continues_when_one_pass_fails():
+def test_review_continues_when_one_pass_fails():
     engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
     engine.config.is_pass_enabled = lambda name: True
 
