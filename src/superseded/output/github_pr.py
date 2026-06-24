@@ -9,14 +9,21 @@ from superseded.models import ReviewResult
 def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) -> list[int]:
     comments = []
     for f in result.findings:
+        body_text = (
+            f"**[{f.severity.upper()}] {f.title}** ({f.pass_name})\n\n"
+            f"{f.description}\n\n"
+        )
+        if f.reasoning:
+            body_text += (
+                "<details><summary>Reasoning</summary>\n\n"
+                f"{f.reasoning}\n\n"
+                "</details>\n\n"
+            )
+        body_text += f"**Suggestion:** {f.suggestion}"
         comment: dict = {
             "path": f.file,
             "line": f.end_line,
-            "body": (
-                f"**[{f.severity.upper()}] {f.title}** ({f.pass_name})\n\n"
-                f"{f.description}\n\n"
-                f"**Suggestion:** {f.suggestion}"
-            ),
+            "body": body_text,
         }
         if f.line != f.end_line:
             comment["start_line"] = f.line

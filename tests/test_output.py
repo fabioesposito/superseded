@@ -230,3 +230,47 @@ def test_reasoning_in_correct_position():
     details_pos = result.index("<details>")
     suggestion_pos = result.index("**Suggestion:**")
     assert desc_pos < details_pos < suggestion_pos
+
+
+def test_pr_comment_includes_reasoning_when_present():
+    f = _finding(reasoning="Suspicious pattern detected")
+    result = ReviewResult(findings=[f])
+    payloads = []
+
+    def fake_run(cmd, **kwargs):
+        payloads.append(json.loads(kwargs.get("input", "{}")))
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stderr="",
+        )
+
+    with patch("superseded.output.github_pr.subprocess.run", side_effect=fake_run):
+        with patch("superseded.output.github_pr._repo", return_value="owner/repo"):
+            post_review_to_pr(pr=1, result=result)
+
+    assert payloads
+    body = payloads[0]["comments"][0]["body"]
+    assert "<details>" in body
+    assert "Suspicious pattern detected" in body
+
+
+def test_pr_comment_excludes_reasoning_when_empty():
+    f = _finding(reasoning="")
+    result = ReviewResult(findings=[f])
+    payloads = []
+
+    def fake_run(cmd, **kwargs):
+        payloads.append(json.loads(kwargs.get("input", "{}")))
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stderr="",
+        )
+
+    with patch("superseded.output.github_pr.subprocess.run", side_effect=fake_run):
+        with patch("superseded.output.github_pr._repo", return_value="owner/repo"):
+            post_review_to_pr(pr=1, result=result)
+
+    body = payloads[0]["comments"][0]["body"]
+    assert "<details>" not in body
