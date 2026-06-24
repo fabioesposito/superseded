@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from superseded.context.static_analysis import (
     STATIC_BUDGET,
@@ -125,3 +125,28 @@ def test_gitleaks_parse_output_invalid_json_returns_empty():
 def test_tools_sorted_alphabetically():
     names = [t.name for t in TOOLS]
     assert names == sorted(names)
+
+
+def test_budget_truncation_per_finding_not_per_tool():
+    huge_output = "x" * (STATIC_BUDGET + 100)
+
+    mock_tool = MagicMock()
+    mock_tool.name = "mock"
+    mock_tool.languages = ["*"]
+    mock_tool.detect.return_value = True
+    mock_tool.build_command.return_value = ["echo"]
+    mock_tool.parse_output.return_value = huge_output
+
+    mock_result = MagicMock()
+    mock_result.returncode = 0
+    mock_result.stdout = huge_output
+    mock_result.stderr = ""
+
+    with (
+        patch("superseded.context.static_analysis.subprocess.run", return_value=mock_result),
+        patch("superseded.context.static_analysis.TOOLS", [mock_tool]),
+    ):
+        result = run_static_analysis(["a.py"], Path("/tmp"))
+
+    assert result is not None
+    assert "omitted" in result.lower()

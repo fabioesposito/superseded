@@ -284,11 +284,36 @@ def run_static_analysis(
         current_len = 0
         for block in blocks:
             sep = "\n\n" if included else ""
-            if current_len + len(sep) + len(block) > STATIC_BUDGET:
+            block_lines = block.splitlines(keepends=True)
+            header = block_lines[0] if block_lines else ""
+            body_lines = block_lines[1:] if len(block_lines) > 1 else []
+
+            if current_len + len(sep) + len(block) <= STATIC_BUDGET:
+                included.append(block)
+                current_len += len(sep) + len(block)
+                continue
+
+            truncated = header
+            kept = 0
+            for line in body_lines:
+                if current_len + len(sep) + len(truncated) + len(line) > STATIC_BUDGET:
+                    break
+                truncated += line
+                kept += 1
+
+            if kept > 0:
+                remaining = len(body_lines) - kept
+                if remaining > 0:
+                    truncated += (
+                        f"\n… ({remaining} more finding(s) omitted by static-analysis budget)\n"
+                    )
+                included.append(truncated)
+                current_len += len(sep) + len(truncated)
+            else:
                 break
-            included.append(block)
-            current_len += len(sep) + len(block)
+
         omitted = len(blocks) - len(included)
         aggregate = "\n\n".join(included)
-        aggregate += f"\n… ({omitted} tool output(s) omitted by static-analysis budget)"
+        if omitted > 0:
+            aggregate += f"\n… ({omitted} tool output(s) omitted by static-analysis budget)"
     return aggregate
