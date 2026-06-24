@@ -44,14 +44,18 @@ def build_review_payload(result: ReviewResult) -> dict:
     return {"event": event, "body": body, "comments": comments}
 
 
+def _post_review_payload(payload: dict, target_repo: str, pr: int) -> list[int]:
+    cmd = ["gh", "api", f"repos/{target_repo}/pulls/{pr}/reviews", "--input", "-"]
+    response = subprocess.run(
+        cmd, input=json.dumps(payload), text=True, capture_output=True, check=True
+    )
+    return _extract_comment_ids(response.stdout)
+
+
 def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) -> list[int]:
     payload = build_review_payload(result)
     target_repo = repo if repo is not None else _repo()
-    cmd = ["gh", "api", f"repos/{target_repo}/pulls/{pr}/reviews", "--input", "-"]
-    response = subprocess.run(
-        cmd, input=json.dumps(payload), text=True, check=True, capture_output=True
-    )
-    return _extract_comment_ids(response.stdout)
+    return _post_review_payload(payload, target_repo, pr)
 
 
 def _extract_comment_ids(stdout: str) -> list[int]:
