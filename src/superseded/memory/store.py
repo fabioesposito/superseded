@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import aiosqlite
@@ -26,6 +27,14 @@ CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     finding_id TEXT REFERENCES findings(id),
     action TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS installations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_installation_id INTEGER UNIQUE NOT NULL,
+    owner TEXT NOT NULL,
+    repos TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -117,3 +126,32 @@ class MemoryStore:
             )
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
+
+    async def record_installation(
+        self, installation_id: int, owner: str, repos: list[str]
+    ) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO installations (app_installation_id, owner, repos) "
+                "VALUES (?, ?, ?)",
+                (installation_id, owner, json.dumps(repos)),
+            )
+            await db.commit()
+
+    async def get_installation(self, installation_id: int) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM installations WHERE app_installation_id = ?",
+                (installation_id,),
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row is not None else None
+
+    async def remove_installation(self, installation_id: int) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "DELETE FROM installations WHERE app_installation_id = ?",
+                (installation_id,),
+            )
+            await db.commit()
