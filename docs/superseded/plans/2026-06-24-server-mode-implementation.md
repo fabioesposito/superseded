@@ -46,7 +46,7 @@
 - Create: `src/superseded/server/config.py`
 - Create: `tests/test_server_config.py`
 
-- [ ] **Step 1: Add server optional dependencies to pyproject.toml**
+- [x] **Step 1: Add server optional dependencies to pyproject.toml**
 
 Edit `pyproject.toml` — add after the `dev` dependency group:
 
@@ -59,7 +59,7 @@ server = [
 ]
 ```
 
-- [ ] **Step 2: Create server package init**
+- [x] **Step 2: Create server package init**
 
 Create `src/superseded/server/__init__.py`:
 
@@ -67,7 +67,7 @@ Create `src/superseded/server/__init__.py`:
 from __future__ import annotations
 ```
 
-- [ ] **Step 3: Write failing test for server config**
+- [x] **Step 3: Write failing test for server config**
 
 Create `tests/test_server_config.py`:
 
@@ -134,12 +134,12 @@ def test_server_config_from_yaml(tmp_path):
     assert config.log_level == "debug"
 ```
 
-- [ ] **Step 4: Run test to verify it fails**
+- [x] **Step 4: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_server_config.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'superseded.server.config'`
 
-- [ ] **Step 5: Implement server config**
+- [x] **Step 5: Implement server config**
 
 Create `src/superseded/server/config.py`:
 
@@ -218,12 +218,12 @@ class ServerConfig(BaseModel):
         return cls(**data)
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_server_config.py -v`
 Expected: PASS (note: `from_env` test requires a real private key file — adjust test to create a temp key file)
 
-- [ ] **Step 7: Fix test to use temp key file**
+- [x] **Step 7: Fix test to use temp key file**
 
 Update `tests/test_server_config.py` — replace `test_server_config_from_env` with:
 
@@ -257,12 +257,12 @@ def test_server_config_from_env_missing(monkeypatch):
         ServerConfig.from_env()
 ```
 
-- [ ] **Step 8: Run all tests again**
+- [x] **Step 8: Run all tests again**
 
 Run: `uv run pytest tests/test_server_config.py -v`
 Expected: ALL PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add pyproject.toml src/superseded/server/ tests/test_server_config.py
@@ -277,7 +277,7 @@ git commit -m "feat(server): add server config model with env/YAML loading"
 - Create: `src/superseded/server/github.py`
 - Create: `tests/test_server_github.py`
 
-- [ ] **Step 1: Write failing tests for webhook verification**
+- [x] **Step 1: Write failing tests for webhook verification**
 
 Create `tests/test_server_github.py`:
 
@@ -340,12 +340,12 @@ def test_verify_webhook_empty_signature(app):
     assert app.verify_webhook(b"payload", "") is False
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_server_github.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Implement webhook verification**
+- [x] **Step 3: Implement webhook verification**
 
 Create `src/superseded/server/github.py`:
 
@@ -499,12 +499,12 @@ class GitHubApp:
             return response.json()["id"]
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_server_github.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Add JWT and httpx as server deps**
+- [x] **Step 5: Add JWT and httpx as server deps**
 
 The `pyjwt` and `httpx` packages should already be in `pyproject.toml` from Task 1. Verify `httpx` is in the `[server]` extras. If not, add it:
 
@@ -518,7 +518,7 @@ server = [
 ]
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/server/github.py tests/test_server_github.py pyproject.toml
@@ -533,7 +533,7 @@ git commit -m "feat(server): add GitHub App auth and webhook verification"
 - Modify: `src/superseded/memory/store.py`
 - Create: `tests/test_server_store.py`
 
-- [ ] **Step 1: Write failing tests for installations table**
+- [x] **Step 1: Write failing tests for installations table**
 
 Create `tests/test_server_store.py`:
 
@@ -629,12 +629,12 @@ def test_remove_installation(store):
     assert result is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_server_store.py -v`
 Expected: FAIL with `AttributeError: 'MemoryStore' object has no attribute 'record_installation'`
 
-- [ ] **Step 3: Implement installations methods in MemoryStore**
+- [x] **Step 3: Implement installations methods in MemoryStore**
 
 Edit `src/superseded/memory/store.py` — add to SCHEMA:
 
@@ -706,17 +706,17 @@ Add these methods to the `MemoryStore` class:
 
 Add `import json` at the top of `store.py`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_server_store.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Run all existing tests to verify no regressions**
+- [x] **Step 5: Run all existing tests to verify no regressions**
 
 Run: `uv run pytest tests/ -v`
 Expected: ALL PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/memory/store.py tests/test_server_store.py
@@ -732,7 +732,7 @@ git commit -m "feat(server): add installations table to memory store"
 - Create: `src/superseded/server/repo_manager.py`
 - Create: `tests/test_server_checkout.py`
 
-- [ ] **Step 1: Write failing tests for checkout**
+- [x] **Step 1: Write failing tests for checkout**
 
 Create `tests/test_server_checkout.py`:
 
@@ -813,12 +813,12 @@ def test_checkout_repo_failure_raises(mock_run):
         asyncio.run(_test())
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_server_checkout.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Implement checkout module**
+- [x] **Step 3: Implement checkout module**
 
 Create `src/superseded/server/checkout.py`:
 
@@ -865,7 +865,7 @@ async def checkout_repo(
     return target
 ```
 
-- [ ] **Step 4: Implement repo manager**
+- [x] **Step 4: Implement repo manager**
 
 Create `src/superseded/server/repo_manager.py`:
 
@@ -893,12 +893,12 @@ class RepoManager:
         return self.base_path / str(installation_id) / owner / repo / str(pr_number)
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_server_checkout.py -v`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/server/checkout.py src/superseded/server/repo_manager.py tests/test_server_checkout.py
@@ -913,7 +913,7 @@ git commit -m "feat(server): add repo checkout and manager modules"
 - Create: `src/superseded/server/worker.py`
 - Create: `tests/test_server_worker.py`
 
-- [ ] **Step 1: Write failing tests for worker**
+- [x] **Step 1: Write failing tests for worker**
 
 Create `tests/test_server_worker.py`:
 
@@ -1011,12 +1011,12 @@ async def test_worker_handles_failure_gracefully():
     github.create_check_run.assert_called_once()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_server_worker.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Implement worker module**
+- [x] **Step 3: Implement worker module**
 
 Create `src/superseded/server/worker.py`:
 
@@ -1243,12 +1243,12 @@ async def _run_review_for_job(
         repo_manager.cleanup(tmp_dir)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_server_worker.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/server/worker.py tests/test_server_worker.py
@@ -1263,7 +1263,7 @@ git commit -m "feat(server): add review worker with queue and concurrency contro
 - Create: `src/superseded/server/app.py`
 - Create: `tests/test_server_app.py`
 
-- [ ] **Step 1: Write failing tests for webhook endpoint**
+- [x] **Step 1: Write failing tests for webhook endpoint**
 
 Create `tests/test_server_app.py`:
 
@@ -1384,12 +1384,12 @@ def test_webhook_ignores_closed_pr(client):
     assert response.status_code == 200  # Still 200, just no job enqueued
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_server_app.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Implement FastAPI app**
+- [x] **Step 3: Implement FastAPI app**
 
 Create `src/superseded/server/app.py`:
 
@@ -1504,12 +1504,12 @@ async def _handle_installation_event(
         logger.info("installation_deleted", extra={"installation_id": installation["id"]})
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_server_app.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/server/app.py tests/test_server_app.py
@@ -1524,7 +1524,7 @@ git commit -m "feat(server): add FastAPI app with webhook and health endpoints"
 - Modify: `src/superseded/cli.py`
 - Create: `src/superseded/server/lifecycle.py`
 
-- [ ] **Step 1: Implement server lifecycle**
+- [x] **Step 1: Implement server lifecycle**
 
 Create `src/superseded/server/lifecycle.py`:
 
@@ -1578,7 +1578,7 @@ class ServerLifecycle:
         asyncio.create_task(self.shutdown())
 ```
 
-- [ ] **Step 2: Add `serve` command to CLI**
+- [x] **Step 2: Add `serve` command to CLI**
 
 Edit `src/superseded/cli.py` — add at the bottom before the closing of the file:
 
@@ -1643,17 +1643,17 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
     uvicorn.run(app, host=config.host, port=config.port, log_level=config.log_level)
 ```
 
-- [ ] **Step 3: Verify CLI entry point works**
+- [x] **Step 3: Verify CLI entry point works**
 
 Run: `uv run superseded serve --help`
 Expected: Shows help text with `--port`, `--host`, `--config` options
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 Run: `uv run pytest tests/ -v`
 Expected: ALL PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/cli.py src/superseded/server/lifecycle.py
@@ -1664,27 +1664,27 @@ git commit -m "feat(server): add serve CLI command and server lifecycle"
 
 ## Task 8: Lint, Format & Final Verification
 
-- [ ] **Step 1: Run ruff check**
+- [x] **Step 1: Run ruff check**
 
 Run: `uv run ruff check src/ tests/`
 Expected: No errors
 
-- [ ] **Step 2: Run ruff format**
+- [x] **Step 2: Run ruff format**
 
 Run: `uv run ruff format src/ tests/`
 Expected: No changes needed (or auto-formatted)
 
-- [ ] **Step 3: Run full test suite**
+- [x] **Step 3: Run full test suite**
 
 Run: `uv run pytest tests/ -v`
 Expected: ALL PASS
 
-- [ ] **Step 4: Verify server starts (manual smoke test)**
+- [x] **Step 4: Verify server starts (manual smoke test)**
 
 Run: `SUPERSEDED_APP_ID=1 SUPERSEDED_WEBHOOK_SECRET=test SUPERSEDED_PRIVATE_KEY_PATH=/dev/null uv run superseded serve --port 8000`
 Expected: Server starts, shows "Starting Superseded server on 0.0.0.0:8000" (will fail on private key validation, but the command itself should parse correctly)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A

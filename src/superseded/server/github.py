@@ -124,3 +124,28 @@ class GitHubApp:
             )
             response.raise_for_status()
             return response.json()["id"]
+
+    async def update_check_run(
+        self,
+        token: str,
+        owner: str,
+        repo: str,
+        check_run_id: int,
+        status: str,
+        conclusion: str | None = None,
+        title: str | None = None,
+        summary: str | None = None,
+    ) -> int:
+        payload: dict = {"status": status}
+        if conclusion is not None:
+            payload["conclusion"] = conclusion
+        if title is not None:
+            payload["output"] = {"title": title, "summary": summary or ""}
+        async with httpx.AsyncClient() as client:
+            response = await client.patch(
+                f"https://api.github.com/repos/{owner}/{repo}/check-runs/{check_run_id}",
+                headers=self._api_headers(token),
+                json=payload,
+            )
+            response.raise_for_status()
+            return check_run_id

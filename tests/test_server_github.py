@@ -46,3 +46,46 @@ def test_verify_webhook_missing_prefix(app):
 
 def test_verify_webhook_empty_signature(app):
     assert app.verify_webhook(b"payload", "") is False
+
+
+@pytest.mark.asyncio
+async def test_update_check_run_uses_patch(app, monkeypatch):
+    captured: dict = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            pass
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def patch(self, url, headers=None, json=None):
+            captured["url"] = url
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr("superseded.server.github.httpx.AsyncClient", FakeClient)
+
+    rid = await app.update_check_run(
+        token="tok",
+        owner="octocat",
+        repo="hello-world",
+        check_run_id=7,
+        status="completed",
+        conclusion="success",
+        title="ok",
+        summary="all good",
+    )
+
+    assert rid == 7
+    assert captured["url"] == "https://api.github.com/repos/octocat/hello-world/check-runs/7"
+    assert captured["json"]["status"] == "completed"
+    assert captured["json"]["conclusion"] == "success"
+    assert captured["json"]["output"] == {"title": "ok", "summary": "all good"}

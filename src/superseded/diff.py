@@ -16,22 +16,30 @@ def fetch_diff(pr: int | None = None, diff_range: str | None = None) -> str:
 
 
 def _fetch_pr_diff(pr: int) -> str:
-    result = subprocess.run(
-        ["gh", "pr", "diff", str(pr)],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "diff", str(pr)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError as err:
+        raise RuntimeError(
+            "'gh' CLI not found on PATH. Install it: https://cli.github.com/"
+        ) from err
     return result.stdout
 
 
 def _fetch_git_diff(diff_range: str) -> str:
-    result = subprocess.run(
-        ["git", "diff", diff_range],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "diff", diff_range],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError as err:
+        raise RuntimeError("'git' not found on PATH. Install git to use --diff.") from err
     return result.stdout
 
 
@@ -43,7 +51,7 @@ def fetch_pr_description(pr: int) -> str | None:
             text=True,
             check=True,
         )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return None
     body = result.stdout.strip()
     return body or None
@@ -68,7 +76,9 @@ def _read_file_lines(path: str) -> list[str]:
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 
 
-def compute_file_context(diff: str, context_padding: int = DEFAULT_CONTEXT_PADDING) -> str:
+def compute_file_context(
+    diff: str, context_padding: int = DEFAULT_CONTEXT_PADDING, root: Path | None = None
+) -> str:
     blocks: list[str] = []
     for entry in parse_diff_files(diff):
         file_path = entry["file"]
@@ -77,8 +87,9 @@ def compute_file_context(diff: str, context_padding: int = DEFAULT_CONTEXT_PADDI
             continue
         new_starts = sorted({int(m.group(2)) for m in hunks})
         try:
-            lines = _read_file_lines(file_path)
-        except (FileNotFoundError, OSError):
+            full = root / file_path if root is not None else Path(file_path)
+            lines = _read_file_lines(str(full))
+        except FileNotFoundError, OSError:
             continue
         snippets: list[str] = []
         for start in new_starts:
@@ -102,5 +113,5 @@ def repo_root() -> Path:
             check=True,
         )
         return Path(result.stdout.strip())
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return Path.cwd()

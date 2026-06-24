@@ -31,14 +31,16 @@ class ReviewEngine:
         self.config = config
 
     @classmethod
-    def select(cls, agent_name: str, model: str | None) -> ReviewEngine:
+    def select(
+        cls, agent_name: str, model: str | None, config: Config | None = None
+    ) -> ReviewEngine:
         from superseded.config import Config
 
         agent_cls = AGENT_MAP.get(agent_name)
         if agent_cls is None:
             raise ValueError(f"Unknown agent: {agent_name}. Choose from: {list(AGENT_MAP)}")
         agent = agent_cls(model=model)
-        return cls(agent=agent, config=Config())
+        return cls(agent=agent, config=config or Config())
 
     def run_pass(self, pass_name: str, prompt: str) -> list[Finding]:
         cmd = self.agent.build_command(prompt)
@@ -78,6 +80,11 @@ class ReviewEngine:
         usage_signals: str | None = None,
         passes: list[str] | None = None,
     ) -> ReviewResult:
+        if not self.agent.is_available():
+            raise RuntimeError(
+                f"Agent CLI '{self.agent.name}' not found on PATH. "
+                "Install it or choose a different agent with --agent."
+            )
         if passes is None:
             passes = [
                 n

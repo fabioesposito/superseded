@@ -12,8 +12,7 @@ def check_pr_feedback(pr: int, repo: str) -> list[dict]:
                 "api",
                 f"repos/{repo}/pulls/{pr}/comments",
                 "--jq",
-                ".[] | {id: .id, body: .body, path: .path, line: ..line, "
-                "reactions: .reactions, resolved: (._resolved // false)}",
+                ".[] | {id: .id, body: .body, path: .path, line: .line, reactions: .reactions}",
             ],
             capture_output=True,
             text=True,

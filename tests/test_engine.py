@@ -70,6 +70,17 @@ def test_run_pass_raises_on_nonzero_exit():
             engine.run_pass("security", "prompt")
 
 
+def test_run_pass_raises_on_timeout():
+    agent = MagicMock()
+    agent.build_command.return_value = ["fakeclaude"]
+    agent.parse_output.return_value = []
+    engine = ReviewEngine(agent=agent, config=MagicMock())
+    with patch("superseded.review.engine.subprocess.run") as mock_run:
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["fakeclaude"], timeout=300)
+        with pytest.raises(RuntimeError, match="timed out"):
+            engine.run_pass("security", "prompt")
+
+
 @pytest.mark.asyncio
 async def test_review_continues_when_one_pass_fails():
     engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
@@ -126,3 +137,10 @@ def test_run_pass_skips_and_logs_malformed_findings(caplog):
     assert len(findings) == 1
     assert findings[0].file == "a.py"
     assert "malformed" in caplog.text.lower() or "not-a-severity" in caplog.text
+
+
+def test_review_raises_when_agent_unavailable(monkeypatch):
+    engine = ReviewEngine.select("claude-code", model=None)
+    monkeypatch.setattr("shutil.which", lambda cmd: None)
+    with pytest.raises(RuntimeError, match=r"agent|PATH|not found"):
+        engine.review(diff="diff --git a/x.py b/x.py\n")

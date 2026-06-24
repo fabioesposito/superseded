@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, Request, Response
+from fastapi import BackgroundTasks, FastAPI, Request, Response
 
 if TYPE_CHECKING:
+    from superseded.memory.store import MemoryStore
     from superseded.server.config import ServerConfig
     from superseded.server.github import GitHubApp
+    from superseded.server.repo_manager import RepoManager
     from superseded.server.worker import ReviewWorker
 
 logger = logging.getLogger(__name__)
@@ -17,8 +20,11 @@ def create_app(
     config: ServerConfig,
     github: GitHubApp,
     worker: ReviewWorker,
+    repo_manager: RepoManager,
+    store: MemoryStore,
 ) -> FastAPI:
     app = FastAPI(title="Superseded", version="0.1.0")
+    start_time = time.time()
 
     @app.get("/health")
     async def health() -> dict:
@@ -26,10 +32,19 @@ def create_app(
             "status": "ok",
             "queue_depth": worker.queue.qsize(),
             "active_reviews": worker.active_count,
+            "disk_usage": repo_manager.disk_usage(),
+            "uptime_seconds": time.time() - start_time,
         }
 
+    @app.post("/review")
+    async def manual_review() -> Response:
+        return Response(
+            status_code=501,
+            content="Manual review trigger is not yet implemented (API-key auth is future work).",
+        )
+
     @app.post("/webhook")
-    async def webhook(request: Request) -> Response:
+    async def webhook(request: Request, background_tasks: BackgroundTasks) -> Response:
         payload = await request.body()
         signature = request.headers.get("X-Hub-Signature-256", "")
 
@@ -40,9 +55,11 @@ def create_app(
         data = await request.json()
 
         if event == "pull_request":
-            await _handle_pr_event(data, github, worker)
+            background_tasks.add_task(_handle_pr_event, data, github, worker)
         elif event == "installation":
-            await _handle_installation_event(data, github)
+            background_tasks.add_task(_handle_installation_event, data, store)
+        elif event == "push":
+            logger.info("webhook_push_received", extra={"ref": data.get("ref", "")})
 
         return Response(status_code=200, content="ok")
 
@@ -82,14 +99,11 @@ async def _handle_pr_event(
 
 async def _handle_installation_event(
     data: dict,
-    github: GitHubApp,
+    store: MemoryStore,
 ) -> None:
     action = data.get("action", "")
     installation = data["installation"]
 
-    from superseded.memory.store import MemoryStore
-
-    store = MemoryStore()
     await store.init()
 
     if action == "created":

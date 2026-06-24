@@ -6,12 +6,19 @@ import subprocess
 from superseded.models import ReviewResult
 
 
-def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) -> list[int]:
+def _escape_reasoning(reasoning: str) -> str:
+    return reasoning.replace("<", "&lt;").replace(">", "&gt;")
+
+
+def build_review_payload(result: ReviewResult) -> dict:
     comments = []
     for f in result.findings:
         body_text = f"**[{f.severity.upper()}] {f.title}** ({f.pass_name})\n\n{f.description}\n\n"
         if f.reasoning:
-            body_text += f"<details><summary>Reasoning</summary>\n\n{f.reasoning}\n\n</details>\n\n"
+            body_text += (
+                f"<details><summary>Reasoning</summary>\n\n"
+                f"{_escape_reasoning(f.reasoning)}\n\n</details>\n\n"
+            )
         body_text += f"**Suggestion:** {f.suggestion}"
         comment: dict = {
             "path": f.file,
@@ -34,12 +41,11 @@ def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) ->
     for sev, count in result.summary.items():
         body += f"- **{sev}:** {count}\n"
 
-    payload = {
-        "event": event,
-        "body": body,
-        "comments": comments,
-    }
+    return {"event": event, "body": body, "comments": comments}
 
+
+def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) -> list[int]:
+    payload = build_review_payload(result)
     target_repo = repo if repo is not None else _repo()
     cmd = ["gh", "api", f"repos/{target_repo}/pulls/{pr}/reviews", "--input", "-"]
     response = subprocess.run(
@@ -71,5 +77,5 @@ def _repo() -> str:
 def current_repo() -> str | None:
     try:
         return _repo()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return None

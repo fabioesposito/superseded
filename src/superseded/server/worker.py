@@ -7,10 +7,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from superseded.models import ReviewResult
     from superseded.server.github import GitHubApp
     from superseded.server.repo_manager import RepoManager
 
 logger = logging.getLogger(__name__)
+
+_SEVERITY_ORDER = ("critical", "important", "suggestion", "nit")
+DISK_USAGE_LIMIT = 0.9
 
 
 @dataclass
@@ -21,6 +25,20 @@ class ReviewJob:
     pr_number: int
     head_sha: str
     base_sha: str
+
+
+@dataclass
+class ReviewOutcome:
+    conclusion: str
+    title: str
+    summary: str
+
+
+def build_check_run_title(result: ReviewResult) -> str:
+    total = len(result.findings)
+    summary = result.summary
+    parts = [f"{summary[sev]} {sev}" for sev in _SEVERITY_ORDER if summary.get(sev, 0)]
+    return f"{total} findings ({', '.join(parts)})" if parts else f"{total} findings"
 
 
 class ReviewWorker:
@@ -77,12 +95,23 @@ class ReviewWorker:
                     status="in_progress",
                 )
 
-                await _run_review_for_job(
+                outcome = await _run_review_for_job(
                     github=self.github,
                     repo_manager=self.repo_manager,
                     token=token,
                     job=job,
                     correlation_id=correlation_id,
+                )
+
+                await self.github.update_check_run(
+                    token=token,
+                    owner=job.owner,
+                    repo=job.repo,
+                    check_run_id=check_run_id,
+                    status="completed",
+                    conclusion=outcome.conclusion,
+                    title=outcome.title,
+                    summary=outcome.summary,
                 )
             except Exception:
                 logger.exception(
@@ -96,12 +125,11 @@ class ReviewWorker:
                 if check_run_id is not None:
                     try:
                         token = await self.github.get_installation_token(job.installation_id)
-                        await self.github.create_check_run(
+                        await self.github.update_check_run(
                             token=token,
                             owner=job.owner,
                             repo=job.repo,
-                            name="Superseded Review",
-                            head_sha=job.head_sha,
+                            check_run_id=check_run_id,
                             status="completed",
                             conclusion="failure",
                             title="Review failed",
@@ -128,6 +156,12 @@ async def _run_review_for_job(
     try:
         from superseded.server.checkout import checkout_repo
 
+        if repo_manager.disk_usage() > DISK_USAGE_LIMIT:
+            raise RuntimeError(
+                f"Disk usage above {DISK_USAGE_LIMIT:.0%} limit "
+                f"({repo_manager.disk_usage():.0%}); skipping clone to avoid filling temp dir."
+            )
+
         repo_path = await checkout_repo(
             token=token,
             owner=job.owner,
@@ -144,72 +178,48 @@ async def _run_review_for_job(
             token, job.owner, job.repo, job.pr_number
         )
 
-        engine = ReviewEngine.select(config.agent, model=config.model)
-        engine.config = config
+        from superseded.context.static_analysis import run_static_analysis
+        from superseded.context.usage_retrieval import retrieve_usages
+        from superseded.diff import compute_file_context, parse_diff_files
+
+        file_context = compute_file_context(diff, root=repo_path) or None
+
+        static_signals: str | None = None
+        usage_signals: str | None = None
+        if config.static_analysis:
+            changed_files = [e["file"] for e in parse_diff_files(diff)]
+            static_signals = run_static_analysis(changed_files, repo_path)
+        if config.usage_retrieval:
+            usage_signals = retrieve_usages(diff, repo_path)
+
+        engine = ReviewEngine.select(config.agent, model=config.model, config=config)
         result = engine.review(
             diff=diff,
             pr_description=pr_description,
+            file_context=file_context,
+            static_signals=static_signals,
+            usage_signals=usage_signals,
         )
 
-        blocking = result.summary.get("critical", 0) + result.summary.get("important", 0)
-        event = "REQUEST_CHANGES" if blocking > 0 else "COMMENT"
+        from superseded.output.github_pr import build_review_payload
 
-        passes_used = sorted({f.pass_name for f in result.findings})
-        pass_labels = ", ".join(p.replace("_", " ").title() + " Review" for p in passes_used)
-
-        body = "## Superseded Code Review\n\n"
-        if pass_labels:
-            body += f"**Passes:** {pass_labels}\n\n"
-        for sev, count in result.summary.items():
-            body += f"- **{sev}:** {count}\n"
-
-        comments = []
-        for f in result.findings:
-            body_text = (
-                f"**[{f.severity.upper()}] {f.title}** ({f.pass_name})\n\n{f.description}\n\n"
-            )
-            if f.reasoning:
-                body_text += (
-                    f"<details><summary>Reasoning</summary>\n\n{f.reasoning}\n\n</details>\n\n"
-                )
-            body_text += f"**Suggestion:** {f.suggestion}"
-            comment: dict = {
-                "path": f.file,
-                "line": f.end_line,
-                "body": body_text,
-            }
-            if f.line != f.end_line:
-                comment["start_line"] = f.line
-            comments.append(comment)
+        payload = build_review_payload(result)
 
         await github.post_review(
             token=token,
             owner=job.owner,
             repo=job.repo,
             pr_number=job.pr_number,
-            body=body,
-            comments=comments,
-            event=event,
+            body=payload["body"],
+            comments=payload["comments"],
+            event=payload["event"],
         )
 
-        conclusion = "success" if blocking == 0 else "failure"
-        title = f"{len(result.findings)} finding(s)"
-        if blocking:
-            title += f" ({blocking} blocking)"
+        conclusion = "success" if payload["event"] != "REQUEST_CHANGES" else "failure"
+        title = build_check_run_title(result)
+        passes_used = sorted({f.pass_name for f in result.findings})
         summary = (
             f"Review completed. {len(result.findings)} findings across {len(passes_used)} pass(es)."
-        )
-
-        await github.create_check_run(
-            token=token,
-            owner=job.owner,
-            repo=job.repo,
-            name="Superseded Review",
-            head_sha=job.head_sha,
-            status="completed",
-            conclusion=conclusion,
-            title=title,
-            summary=summary,
         )
 
         logger.info(
@@ -221,5 +231,6 @@ async def _run_review_for_job(
                 "findings_count": len(result.findings),
             },
         )
+        return ReviewOutcome(conclusion=conclusion, title=title, summary=summary)
     finally:
         repo_manager.cleanup(tmp_dir)

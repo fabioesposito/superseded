@@ -232,6 +232,41 @@ def test_reasoning_in_correct_position():
     assert desc_pos < details_pos < suggestion_pos
 
 
+def test_reasoning_html_escaped_in_markdown():
+    f = _finding(reasoning="looks like </details><details open> injection")
+    result = format_markdown(ReviewResult(findings=[f]))
+    assert "&lt;/details&gt;" in result
+    assert "</details><details open>" not in result
+    assert result.count("<details>") == 1
+    assert result.count("</details>") == 1
+
+
+def test_pr_comment_reasoning_html_escaped():
+    f = _finding(reasoning="looks like </details> break")
+    result = ReviewResult(findings=[f])
+    payloads = []
+
+    def fake_run(cmd, **kwargs):
+        payloads.append(json.loads(kwargs.get("input", "{}")))
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stderr="",
+        )
+
+    with (
+        patch("superseded.output.github_pr.subprocess.run", side_effect=fake_run),
+        patch("superseded.output.github_pr._repo", return_value="owner/repo"),
+    ):
+        post_review_to_pr(pr=1, result=result)
+
+    body = payloads[0]["comments"][0]["body"]
+    assert "&lt;/details&gt;" in body
+    assert "</details> break" not in body
+    assert body.count("<details>") == 1
+    assert body.count("</details>") == 1
+
+
 def test_pr_comment_includes_reasoning_when_present():
     f = _finding(reasoning="Suspicious pattern detected")
     result = ReviewResult(findings=[f])

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -79,6 +80,18 @@ def test_extract_symbols_filters_keywords():
     assert "None" not in syms
 
 
+def test_extract_symbols_python_annotated_module_var():
+    diff = "@@ -1,1 +1,2 @@\n+MAX_RETRIES: int = 5\n"
+    syms = extract_symbols(diff, "python")
+    assert "MAX_RETRIES" in syms
+
+
+def test_generic_fallback_boosts_known_language_symbols():
+    diff = "@@ -1 +1 @@\n+result = compute_things()\n"
+    syms = extract_symbols(diff, "python")
+    assert "compute_things" in syms
+
+
 def test_rg_invocation(monkeypatch):
     def fake_run(cmd, **kwargs):
         if "rg" in cmd[0]:
@@ -143,3 +156,47 @@ def test_changed_file_excluded_from_rg(monkeypatch):
     )
     assert calls
     assert "--glob" in calls[0]
+
+
+def test_multi_file_diff_extracts_symbols_from_all_files(monkeypatch):
+    """A multi-file PR must extract symbols from every changed file (per its language)."""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        if "rg" in cmd[0]:
+            calls.append(cmd)
+            return MagicMock(returncode=0, stdout="x:1: hit\n", stderr="")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    diff = (
+        "diff --git a/foo.py b/foo.py\n"
+        "@@ -1,1 +1,2 @@\n"
+        "+def spam():\n"
+        "diff --git a/bar.go b/bar.go\n"
+        "@@ -1,1 +1,2 @@\n"
+        "+func Eggs():\n"
+    )
+    retrieve_usages(diff, Path("/repo"))
+
+    assert calls, "ripgrep was never invoked"
+    searched_patterns = [cmd[4] for cmd in calls]
+    assert any("spam" in p for p in searched_patterns)
+    assert any("Eggs" in p for p in searched_patterns)
+    all_args = [arg for cmd in calls for arg in cmd]
+    assert "!foo.py" in all_args
+    assert "!bar.go" in all_args
+
+
+def test_timeout_on_one_symbol_skips_symbol_not_all(monkeypatch):
+    def fake_run(cmd, **kwargs):
+        if "slow" in cmd[4]:
+            raise subprocess.TimeoutExpired(cmd="rg", timeout=15)
+        return MagicMock(returncode=0, stdout="x:1: hit\n", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    diff = "@@ -1 +1 @@\n+def fast():\n+def slow():\n"
+    result = retrieve_usages(diff, Path("/repo"))
+    assert result is not None
+    assert "fast" in result
+    assert "slow" not in result

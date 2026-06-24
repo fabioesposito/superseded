@@ -33,7 +33,9 @@ class Tool(Protocol):
 
     def detect(self, root: Path) -> bool: ...
     def build_command(self, changed_files: list[str], root: Path) -> list[str]: ...
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str: ...
+    def parse_output(
+        self, stdout: str, stderr: str, root: Path, changed_files: list[str]
+    ) -> str: ...
 
 
 def _detect_pyproject_dep(root: Path, dep: str) -> bool:
@@ -54,7 +56,7 @@ class RuffTool:
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
         return ["ruff", "check", "--output-format=concise", *changed_files]
 
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str:
+    def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""
 
 
@@ -68,7 +70,7 @@ class MypyTool:
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
         return ["mypy", "--no-error-summary", *changed_files]
 
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str:
+    def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""
 
 
@@ -82,7 +84,7 @@ class BanditTool:
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
         return ["bandit", "-q", *changed_files]
 
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str:
+    def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""
 
 
@@ -101,7 +103,7 @@ class EslintTool:
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
         return ["eslint", "--format=compact", *changed_files]
 
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str:
+    def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""
 
 
@@ -115,7 +117,7 @@ class TscTool:
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
         return ["tsc", "--noEmit"]
 
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str:
+    def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stderr.strip() if stderr.strip() else ""
 
 
@@ -130,7 +132,7 @@ class GofmtTool:
         go_files = [f for f in changed_files if f.endswith(".go")]
         return ["gofmt", "-l", *go_files] if go_files else ["gofmt", "-l", "."]
 
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str:
+    def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         if not stdout.strip():
             return ""
         files = [f"  {f}" for f in stdout.strip().splitlines()]
@@ -147,7 +149,7 @@ class GoVetTool:
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
         return ["go", "vet", "."]
 
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str:
+    def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         combined = (stdout + "\n" + stderr).strip()
         return combined if combined else ""
 
@@ -166,7 +168,7 @@ class StaticcheckTool:
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
         return ["staticcheck", *changed_files]
 
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str:
+    def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""
 
 
@@ -175,9 +177,7 @@ class GitleaksTool:
     languages: ClassVar[list[str]] = [LANG_ANY]
 
     def detect(self, root: Path) -> bool:
-        from shutil import which
-
-        return which("gitleaks") is not None
+        return (root / ".git").exists()
 
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
         return [
@@ -191,18 +191,21 @@ class GitleaksTool:
             "json",
         ]
 
-    def parse_output(self, stdout: str, stderr: str, root: Path) -> str:
+    def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         import json
 
         try:
             data = json.loads(stdout)
-        except (json.JSONDecodeError, ValueError):
+        except json.JSONDecodeError, ValueError:
             return ""
+        changed = set(changed_files)
         findings = []
         for item in data:
+            file = item.get("File", "")
+            if file not in changed:
+                continue
             desc = item.get("Description", "")
             line = item.get("StartLine", "")
-            file = item.get("File", "")
             findings.append(f"  {file}:{line} — {desc}")
         return "Secrets detected:\n" + "\n".join(findings) if findings else ""
 
@@ -265,7 +268,7 @@ def run_static_analysis(
             )
             continue
 
-        block = tool.parse_output(result.stdout, result.stderr, root)
+        block = tool.parse_output(result.stdout, result.stderr, root, changed_files)
         if block:
             blocks.append(f"### {tool.name}\n{block}")
 

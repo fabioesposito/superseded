@@ -69,7 +69,7 @@ superseded/
 - Create: `src/superseded/cli.py`
 - Create: `tests/__init__.py`
 
-- [ ] **Step 1: Remove old source code**
+- [x] **Step 1: Remove old source code**
 
 ```bash
 rm -rf src/superseded/ templates/ static/ migrations/ alembic.ini docker-compose.yml Dockerfile start.sh
@@ -79,7 +79,7 @@ rm -rf vendor/ .superseded/ .claude/ .code-review-graph/
 
 Keep: `docs/`, `.git/`, `.gitignore`, `LICENSE`, `README.md`, `AGENTS.md`, `prd.md`
 
-- [ ] **Step 2: Write new pyproject.toml**
+- [x] **Step 2: Write new pyproject.toml**
 
 ```toml
 [project]
@@ -133,7 +133,7 @@ known-first-party = ["superseded"]
 quote-style = "double"
 ```
 
-- [ ] **Step 3: Write src/superseded/__init__.py**
+- [x] **Step 3: Write src/superseded/__init__.py**
 
 ```python
 from __future__ import annotations
@@ -141,7 +141,7 @@ from __future__ import annotations
 __version__ = "0.1.0"
 ```
 
-- [ ] **Step 4: Write minimal CLI**
+- [x] **Step 4: Write minimal CLI**
 
 ```python
 from __future__ import annotations
@@ -179,12 +179,12 @@ def feedback(check, comment_id, helpful, dismiss):
     click.echo("Not yet implemented")
 ```
 
-- [ ] **Step 5: Write tests/__init__.py**
+- [x] **Step 5: Write tests/__init__.py**
 
 ```python
 ```
 
-- [ ] **Step 6: Install dependencies and verify CLI runs**
+- [x] **Step 6: Install dependencies and verify CLI runs**
 
 ```bash
 uv sync
@@ -194,7 +194,7 @@ uv run superseded review --help
 
 Expected: version prints, help shows review subcommand with all options.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -209,7 +209,7 @@ git commit -m "chore: scaffold project structure for code review tool"
 - Create: `src/superseded/models.py`
 - Create: `tests/test_models.py`
 
-- [ ] **Step 1: Write failing tests for models**
+- [x] **Step 1: Write failing tests for models**
 
 ```python
 from __future__ import annotations
@@ -278,7 +278,7 @@ def test_review_result_from_findings():
     assert result.summary["nit"] == 1
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_models.py -v
@@ -286,7 +286,7 @@ uv run pytest tests/test_models.py -v
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write models.py**
+- [x] **Step 3: Write models.py**
 
 ```python
 from __future__ import annotations
@@ -328,7 +328,7 @@ class ReviewResult(BaseModel):
         return counts
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_models.py -v
@@ -336,7 +336,7 @@ uv run pytest tests/test_models.py -v
 
 Expected: 3 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/models.py tests/test_models.py
@@ -351,7 +351,7 @@ git commit -m "feat: add Pydantic models for Finding and ReviewResult"
 - Create: `src/superseded/config.py`
 - Create: `tests/test_config.py`
 
-- [ ] **Step 1: Write failing tests for config**
+- [x] **Step 1: Write failing tests for config**
 
 ```python
 from __future__ import annotations
@@ -389,7 +389,7 @@ def test_config_passes_override():
     assert cfg.is_pass_enabled("nonexistent") is False
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_config.py -v
@@ -397,7 +397,7 @@ uv run pytest tests/test_config.py -v
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write config.py**
+- [x] **Step 3: Write config.py**
 
 ```python
 from __future__ import annotations
@@ -437,7 +437,7 @@ def load_config(path: Path | None = None) -> Config:
     return Config(**data)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_config.py -v
@@ -445,7 +445,7 @@ uv run pytest tests/test_config.py -v
 
 Expected: 3 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/config.py tests/test_config.py
@@ -460,7 +460,7 @@ git commit -m "feat: add config loader for .superseded.yaml"
 - Create: `src/superseded/diff.py`
 - Create: `tests/test_diff.py`
 
-- [ ] **Step 1: Write failing tests for diff fetching**
+- [x] **Step 1: Write failing tests for diff fetching**
 
 ```python
 from __future__ import annotations
@@ -506,7 +506,7 @@ diff --git a/b.py b/b.py
     assert files[1]["file"] == "b.py"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_diff.py -v
@@ -514,7 +514,7 @@ uv run pytest tests/test_diff.py -v
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write diff.py**
+- [x] **Step 3: Write diff.py**
 
 ```python
 from __future__ import annotations
@@ -563,7 +563,7 @@ def parse_diff_files(diff: str) -> list[dict[str, str]]:
     return files
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_diff.py -v
@@ -571,7 +571,7 @@ uv run pytest tests/test_diff.py -v
 
 Expected: 2 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/diff.py tests/test_diff.py
@@ -588,7 +588,7 @@ git commit -m "feat: add diff fetching from gh pr and git"
 - Create: `src/superseded/agents/claude_code.py`
 - Create: `tests/test_agents.py`
 
-- [ ] **Step 1: Write failing tests for agent base and Claude Code adapter**
+- [x] **Step 1: Write failing tests for agent base and Claude Code adapter**
 
 ```python
 from __future__ import annotations
@@ -634,7 +634,7 @@ def test_claude_code_parse_output():
     assert findings[0]["pass_name"] == "security"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_agents.py -v
@@ -642,13 +642,13 @@ uv run pytest tests/test_agents.py -v
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write agents/__init__.py**
+- [x] **Step 3: Write agents/__init__.py**
 
 ```python
 from __future__ import annotations
 ```
 
-- [ ] **Step 4: Write agents/base.py**
+- [x] **Step 4: Write agents/base.py**
 
 ```python
 from __future__ import annotations
@@ -673,7 +673,7 @@ class Agent(ABC):
         return shutil.which(binary) is not None
 ```
 
-- [ ] **Step 5: Write agents/claude_code.py**
+- [x] **Step 5: Write agents/claude_code.py**
 
 ```python
 from __future__ import annotations
@@ -714,7 +714,7 @@ def _extract_findings(raw: str, pass_name: str) -> list[dict]:
     return findings
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_agents.py -v
@@ -722,7 +722,7 @@ uv run pytest tests/test_agents.py -v
 
 Expected: 4 passed.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/superseded/agents/ tests/test_agents.py
@@ -738,7 +738,7 @@ git commit -m "feat: add agent base class and Claude Code adapter"
 - Create: `src/superseded/agents/codex.py`
 - Modify: `tests/test_agents.py`
 
-- [ ] **Step 1: Add tests for OpenCode and Codex agents**
+- [x] **Step 1: Add tests for OpenCode and Codex agents**
 
 Append to `tests/test_agents.py`:
 
@@ -774,7 +774,7 @@ def test_codex_build_command():
     assert "gpt-4o" in cmd
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_agents.py -v -k "opencode or codex"
@@ -782,7 +782,7 @@ uv run pytest tests/test_agents.py -v -k "opencode or codex"
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write agents/opencode.py**
+- [x] **Step 3: Write agents/opencode.py**
 
 ```python
 from __future__ import annotations
@@ -824,7 +824,7 @@ def _extract_findings(raw: str, pass_name: str) -> list[dict]:
     return findings
 ```
 
-- [ ] **Step 4: Write agents/codex.py**
+- [x] **Step 4: Write agents/codex.py**
 
 ```python
 from __future__ import annotations
@@ -879,7 +879,7 @@ def _extract_findings_jsonl(raw: str, pass_name: str) -> list[dict]:
     return findings
 ```
 
-- [ ] **Step 5: Run all agent tests**
+- [x] **Step 5: Run all agent tests**
 
 ```bash
 uv run pytest tests/test_agents.py -v
@@ -887,7 +887,7 @@ uv run pytest tests/test_agents.py -v
 
 Expected: 6 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/agents/opencode.py src/superseded/agents/codex.py tests/test_agents.py
@@ -903,7 +903,7 @@ git commit -m "feat: add OpenCode and Codex agent adapters"
 - Create: `src/superseded/review/prompts.py`
 - Create: `tests/test_prompts.py`
 
-- [ ] **Step 1: Write failing tests for prompts**
+- [x] **Step 1: Write failing tests for prompts**
 
 ```python
 from __future__ import annotations
@@ -952,7 +952,7 @@ def test_all_passes_have_instructions():
         assert len(PASS_INSTRUCTIONS[name]) > 10
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_prompts.py -v
@@ -960,13 +960,13 @@ uv run pytest tests/test_prompts.py -v
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write review/__init__.py**
+- [x] **Step 3: Write review/__init__.py**
 
 ```python
 from __future__ import annotations
 ```
 
-- [ ] **Step 4: Write review/prompts.py**
+- [x] **Step 4: Write review/prompts.py**
 
 ```python
 from __future__ import annotations
@@ -1055,7 +1055,7 @@ def build_prompt(
 {JSON_FORMAT_INSTRUCTIONS}"""
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_prompts.py -v
@@ -1063,7 +1063,7 @@ uv run pytest tests/test_prompts.py -v
 
 Expected: 4 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/review/ tests/test_prompts.py
@@ -1078,7 +1078,7 @@ git commit -m "feat: add review prompt templates per pass"
 - Create: `src/superseded/review/engine.py`
 - Create: `tests/test_engine.py`
 
-- [ ] **Step 1: Write failing tests for review engine**
+- [x] **Step 1: Write failing tests for review engine**
 
 ```python
 from __future__ import annotations
@@ -1136,7 +1136,7 @@ def test_engine_selects_agent():
     assert isinstance(engine.agent, CodexAgent)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_engine.py -v
@@ -1144,7 +1144,7 @@ uv run pytest tests/test_engine.py -v
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write review/engine.py**
+- [x] **Step 3: Write review/engine.py**
 
 ```python
 from __future__ import annotations
@@ -1245,7 +1245,7 @@ class ReviewEngine:
         return ReviewResult(findings=sorted_findings)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_engine.py -v
@@ -1253,7 +1253,7 @@ uv run pytest tests/test_engine.py -v
 
 Expected: 3 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/review/engine.py tests/test_engine.py
@@ -1271,7 +1271,7 @@ git commit -m "feat: add review engine with parallel pass orchestration"
 - Create: `src/superseded/output/table.py`
 - Create: `tests/test_output.py`
 
-- [ ] **Step 1: Write failing tests for output formatters**
+- [x] **Step 1: Write failing tests for output formatters**
 
 ```python
 from __future__ import annotations
@@ -1330,7 +1330,7 @@ def test_empty_result():
     assert "No issues" in format_table(result).lower() or format_table(result).strip() != ""
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_output.py -v
@@ -1338,13 +1338,13 @@ uv run pytest tests/test_output.py -v
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write output/__init__.py**
+- [x] **Step 3: Write output/__init__.py**
 
 ```python
 from __future__ import annotations
 ```
 
-- [ ] **Step 4: Write output/json_out.py**
+- [x] **Step 4: Write output/json_out.py**
 
 ```python
 from __future__ import annotations
@@ -1359,7 +1359,7 @@ def format_json(result: ReviewResult) -> str:
     return json.dumps(data, indent=2)
 ```
 
-- [ ] **Step 5: Write output/markdown.py**
+- [x] **Step 5: Write output/markdown.py**
 
 ```python
 from __future__ import annotations
@@ -1400,7 +1400,7 @@ def format_markdown(result: ReviewResult) -> str:
     return "\n".join(lines)
 ```
 
-- [ ] **Step 6: Write output/table.py**
+- [x] **Step 6: Write output/table.py**
 
 ```python
 from __future__ import annotations
@@ -1438,7 +1438,7 @@ def format_table(result: ReviewResult) -> str:
     return "\n".join(lines)
 ```
 
-- [ ] **Step 7: Run tests to verify they pass**
+- [x] **Step 7: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_output.py -v
@@ -1446,7 +1446,7 @@ uv run pytest tests/test_output.py -v
 
 Expected: 4 passed.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/superseded/output/ tests/test_output.py
@@ -1461,7 +1461,7 @@ git commit -m "feat: add JSON, markdown, and table output formatters"
 - Create: `src/superseded/output/github_pr.py`
 - Modify: `tests/test_output.py`
 
-- [ ] **Step 1: Add test for GitHub PR posting**
+- [x] **Step 1: Add test for GitHub PR posting**
 
 Append to `tests/test_output.py`:
 
@@ -1482,7 +1482,7 @@ def test_post_review_to_pr(mock_run):
     assert "api" in args
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 uv run pytest tests/test_output.py -v -k "post_review"
@@ -1490,7 +1490,7 @@ uv run pytest tests/test_output.py -v -k "post_review"
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write output/github_pr.py**
+- [x] **Step 3: Write output/github_pr.py**
 
 ```python
 from __future__ import annotations
@@ -1540,7 +1540,7 @@ def _repo(pr: int) -> str:
     return result.stdout.strip()
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 uv run pytest tests/test_output.py -v
@@ -1548,7 +1548,7 @@ uv run pytest tests/test_output.py -v
 
 Expected: 5 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/output/github_pr.py tests/test_output.py
@@ -1564,7 +1564,7 @@ git commit -m "feat: add GitHub PR review posting via gh api"
 - Create: `src/superseded/memory/store.py`
 - Create: `tests/test_memory.py`
 
-- [ ] **Step 1: Write failing tests for memory store**
+- [x] **Step 1: Write failing tests for memory store**
 
 ```python
 from __future__ import annotations
@@ -1606,7 +1606,7 @@ def test_memory_store():
     asyncio.run(_test_store())
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_memory.py -v
@@ -1614,13 +1614,13 @@ uv run pytest tests/test_memory.py -v
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write memory/__init__.py**
+- [x] **Step 3: Write memory/__init__.py**
 
 ```python
 from __future__ import annotations
 ```
 
-- [ ] **Step 4: Write memory/store.py**
+- [x] **Step 4: Write memory/store.py**
 
 ```python
 from __future__ import annotations
@@ -1706,7 +1706,7 @@ class MemoryStore:
             return [dict(row) for row in rows]
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_memory.py -v
@@ -1714,7 +1714,7 @@ uv run pytest tests/test_memory.py -v
 
 Expected: 1 passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/memory/ tests/test_memory.py
@@ -1729,7 +1729,7 @@ git commit -m "feat: add SQLite memory store for findings and feedback"
 - Create: `src/superseded/memory/feedback.py`
 - Modify: `tests/test_memory.py`
 
-- [ ] **Step 1: Add test for feedback collection**
+- [x] **Step 1: Add test for feedback collection**
 
 Append to `tests/test_memory.py`:
 
@@ -1749,7 +1749,7 @@ def test_check_pr_feedback(mock_run):
     assert isinstance(feedback, list)
 ```
 
-- [ ] **Step 2: Write memory/feedback.py**
+- [x] **Step 2: Write memory/feedback.py**
 
 ```python
 from __future__ import annotations
@@ -1783,7 +1783,7 @@ def check_pr_feedback(pr: int, repo: str) -> list[dict]:
     return comments
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 uv run pytest tests/test_memory.py -v
@@ -1791,7 +1791,7 @@ uv run pytest tests/test_memory.py -v
 
 Expected: 2 passed.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/superseded/memory/feedback.py tests/test_memory.py
@@ -1806,7 +1806,7 @@ git commit -m "feat: add feedback collection from PR comments"
 - Modify: `src/superseded/cli.py`
 - Create: `tests/test_cli.py`
 
-- [ ] **Step 1: Write failing tests for CLI integration**
+- [x] **Step 1: Write failing tests for CLI integration**
 
 ```python
 from __future__ import annotations
@@ -1840,7 +1840,7 @@ def test_review_with_pr(mock_review):
     mock_review.assert_called_once()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_cli.py -v
@@ -1848,7 +1848,7 @@ uv run pytest tests/test_cli.py -v
 
 Expected: FAIL — _run_review not found.
 
-- [ ] **Step 3: Update cli.py with full implementation**
+- [x] **Step 3: Update cli.py with full implementation**
 
 ```python
 from __future__ import annotations
@@ -1974,7 +1974,7 @@ def feedback(check: bool, comment_id: str | None, helpful: bool, dismiss: bool) 
     click.echo("Usage: superseded feedback --check OR superseded feedback <id> --helpful/--dismiss")
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_cli.py -v
@@ -1982,7 +1982,7 @@ uv run pytest tests/test_cli.py -v
 
 Expected: 3 passed.
 
-- [ ] **Step 5: Run all tests**
+- [x] **Step 5: Run all tests**
 
 ```bash
 uv run pytest tests/ -v
@@ -1990,14 +1990,14 @@ uv run pytest tests/ -v
 
 Expected: All tests pass.
 
-- [ ] **Step 6: Lint and format**
+- [x] **Step 6: Lint and format**
 
 ```bash
 uv run ruff check src/ tests/
 uv run ruff format src/ tests/
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/superseded/cli.py tests/test_cli.py
@@ -2012,7 +2012,7 @@ git commit -m "feat: wire up CLI with review and feedback commands"
 - Create: `action.yml`
 - Create: `Dockerfile`
 
-- [ ] **Step 1: Write action.yml**
+- [x] **Step 1: Write action.yml**
 
 ```yaml
 name: "Superseded Code Review"
@@ -2041,7 +2041,7 @@ runs:
     GITHUB_TOKEN: ${{ github.token }}
 ```
 
-- [ ] **Step 2: Write Dockerfile**
+- [x] **Step 2: Write Dockerfile**
 
 ```dockerfile
 FROM python:3.14-slim
@@ -2068,7 +2068,7 @@ ENTRYPOINT ["superseded"]
 CMD ["review", "--pr", "${PR_NUMBER}", "--post"]
 ```
 
-- [ ] **Step 3: Write action entrypoint script**
+- [x] **Step 3: Write action entrypoint script**
 
 Create `entrypoint.sh`:
 
@@ -2102,7 +2102,7 @@ echo "Running: $CMD"
 eval "$CMD"
 ```
 
-- [ ] **Step 4: Update Dockerfile to use entrypoint**
+- [x] **Step 4: Update Dockerfile to use entrypoint**
 
 ```dockerfile
 FROM python:3.14-slim
@@ -2130,7 +2130,7 @@ RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add action.yml Dockerfile entrypoint.sh
@@ -2144,7 +2144,7 @@ git commit -m "feat: add GitHub Action for PR code review"
 **Files:**
 - Create: `.superseded.yaml`
 
-- [ ] **Step 1: Write default config**
+- [x] **Step 1: Write default config**
 
 ```yaml
 agent: claude-code
@@ -2160,7 +2160,7 @@ format: table
 memory: true
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add .superseded.yaml
@@ -2174,7 +2174,7 @@ git commit -m "chore: add default .superseded.yaml config"
 **Files:**
 - Create: `tests/test_integration.py`
 
-- [ ] **Step 1: Write integration test**
+- [x] **Step 1: Write integration test**
 
 ```python
 from __future__ import annotations
@@ -2201,7 +2201,7 @@ def test_full_review_flow(mock_engine_cls, mock_fetch):
     mock_engine.review.assert_called_once()
 ```
 
-- [ ] **Step 2: Run all tests**
+- [x] **Step 2: Run all tests**
 
 ```bash
 uv run pytest tests/ -v
@@ -2209,14 +2209,14 @@ uv run pytest tests/ -v
 
 Expected: All tests pass.
 
-- [ ] **Step 3: Lint and format**
+- [x] **Step 3: Lint and format**
 
 ```bash
 uv run ruff check src/ tests/
 uv run ruff format src/ tests/
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/test_integration.py

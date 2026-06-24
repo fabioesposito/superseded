@@ -19,17 +19,15 @@ async def checkout_repo(
     target.mkdir(parents=True)
 
     url = f"https://x-access-token:{token}@github.com/{owner}/{repo}.git"
-    cmd = [
+    clone_cmd = [
         "git",
         "clone",
         "--depth=2",
-        "--branch",
-        ref,
         url,
         str(target),
     ]
     proc = await asyncio.create_subprocess_exec(
-        *cmd,
+        *clone_cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -38,4 +36,20 @@ async def checkout_repo(
         raise RuntimeError(
             f"git clone failed (exit {proc.returncode}): " + stderr.decode(errors="replace").strip()
         )
+
+    checkout_proc = await asyncio.create_subprocess_exec(
+        "git",
+        "checkout",
+        ref,
+        cwd=str(target),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _stdout, stderr = await checkout_proc.communicate()
+    if checkout_proc.returncode != 0:
+        raise RuntimeError(
+            f"git checkout failed (exit {checkout_proc.returncode}): "
+            + stderr.decode(errors="replace").strip()
+        )
+
     return target

@@ -4,7 +4,14 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from superseded.diff import compute_file_context, parse_diff_files
+import pytest
+
+from superseded.diff import (
+    _fetch_git_diff,
+    _fetch_pr_diff,
+    compute_file_context,
+    parse_diff_files,
+)
 
 
 def test_parse_diff_files():
@@ -81,6 +88,28 @@ def test_compute_file_context_handles_missing_files():
     assert "missing.py" in ctx or ctx == ""
 
 
+def test_compute_file_context_reads_relative_to_root(tmp_path, monkeypatch):
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "auth.py").write_text("\n".join(f"line {n}" for n in range(1, 60)))
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    diff = """diff --git a/src/auth.py b/src/auth.py
+--- a/src/auth.py
++++ b/src/auth.py
+@@ -10,6 +10,8 @@
+ context
++new
+"""
+    ctx = compute_file_context(diff, root=tmp_path, context_padding=20)
+    assert "src/auth.py" in ctx
+    assert "line 1" in ctx
+    assert "line 30" in ctx
+
+
 def test_repo_root_returns_path(monkeypatch):
     from superseded.diff import repo_root
 
@@ -99,3 +128,25 @@ def test_repo_root_falls_back_to_cwd(monkeypatch):
     monkeypatch.setattr("subprocess.run", fail)
     result = repo_root()
     assert result == Path.cwd()
+
+
+def test_fetch_pr_diff_raises_when_gh_not_found():
+    def raise_fnf(*a, **kw):
+        raise FileNotFoundError("gh")
+
+    with (
+        patch("subprocess.run", side_effect=raise_fnf),
+        pytest.raises(RuntimeError, match=r"gh.*not found"),
+    ):
+        _fetch_pr_diff(1)
+
+
+def test_fetch_git_diff_raises_when_git_not_found():
+    def raise_fnf(*a, **kw):
+        raise FileNotFoundError("git")
+
+    with (
+        patch("subprocess.run", side_effect=raise_fnf),
+        pytest.raises(RuntimeError, match=r"git.*not found"),
+    ):
+        _fetch_git_diff("HEAD~1..HEAD")

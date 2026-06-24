@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from superseded.cli import cli, format_memory_context, resolve_agent, resolve_model
@@ -116,6 +117,129 @@ def test_persist_findings_passes_reasoning(monkeypatch):
     mock_store = type("FakeStore", (), {})()
     mock_store.record_finding = staticmethod(async_record)
 
-    _persist_findings(mock_store, result, "owner/repo")
+    import asyncio
+
+    asyncio.run(_persist_findings(mock_store, result, "owner/repo"))
     assert len(calls) == 1
     assert calls[0]["reasoning"] == "suspicious input"
+
+
+def test_run_review_exits_cleanly_when_agent_unavailable(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff", lambda pr=None, diff_range=None: "diff --git a/x.py b/x.py\n"
+    )
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr("superseded.cli.compute_file_context", lambda diff, root=None: None)
+    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
+    monkeypatch.setattr("superseded.cli.run_static_analysis", lambda files, root: None)
+    monkeypatch.setattr("superseded.cli.retrieve_usages", lambda diff, root: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+    monkeypatch.setattr("shutil.which", lambda cmd: None)
+
+    from superseded.cli import _run_review
+
+    with pytest.raises(SystemExit) as exc:
+        _run_review(
+            pr=None,
+            diff_range="HEAD~1..HEAD",
+            agent=None,
+            model=None,
+            output_format="json",
+            post=False,
+            passes=None,
+        )
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert "agent" in err.lower() or "path" in err.lower()
+
+
+def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, monkeypatch):
+    """passes.style: false in .superseded.yaml must skip style when --passes is omitted."""
+    (tmp_path / ".superseded.yaml").write_text("agent: claude-code\npasses:\n  style: false\n")
+    monkeypatch.chdir(tmp_path)
+
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff", lambda pr=None, diff_range=None: "diff --git a/x.py b/x.py\n"
+    )
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr("superseded.cli.compute_file_context", lambda diff, root=None: None)
+    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
+    monkeypatch.setattr("superseded.cli.run_static_analysis", lambda files, root: None)
+    monkeypatch.setattr("superseded.cli.retrieve_usages", lambda diff, root: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+
+    invoked: list[str] = []
+
+    def fake_run_pass(self, pass_name, prompt):
+        invoked.append(pass_name)
+        return []
+
+    monkeypatch.setattr("superseded.review.engine.ReviewEngine.run_pass", fake_run_pass)
+
+    from superseded.cli import _run_review
+
+    _run_review(
+        pr=None,
+        diff_range="HEAD~1..HEAD",
+        agent=None,
+        model=None,
+        output_format="json",
+        post=False,
+        passes=None,
+    )
+
+    assert "style" not in invoked
+    assert {"security", "correctness", "performance", "architecture"} <= set(invoked)
+
+
+def test_persist_and_link_batch_into_single_event_loop(monkeypatch):
+    """_persist_findings and _link_comment_ids should each use a single asyncio.run()."""
+    import asyncio
+
+    from superseded.cli import _link_comment_ids, _persist_findings
+    from superseded.models import Finding, ReviewResult
+
+    findings = [
+        Finding(
+            pass_name="security",
+            severity="critical",
+            file=f"file{i}.py",
+            line=1,
+            end_line=2,
+            title=f"issue {i}",
+            description="d",
+            suggestion="s",
+        )
+        for i in range(3)
+    ]
+    result = ReviewResult(findings=findings)
+
+    run_calls = []
+    original_run = asyncio.run
+
+    def counting_run(coro):
+        run_calls.append(1)
+        return original_run(coro)
+
+    monkeypatch.setattr("asyncio.run", counting_run)
+
+    calls = []
+
+    async def async_record(**kwargs):
+        calls.append(kwargs)
+
+    mock_store = type("FakeStore", (), {})()
+    mock_store.record_finding = staticmethod(async_record)
+    mock_store.set_comment_id = AsyncMock()
+
+    asyncio.run(_persist_findings(mock_store, result, "owner/repo"))
+    persist_runs = len(run_calls)
+
+    asyncio.run(_link_comment_ids(mock_store, result, [10, 20, 30]))
+    total_runs = len(run_calls)
+
+    assert persist_runs == 1, f"Expected 1 asyncio.run() for persist, got {persist_runs}"
+    assert total_runs == persist_runs + 1, (
+        f"Expected 1 asyncio.run() for link, got {total_runs - persist_runs}"
+    )
+    assert len(calls) == 3

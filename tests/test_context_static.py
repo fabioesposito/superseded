@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
 
 from superseded.context.static_analysis import (
     STATIC_BUDGET,
+    GitleaksTool,
     RuffTool,
     run_static_analysis,
 )
@@ -33,8 +35,30 @@ def test_ruff_build_command():
 def test_ruff_parse_output():
     tool = RuffTool()
     out = "a.py:1:1: F401 unused\n"
-    result = tool.parse_output(out, "", Path("/repo"))
+    result = tool.parse_output(out, "", Path("/repo"), ["a.py"])
     assert "F401" in result
+
+
+def test_gitleaks_parse_output_filters_to_changed_files():
+    stdout = json.dumps(
+        [
+            {"Description": "aws key", "StartLine": 1, "File": "a.py"},
+            {"Description": "github token", "StartLine": 5, "File": "b.py"},
+        ]
+    )
+    out = GitleaksTool().parse_output(stdout, "", Path("/repo"), ["a.py"])
+    assert "a.py" in out
+    assert "aws key" in out
+    assert "b.py" not in out
+    assert "github token" not in out
+
+
+def test_gitleaks_detect_on_git_dir(tmp_path):
+    (tmp_path / ".git").mkdir()
+    assert GitleaksTool().detect(tmp_path) is True
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    assert GitleaksTool().detect(bare) is False
 
 
 def test_budget_truncation(tmp_path, monkeypatch):

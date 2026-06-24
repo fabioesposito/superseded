@@ -123,10 +123,9 @@ def _run_review(
     pass_list = passes.split(",") if passes else None
 
     click.echo("Gathering context...")
-    file_context = compute_file_context(diff) or None
-    pr_description = fetch_pr_description(pr) if pr is not None else None
-
     root = repo_root()
+    file_context = compute_file_context(diff, root=root) or None
+    pr_description = fetch_pr_description(pr) if pr is not None else None
 
     static_signals: str | None = None
     usage_signals: str | None = None
@@ -141,21 +140,24 @@ def _run_review(
     store: MemoryStore | None = None
     if config.memory and repo:
         store = MemoryStore()
-        asyncio.run(store.init())
-        dismissed = asyncio.run(store.get_dismissed_findings(repo))
+        dismissed = asyncio.run(_load_dismissed(store, repo))
         memory_context = format_memory_context(dismissed)
 
     click.echo(f"Running review with {agent_name}...")
-    engine = ReviewEngine.select(agent_name, model=model_name)
-    result = engine.review(
-        diff=diff,
-        pr_description=pr_description,
-        file_context=file_context,
-        memory_context=memory_context,
-        static_signals=static_signals,
-        usage_signals=usage_signals,
-        passes=pass_list,
-    )
+    engine = ReviewEngine.select(agent_name, model=model_name, config=config)
+    try:
+        result = engine.review(
+            diff=diff,
+            pr_description=pr_description,
+            file_context=file_context,
+            memory_context=memory_context,
+            static_signals=static_signals,
+            usage_signals=usage_signals,
+            passes=pass_list,
+        )
+    except RuntimeError as err:
+        click.echo(f"Error: {err}", err=True)
+        sys.exit(1)
 
     if fmt == "json":
         click.echo(format_json(result))
@@ -165,36 +167,41 @@ def _run_review(
         click.echo(format_table(result))
 
     if store is not None and repo:
-        _persist_findings(store, result, repo)
+        asyncio.run(_persist_findings(store, result, repo))
 
     if post and pr is not None:
         click.echo("Posting to GitHub PR...")
         comment_ids = post_review_to_pr(pr=pr, result=result)
         if store is not None:
-            _link_comment_ids(store, result, comment_ids)
+            asyncio.run(_link_comment_ids(store, result, comment_ids))
         click.echo(f"Done. Posted {len(comment_ids)} comment(s).")
 
 
-def _persist_findings(store: MemoryStore, result: ReviewResult, repo: str) -> None:
+async def _load_dismissed(store: MemoryStore, repo: str) -> list[dict]:
+    await store.init()
+    return await store.get_dismissed_findings(repo)
+
+
+async def _persist_findings(store: MemoryStore, result: ReviewResult, repo: str) -> None:
     for f in result.findings:
-        asyncio.run(
-            store.record_finding(
-                finding_id=f.id,
-                repo=repo,
-                pass_name=f.pass_name,
-                severity=f.severity,
-                file=f.file,
-                line=f.line,
-                title=f.title,
-                description=f.description,
-                reasoning=f.reasoning,
-            )
+        await store.record_finding(
+            finding_id=f.id,
+            repo=repo,
+            pass_name=f.pass_name,
+            severity=f.severity,
+            file=f.file,
+            line=f.line,
+            title=f.title,
+            description=f.description,
+            reasoning=f.reasoning,
         )
 
 
-def _link_comment_ids(store: MemoryStore, result: ReviewResult, comment_ids: list[int]) -> None:
-    for finding, comment_id in zip(result.findings, comment_ids, strict=False):
-        asyncio.run(store.set_comment_id(finding.id, comment_id))
+async def _link_comment_ids(
+    store: MemoryStore, result: ReviewResult, comment_ids: list[int]
+) -> None:
+    for finding, comment_id in zip(result.findings, comment_ids, strict=True):
+        await store.set_comment_id(finding.id, comment_id)
 
 
 @cli.command()
@@ -234,7 +241,11 @@ def _run_feedback_check(pr: int) -> None:
         click.echo("No past review comments found on this PR.")
         return
     store = MemoryStore()
-    asyncio.run(store.init())
+    asyncio.run(_process_feedback(store, comments))
+
+
+async def _process_feedback(store: MemoryStore, comments: list[dict]) -> None:
+    await store.init()
     recorded = 0
     for c in comments:
         cid = c.get("id")
@@ -243,10 +254,13 @@ def _run_feedback_check(pr: int) -> None:
         action = _classify_feedback(c)
         if action is None:
             continue
-        ok = asyncio.run(store.record_feedback_by_comment_id(int(cid), action))
+        ok = await store.record_feedback_by_comment_id(int(cid), action)
         if ok:
             recorded += 1
-    click.echo(f"Recorded {action} for comment {cid}.")
+    if recorded:
+        click.echo(f"Recorded feedback for {recorded} comment(s).")
+    else:
+        click.echo("No actionable feedback found.")
 
 
 @cli.command()
@@ -284,9 +298,11 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
     import uvicorn
 
     from superseded.server.app import create_app
-    from superseded.server.lifecycle import ServerLifecycle
+    from superseded.server.lifecycle import JsonFormatter, ServerLifecycle
 
-    app = create_app(config=config, github=github, worker=worker)
+    app = create_app(
+        config=config, github=github, worker=worker, repo_manager=repo_manager, store=MemoryStore()
+    )
     lifecycle = ServerLifecycle(app=app, worker=worker)
 
     @app.on_event("startup")
@@ -297,13 +313,20 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
     async def on_shutdown() -> None:
         await lifecycle.shutdown()
 
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
     logging.basicConfig(
         level=getattr(logging, config.log_level.upper(), logging.INFO),
-        format="%(message)s",
+        handlers=[handler],
     )
 
     click.echo(f"Starting Superseded server on {config.host}:{config.port}")
     uvicorn.run(app, host=config.host, port=config.port, log_level=config.log_level)
+
+
+async def _apply_feedback(store: MemoryStore, comment_id: int, action: str) -> bool:
+    await store.init()
+    return await store.record_feedback_by_comment_id(comment_id, action)
 
 
 def _classify_feedback(comment: dict) -> str | None:
@@ -324,8 +347,7 @@ def _run_feedback_manual(comment_id: str, action: str) -> None:
         click.echo(f"Error: comment id must be numeric, got {comment_id!r}.", err=True)
         sys.exit(1)
     store = MemoryStore()
-    asyncio.run(store.init())
-    ok = asyncio.run(store.record_feedback_by_comment_id(cid, action))
+    ok = asyncio.run(_apply_feedback(store, cid, action))
     if not ok:
         click.echo(
             f"Error: no stored finding for GitHub comment id {cid}. "

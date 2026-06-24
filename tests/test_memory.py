@@ -114,3 +114,14 @@ def test_check_pr_feedback_returns_reactions_and_resolution(mock_run):
 def test_check_pr_feedback_empty(mock_run):
     mock_run.return_value = MagicMock(returncode=0, stdout="")
     assert check_pr_feedback(pr=123, repo="owner/repo") == []
+
+
+@patch("subprocess.run")
+def test_check_pr_feedback_jq_uses_top_level_line(mock_run):
+    mock_run.return_value = MagicMock(returncode=0, stdout="")
+    check_pr_feedback(pr=123, repo="owner/repo")
+    cmd = mock_run.call_args.args[0]
+    jq_expr = cmd[cmd.index("--jq") + 1]
+    assert "..line" not in jq_expr
+    assert "line: .line" in jq_expr
+    assert "_resolved" not in jq_expr

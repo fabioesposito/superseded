@@ -127,9 +127,7 @@ class MemoryStore:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def record_installation(
-        self, installation_id: int, owner: str, repos: list[str]
-    ) -> None:
+    async def record_installation(self, installation_id: int, owner: str, repos: list[str]) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 "INSERT OR REPLACE INTO installations (app_installation_id, owner, repos) "
