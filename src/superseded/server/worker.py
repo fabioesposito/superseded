@@ -80,12 +80,23 @@ class ReviewWorker:
             },
         )
 
+        try:
+            token = await self.github.get_installation_token(job.installation_id)
+        except Exception:
+            logger.exception(
+                "review_failed",
+                extra={
+                    "correlation_id": correlation_id,
+                    "repo": f"{job.owner}/{job.repo}",
+                    "pr": job.pr_number,
+                },
+            )
+            return
+
         check_run_id = None
         async with self._semaphore:
             self._active_count += 1
             try:
-                token = await self.github.get_installation_token(job.installation_id)
-
                 check_run_id = await self.github.create_check_run(
                     token=token,
                     owner=job.owner,
@@ -124,7 +135,6 @@ class ReviewWorker:
                 )
                 if check_run_id is not None:
                     try:
-                        token = await self.github.get_installation_token(job.installation_id)
                         await self.github.update_check_run(
                             token=token,
                             owner=job.owner,

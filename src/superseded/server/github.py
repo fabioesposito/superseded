@@ -14,6 +14,7 @@ class GitHubApp:
         self.app_id = app_id
         self._private_key = private_key_path.read_text()
         self._webhook_secret = webhook_secret.encode()
+        self._jwt_cache: tuple[float, str] | None = None
 
     def verify_webhook(self, payload: bytes, signature: str) -> bool:
         if not signature or not signature.startswith("sha256="):
@@ -31,12 +32,19 @@ class GitHubApp:
 
     def _sign_jwt(self) -> str:
         now = int(time.time())
+        if self._jwt_cache is not None:
+            cached_time, cached_jwt = self._jwt_cache
+            if now - cached_time < 540:
+                return cached_jwt
+
         payload = {
             "iat": now - 60,
             "exp": now + 600,
             "iss": str(self.app_id),
         }
-        return jwt.encode(payload, self._private_key, algorithm="RS256")
+        jwt_token = jwt.encode(payload, self._private_key, algorithm="RS256")
+        self._jwt_cache = (now, jwt_token)
+        return jwt_token
 
     async def get_installation_token(self, installation_id: int) -> str:
         jwt_token = self._sign_jwt()

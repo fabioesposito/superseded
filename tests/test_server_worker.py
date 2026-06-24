@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from dataclasses import dataclass, field
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -336,6 +337,24 @@ async def test_run_review_for_job_end_to_end(tmp_path):
     github.post_review.assert_awaited_once()
     assert outcome.conclusion == "failure"
     assert "1 critical" in outcome.title
+
+
+def test_semaphore_acquired_after_token_fetch():
+    """Network call should not hold concurrency slot."""
+    source = inspect.getsource(ReviewWorker._process)
+    lines = source.splitlines()
+
+    token_line = None
+    semaphore_line = None
+    for i, line in enumerate(lines):
+        if "get_installation_token" in line and token_line is None:
+            token_line = i
+        if "async with self._semaphore" in line:
+            semaphore_line = i
+
+    assert token_line < semaphore_line, (
+        f"Token fetch at line {token_line} should be before semaphore at line {semaphore_line}"
+    )
 
 
 @pytest.mark.asyncio
