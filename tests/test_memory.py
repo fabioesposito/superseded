@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from superseded.memory.feedback import check_pr_feedback
+from superseded.memory.feedback import check_pr_feedback, check_resolved_threads
 from superseded.memory.store import MemoryStore
 
 
@@ -125,3 +127,120 @@ def test_check_pr_feedback_jq_uses_top_level_line(mock_run):
     assert "..line" not in jq_expr
     assert "line: .line" in jq_expr
     assert "_resolved" not in jq_expr
+
+
+@patch("subprocess.run")
+def test_check_resolved_threads_empty(mock_run):
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout=json.dumps({
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [],
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        }
+                    }
+                }
+            }
+        }),
+    )
+    resolved = check_resolved_threads(pr=123, owner="o", repo="r")
+    assert resolved == set()
+
+
+@patch("subprocess.run")
+def test_check_resolved_threads_finds_resolved(mock_run):
+    mock_run.return_value = MagicMock(
+        returncode=0,
+        stdout=json.dumps({
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "reviewThreads": {
+                            "nodes": [
+                                {
+                                    "isResolved": True,
+                                    "comments": {"nodes": [{"databaseId": 9001}]},
+                                },
+                                {
+                                    "isResolved": False,
+                                    "comments": {"nodes": [{"databaseId": 9002}]},
+                                },
+                            ],
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        }
+                    }
+                }
+            }
+        }),
+    )
+    resolved = check_resolved_threads(pr=1, owner="o", repo="r")
+    assert resolved == {9001}
+
+
+@patch("subprocess.run")
+def test_check_resolved_threads_pagination(mock_run):
+    mock_run.side_effect = [
+        MagicMock(
+            returncode=0,
+            stdout=json.dumps({
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "reviewThreads": {
+                                "nodes": [
+                                    {
+                                        "isResolved": True,
+                                        "comments": {"nodes": [{"databaseId": 1}]},
+                                    }
+                                ],
+                                "pageInfo": {"hasNextPage": True, "endCursor": "c1"},
+                            }
+                        }
+                    }
+                }
+            }),
+        ),
+        MagicMock(
+            returncode=0,
+            stdout=json.dumps({
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "reviewThreads": {
+                                "nodes": [
+                                    {
+                                        "isResolved": True,
+                                        "comments": {"nodes": [{"databaseId": 2}]},
+                                    }
+                                ],
+                                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            }
+                        }
+                    }
+                }
+            }),
+        ),
+    ]
+    resolved = check_resolved_threads(pr=1, owner="o", repo="r")
+    assert resolved == {1, 2}
+    assert mock_run.call_count == 2
+    # Second call should pass the cursor
+    second_call_args = mock_run.call_args_list[1].args[0]
+    assert "cursor=c1" in second_call_args
+
+
+@patch("subprocess.run")
+def test_check_resolved_threads_error_returns_empty(mock_run):
+    mock_run.side_effect = subprocess.CalledProcessError(1, "gh")
+    resolved = check_resolved_threads(pr=1, owner="o", repo="r")
+    assert resolved == set()
+
+
+@patch("subprocess.run")
+def test_check_resolved_threads_invalid_json_returns_empty(mock_run):
+    mock_run.return_value = MagicMock(returncode=0, stdout="not json")
+    resolved = check_resolved_threads(pr=1, owner="o", repo="r")
+    assert resolved == set()
