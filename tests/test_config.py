@@ -31,3 +31,17 @@ def test_config_passes_override():
     cfg = Config()
     assert cfg.is_pass_enabled("security") is True
     assert cfg.is_pass_enabled("nonexistent") is False
+
+
+def test_config_defaults():
+    c = Config()
+    assert c.static_analysis is True
+    assert c.usage_retrieval is True
+
+
+def test_load_config_with_enrichment_flags(tmp_path):
+    cfg = tmp_path / ".superseded.yaml"
+    cfg.write_text("static_analysis: false\nusage_retrieval: false\n")
+    c = load_config(cfg)
+    assert c.static_analysis is False
+    assert c.usage_retrieval is False
