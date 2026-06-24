@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from superseded.server.config import ServerConfig
+
+
+def test_server_config_is_configured():
+    config = ServerConfig()
+    assert not config.is_configured
+    config = ServerConfig(app_id=123, webhook_secret="s", private_key_path=Path("/dev/null"))
+    assert config.is_configured
 
 
 def test_server_config_defaults():

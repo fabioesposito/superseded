@@ -17,6 +17,11 @@ class ServerConfig(BaseModel):
     temp_dir: Path = Path("/tmp/superseded")
     log_level: str = "info"
 
+    @property
+    def is_configured(self) -> bool:
+        """Return True if this config has a real app_id (not default 0)."""
+        return self.app_id != 0
+
     @model_validator(mode="after")
     def _validate_required_fields(self) -> ServerConfig:
         if self.app_id == 0:

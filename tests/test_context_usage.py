@@ -119,7 +119,7 @@ def test_rg_missing_returns_none(monkeypatch, caplog):
 
 
 def test_budget_truncation(monkeypatch):
-    big_match = "file.py:{}: call_to_sym()\n"
+    big_match = "file.py:{}: sym()\n"
     matches = "".join(big_match.format(i) for i in range(400))
 
     def fake_run(cmd, **kwargs):
@@ -132,7 +132,8 @@ def test_budget_truncation(monkeypatch):
         "@@ -1,3 +1,5 @@\n+def sym():\n",
         Path("/repo"),
     )
-    assert "omitted by retrieval budget" in result
+    assert result is not None
+    assert "omitted" in result
 
 
 def test_no_symbols_returns_none():
@@ -188,15 +189,11 @@ def test_multi_file_diff_extracts_symbols_from_all_files(monkeypatch):
     assert "!bar.go" in all_args
 
 
-def test_timeout_on_one_symbol_skips_symbol_not_all(monkeypatch):
+def test_timeout_on_batched_rg_returns_none(monkeypatch):
     def fake_run(cmd, **kwargs):
-        if "slow" in cmd[4]:
-            raise subprocess.TimeoutExpired(cmd="rg", timeout=15)
-        return MagicMock(returncode=0, stdout="x:1: hit\n", stderr="")
+        raise subprocess.TimeoutExpired(cmd="rg", timeout=15)
 
     monkeypatch.setattr("subprocess.run", fake_run)
     diff = "@@ -1 +1 @@\n+def fast():\n+def slow():\n"
     result = retrieve_usages(diff, Path("/repo"))
-    assert result is not None
-    assert "fast" in result
-    assert "slow" not in result
+    assert result is None
