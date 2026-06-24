@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 
-from superseded.models import ReviewResult
+from superseded.models import Finding, ReviewResult
 
 
 def _escape_reasoning(reasoning: str) -> str:
@@ -80,6 +80,17 @@ def _partition_comments(
     left_bad = _partition_comments(comments[:mid], base_payload, target_repo, pr)
     right_bad = _partition_comments(comments[mid:], base_payload, target_repo, pr)
     return left_bad | {i + mid for i in right_bad}
+
+
+def _build_fallback_text(findings: list[Finding]) -> str:
+    lines = [
+        "\n\n## Out-of-range findings\n\n",
+        "These findings could not be placed as inline comments because their ",
+        "line numbers fall outside the PR diff hunk:\n\n",
+    ]
+    for f in findings:
+        lines.append(f"- **{f.file}:{f.line}** [{f.severity}] {f.title}\n")
+    return "".join(lines)
 
 
 def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) -> list[int]:

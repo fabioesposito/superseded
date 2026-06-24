@@ -446,6 +446,55 @@ def test_partition_comments_one_bad_three():
         assert bad == {1}
 
 
+def test_build_fallback_text_single():
+    from superseded.output.github_pr import _build_fallback_text
+
+    f = Finding(
+        pass_name="security",
+        severity="critical",
+        file="src/auth.py",
+        line=142,
+        end_line=142,
+        title="SQL injection",
+        description="User input in SQL",
+        suggestion="Use params",
+    )
+    text = _build_fallback_text([f])
+    assert "## Out-of-range findings" in text
+    assert "src/auth.py:142" in text
+    assert "[critical]" in text
+    assert "SQL injection" in text
+
+
+def test_build_fallback_text_multiple():
+    from superseded.output.github_pr import _build_fallback_text
+
+    f1 = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        end_line=1,
+        title="t1",
+        description="d",
+        suggestion="s",
+    )
+    f2 = Finding(
+        pass_name="style",
+        severity="nit",
+        file="b.py",
+        line=2,
+        end_line=2,
+        title="t2",
+        description="d",
+        suggestion="s",
+    )
+    text = _build_fallback_text([f1, f2])
+    assert text.count("- **") == 2
+    assert "a.py:1" in text
+    assert "b.py:2" in text
+
+
 def test_partition_comments_two_bad_three():
     from superseded.output.github_pr import _partition_comments
 
