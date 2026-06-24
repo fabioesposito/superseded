@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 from superseded.context.static_analysis import (
     STATIC_BUDGET,
+    TOOLS,
     GitleaksTool,
     RuffTool,
     run_static_analysis,
@@ -119,3 +120,8 @@ def test_gitleaks_parse_output_invalid_json_returns_empty():
     tool = GitleaksTool()
     result = tool.parse_output("not valid json", "", Path("/repo"), ["a.py"])
     assert result == ""
+
+
+def test_tools_sorted_alphabetically():
+    names = [t.name for t in TOOLS]
+    assert names == sorted(names)

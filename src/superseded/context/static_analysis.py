@@ -210,17 +210,20 @@ class GitleaksTool:
         return "Secrets detected:\n" + "\n".join(findings) if findings else ""
 
 
-TOOLS: list[Tool] = [
-    RuffTool(),
-    MypyTool(),
-    BanditTool(),
-    EslintTool(),
-    TscTool(),
-    GofmtTool(),
-    GoVetTool(),
-    StaticcheckTool(),
-    GitleaksTool(),
-]
+TOOLS: list[Tool] = sorted(
+    [
+        RuffTool(),
+        MypyTool(),
+        BanditTool(),
+        EslintTool(),
+        TscTool(),
+        GofmtTool(),
+        GoVetTool(),
+        StaticcheckTool(),
+        GitleaksTool(),
+    ],
+    key=lambda t: t.name,
+)
 
 
 def _languages_in_files(changed_files: list[str]) -> set[str]:
