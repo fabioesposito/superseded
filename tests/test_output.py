@@ -4,6 +4,8 @@ import json
 import subprocess
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from superseded.models import Finding, ReviewResult
 from superseded.output.github_pr import post_review_to_pr
 from superseded.output.json_out import format_json
@@ -344,8 +346,9 @@ def test_partition_comments_all_valid():
             stderr="",
         ),
     ):
-        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
         assert bad == set()
+        assert ids == [1]
 
 
 def test_partition_comments_one_bad():
@@ -356,8 +359,9 @@ def test_partition_comments_one_bad():
         "superseded.output.github_pr.subprocess.run",
         side_effect=subprocess.CalledProcessError(1, "gh"),
     ):
-        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
         assert bad == {0}
+        assert ids == []
 
 
 def test_partition_comments_mixed():
@@ -383,15 +387,17 @@ def test_partition_comments_mixed():
         )
 
     with patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect):
-        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
         assert bad == {1}
+        assert len(ids) == 1
 
 
 def test_partition_comments_empty():
     from superseded.output.github_pr import _partition_comments
 
-    bad = _partition_comments([], {"body": "test"}, "r", 1)
+    bad, ids = _partition_comments([], {"body": "test"}, "r", 1)
     assert bad == set()
+    assert ids == []
 
 
 def test_partition_comments_all_valid_three():
@@ -410,12 +416,13 @@ def test_partition_comments_all_valid_three():
         "superseded.output.github_pr.subprocess.run",
         return_value=MagicMock(
             returncode=0,
-            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stdout=json.dumps({"comments": [{"id": 1}, {"id": 2}, {"id": 3}]}),
             stderr="",
         ),
     ):
-        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
         assert bad == set()
+        assert len(ids) == 3
 
 
 def test_partition_comments_one_bad_three():
@@ -442,8 +449,9 @@ def test_partition_comments_one_bad_three():
         )
 
     with patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect):
-        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
         assert bad == {1}
+        assert len(ids) == 2
 
 
 def test_build_fallback_text_single():
@@ -519,5 +527,133 @@ def test_partition_comments_two_bad_three():
         )
 
     with patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect):
-        bad = _partition_comments(payload["comments"], payload, "r", 1)
+        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
         assert bad == {1, 2}
+        assert len(ids) == 1
+
+
+def test_post_review_fallback_mixed():
+    """Happy path fails, binary search isolates bad comment, final post is body-only."""
+    result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="ok.py",
+                line=1,
+                end_line=1,
+                title="good",
+                description="d",
+                suggestion="s",
+            ),
+            Finding(
+                pass_name="style",
+                severity="nit",
+                file="bad.py",
+                line=999,
+                end_line=999,
+                title="out-of-range",
+                description="d",
+                suggestion="s",
+            ),
+        ]
+    )
+
+    call_count = [0]
+    payloads = []
+
+    def side_effect(cmd, **kwargs):
+        call_count[0] += 1
+        input_json = json.loads(kwargs.get("input", "{}"))
+        payloads.append(input_json)
+        if call_count[0] == 1:
+            raise subprocess.CalledProcessError(1, "gh")
+        comment_bodies = [c.get("body", "") for c in input_json.get("comments", [])]
+        if any("out-of-range" in b for b in comment_bodies):
+            raise subprocess.CalledProcessError(1, "gh")
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stderr="",
+        )
+
+    with (
+        patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect),
+        patch("superseded.output.github_pr._repo", return_value="owner/repo"),
+    ):
+        ids = post_review_to_pr(pr=1, result=result)
+
+    # Final payload is body-only (valid comments already live from probe)
+    final_payload = payloads[-1]
+    assert final_payload["comments"] == []
+    assert "## Out-of-range findings" in final_payload["body"]
+    assert "bad.py:999" in final_payload["body"]
+    assert len(ids) == 1  # one valid comment
+
+
+def test_post_review_fallback_all_bad():
+    """All comments out of range -> body-only review with fallback text."""
+    result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="a.py",
+                line=999,
+                end_line=999,
+                title="bad1",
+                description="d",
+                suggestion="s",
+            ),
+            Finding(
+                pass_name="style",
+                severity="nit",
+                file="b.py",
+                line=999,
+                end_line=999,
+                title="bad2",
+                description="d",
+                suggestion="s",
+            ),
+        ]
+    )
+
+    payloads = []
+
+    def side_effect(cmd, **kwargs):
+        input_json = json.loads(kwargs.get("input", "{}"))
+        payloads.append(input_json)
+        if input_json.get("comments"):
+            raise subprocess.CalledProcessError(1, "gh")
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps({"id": 1, "comments": []}),
+            stderr="",
+        )
+
+    with (
+        patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect),
+        patch("superseded.output.github_pr._repo", return_value="owner/repo"),
+    ):
+        post_review_to_pr(pr=1, result=result)
+
+    final_payload = payloads[-1]
+    assert final_payload["comments"] == []
+    assert "## Out-of-range findings" in final_payload["body"]
+    assert "a.py:999" in final_payload["body"]
+    assert "b.py:999" in final_payload["body"]
+
+
+def test_post_review_no_comments_raises():
+    """CalledProcessError with empty comments re-raises."""
+    result = ReviewResult(findings=[])
+
+    with (
+        patch(
+            "superseded.output.github_pr.subprocess.run",
+            side_effect=subprocess.CalledProcessError(1, "gh"),
+        ),
+        patch("superseded.output.github_pr._repo", return_value="owner/repo"),
+        pytest.raises(subprocess.CalledProcessError),
+    ):
+        post_review_to_pr(pr=1, result=result)

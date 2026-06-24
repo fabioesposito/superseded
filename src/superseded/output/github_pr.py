@@ -54,32 +54,37 @@ def _post_review_payload(payload: dict, target_repo: str, pr: int) -> list[int]:
 
 def _partition_comments(
     comments: list[dict], base_payload: dict, target_repo: str, pr: int
-) -> set[int]:
+) -> tuple[set[int], list[int]]:
     """Binary-search to identify indices of invalid (out-of-diff-hunk) comments.
 
-    Returns a set of indices into *comments* that cannot be posted as inline
-    comments.  Uses _post_review_payload to test batches — a batch that succeeds
-    has no bad comments; a failing batch is split and recursed.
+    Returns (bad_indices, comment_ids) — *bad_indices* identifies out-of-range
+    comments; *comment_ids* collects the GitHub comment IDs from every successful
+    probe post, maintained in the same order as the original comment list.
     """
     if len(comments) == 0:
-        return set()
+        return set(), []
     if len(comments) == 1:
         try:
-            _post_review_payload({**base_payload, "comments": [comments[0]]}, target_repo, pr)
-            return set()
+            ids = _post_review_payload(
+                {**base_payload, "comments": [comments[0]]}, target_repo, pr
+            )
+            return set(), ids
         except subprocess.CalledProcessError:
-            return {0}
+            return {0}, []
 
+    # Test the full batch before recursing
     try:
-        _post_review_payload({**base_payload, "comments": comments}, target_repo, pr)
-        return set()
+        ids = _post_review_payload(
+            {**base_payload, "comments": comments}, target_repo, pr
+        )
+        return set(), ids
     except subprocess.CalledProcessError:
         pass
 
     mid = len(comments) // 2
-    left_bad = _partition_comments(comments[:mid], base_payload, target_repo, pr)
-    right_bad = _partition_comments(comments[mid:], base_payload, target_repo, pr)
-    return left_bad | {i + mid for i in right_bad}
+    left_bad, left_ids = _partition_comments(comments[:mid], base_payload, target_repo, pr)
+    right_bad, right_ids = _partition_comments(comments[mid:], base_payload, target_repo, pr)
+    return left_bad | {i + mid for i in right_bad}, left_ids + right_ids
 
 
 def _build_fallback_text(findings: list[Finding]) -> str:
@@ -96,7 +101,26 @@ def _build_fallback_text(findings: list[Finding]) -> str:
 def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) -> list[int]:
     payload = build_review_payload(result)
     target_repo = repo if repo is not None else _repo()
-    return _post_review_payload(payload, target_repo, pr)
+
+    try:
+        return _post_review_payload(payload, target_repo, pr)
+    except subprocess.CalledProcessError:
+        if not payload["comments"]:
+            raise
+
+        bad_indices, comment_ids = _partition_comments(
+            payload["comments"], payload, target_repo, pr
+        )
+
+        bad_findings = [result.findings[i] for i in sorted(bad_indices)]
+        if bad_findings:
+            payload["body"] += _build_fallback_text(bad_findings)
+
+        # Post body-only — valid inline comments are already live from the probe.
+        payload["comments"] = []
+        _post_review_payload(payload, target_repo, pr)
+
+        return comment_ids
 
 
 def _extract_comment_ids(stdout: str) -> list[int]:
