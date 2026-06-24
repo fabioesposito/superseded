@@ -21,4 +21,4 @@ test-results/
 htmlcov/
 coverage/
 playwright-report/
-.playwright/
+.playwright/.code-review-graph/
