@@ -10,7 +10,7 @@ Outstanding issues from the code review (commit `9e494c9`). Criticals and Import
 
 ## Spec compliance (low-stakes)
 
-- [ ] **`installation_config` table.** `server-mode-design.md:321-330` marks it "optional, for future use" — not a gap, but document the omission in the plan if not built.
+- [x] **`installation_config` table.** `server-mode-design.md:321-330` marks it "optional, for future use" — not a gap, but document the omission in the plan if not built.
 - [ ] **Static budget truncation drops whole tool blocks.** `context/static_analysis.py:276-287` drops an entire tool's block if it alone exceeds `STATIC_BUDGET`, losing all its findings. Spec wording says "N more findings omitted"; impl says "N tool output(s) omitted". Switch to per-finding truncation and match the spec tail string.
 - [ ] **`TOOLS` not sorted alphabetically.** `context/static_analysis.py:210-220`; spec testing plan calls out "aggregate block ordering (alphabetical by name)". Add the sort + a test.
 - [ ] **Symbol cap is first-added-first.** `context/usage_retrieval.py` keeps the first `MAX_SYMBOLS` symbols; spec wants "most-recently-added first" so the focal change is retained. Reverse the retention.

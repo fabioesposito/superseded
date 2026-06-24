@@ -671,6 +671,11 @@ CREATE TABLE IF NOT EXISTS installations (
 );
 ```
 
+> **Note (intentional omission):** The `installation_config` table from the design spec
+> (`server-mode-design.md:321-330`) is marked "optional, for future use" and is not
+> implemented. Per-installation config overrides are deferred until a concrete use case
+> emerges.```
+
 Add these methods to the `MemoryStore` class:
 
 ```python
