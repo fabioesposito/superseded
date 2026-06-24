@@ -72,9 +72,16 @@ class MemoryStore:
     ) -> None:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
-                "INSERT OR IGNORE INTO findings "
+                "INSERT INTO findings "
                 "(id, repo, pass, severity, file, line, title, description, reasoning) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET "
+                "severity = excluded.severity, "
+                "description = excluded.description, "
+                "reasoning = excluded.reasoning "
+                "WHERE excluded.severity != severity "
+                "OR excluded.description != description "
+                "OR excluded.reasoning != reasoning",
                 (finding_id, repo, pass_name, severity, file, line, title, description, reasoning),
             )
             await db.commit()

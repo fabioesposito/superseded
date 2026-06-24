@@ -131,6 +131,89 @@ async def _init_old_db(db_path: Path) -> None:
         """)
 
 
+def test_record_finding_upserts_on_change(store):
+    asyncio.run(
+        store.record_finding(
+            finding_id="f1",
+            repo="owner/repo",
+            pass_name="security",
+            severity="critical",
+            file="a.py",
+            line=1,
+            title="title",
+            description="desc1",
+            reasoning="reason1",
+        )
+    )
+    asyncio.run(
+        store.record_finding(
+            finding_id="f1",
+            repo="owner/repo",
+            pass_name="security",
+            severity="important",
+            file="a.py",
+            line=1,
+            title="title",
+            description="desc2",
+            reasoning="reason2",
+        )
+    )
+
+    async def _get():
+        import aiosqlite
+
+        async with aiosqlite.connect(store.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM findings WHERE id = 'f1'")
+            return dict(await cursor.fetchone())
+
+    row = asyncio.run(_get())
+    assert row["severity"] == "important"
+    assert row["description"] == "desc2"
+    assert row["reasoning"] == "reason2"
+
+
+def test_record_finding_preserves_comment_id_on_upsert(store):
+    asyncio.run(
+        store.record_finding(
+            finding_id="f2",
+            repo="owner/repo",
+            pass_name="security",
+            severity="critical",
+            file="a.py",
+            line=1,
+            title="title",
+            description="desc1",
+        )
+    )
+    asyncio.run(store.set_comment_id("f2", 42))
+    asyncio.run(
+        store.record_finding(
+            finding_id="f2",
+            repo="owner/repo",
+            pass_name="security",
+            severity="warning",
+            file="a.py",
+            line=1,
+            title="title",
+            description="desc2",
+        )
+    )
+
+    async def _get():
+        import aiosqlite
+
+        async with aiosqlite.connect(store.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM findings WHERE id = 'f2'")
+            return dict(await cursor.fetchone())
+
+    row = asyncio.run(_get())
+    assert row["severity"] == "warning"
+    assert row["description"] == "desc2"
+    assert row["comment_id"] == 42
+
+
 def test_dismissed_findings_include_reasoning(store):
     asyncio.run(
         store.record_finding(
