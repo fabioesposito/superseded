@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from superseded.review.prompts import build_prompt, JSON_FORMAT_INSTRUCTIONS
+from superseded.review.prompts import JSON_FORMAT_INSTRUCTIONS, build_prompt
 
 
 def test_new_sections_present():

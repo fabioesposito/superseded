@@ -71,5 +71,5 @@ def _repo() -> str:
 def current_repo() -> str | None:
     try:
         return _repo()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except subprocess.CalledProcessError, FileNotFoundError:
         return None

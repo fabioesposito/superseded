@@ -258,8 +258,13 @@ def test_context_enrichment_called(monkeypatch):
     monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
 
     _run_review(
-        pr=None, diff_range="HEAD~1..HEAD", agent=None, model=None,
-        output_format="json", post=False, passes=None,
+        pr=None,
+        diff_range="HEAD~1..HEAD",
+        agent=None,
+        model=None,
+        output_format="json",
+        post=False,
+        passes=None,
     )
 
     assert called_static
@@ -291,11 +296,19 @@ def test_context_disabled_skips_enrichment(monkeypatch):
     monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
 
     from superseded.config import Config
-    monkeypatch.setattr("superseded.cli.load_config", lambda: Config(static_analysis=False, usage_retrieval=False))
+
+    monkeypatch.setattr(
+        "superseded.cli.load_config", lambda: Config(static_analysis=False, usage_retrieval=False)
+    )
 
     _run_review(
-        pr=None, diff_range="HEAD~1..HEAD", agent=None, model=None,
-        output_format="json", post=False, passes=None,
+        pr=None,
+        diff_range="HEAD~1..HEAD",
+        agent=None,
+        model=None,
+        output_format="json",
+        post=False,
+        passes=None,
     )
 
     assert not called
