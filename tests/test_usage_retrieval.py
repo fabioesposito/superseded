@@ -23,6 +23,13 @@ def test_extract_symbols_keeps_most_recent():
     assert "func_0" not in symbols
 
 
+def test_extract_symbols_case_insensitive_dedupe_for_python():
+    """Spec wants case-insensitive dedupe for Python/JS/TS."""
+    diff = "+class MyClass: pass\n+def myclass(): pass"
+    symbols = extract_symbols(diff, "python")
+    assert len([s for s in symbols if s.lower() == "myclass"]) == 1
+
+
 def test_retrieve_usages_single_rg_call():
     """Spec wants batched ripgrep, not one call per symbol."""
     mock_result = MagicMock()

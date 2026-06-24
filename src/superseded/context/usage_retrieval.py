@@ -89,12 +89,17 @@ def extract_symbols(diff: str, lang: str) -> list[str]:
     else:
         primary_re = _GENERIC_RE
 
+    case_insensitive = lang in ("python", "js", "ts")
     seen: set[str] = set()
+    seen_lower: set[str] = set()
     symbols: list[str] = []
 
     def add(name: str | None) -> None:
         if name and name not in _KEYWORDS and name not in seen:
+            if case_insensitive and name.lower() in seen_lower:
+                return
             seen.add(name)
+            seen_lower.add(name.lower())
             symbols.append(name)
 
     for m in primary_re.finditer(added_lines):
