@@ -11,9 +11,9 @@
     <style>
         :root {
             --bg: #080810;
-            --bg-card: #10101f;
-            --bg-elevated: #181830;
-            --border: #282850;
+            --bg-card: #12122a;
+            --bg-elevated: #1a1a38;
+            --border: #2a2a55;
             --border-bright: #404078;
             --text: #e8e8f0;
             --text-muted: #8888b8;
@@ -45,8 +45,6 @@
 
         html {
             scroll-behavior: smooth;
-            image-rendering: pixelated;
-            image-rendering: crisp-edges;
         }
 
         body {
@@ -67,12 +65,12 @@
             z-index: 9999;
             background: repeating-linear-gradient(
                 0deg,
-                rgba(0,0,0,0.08) 0px,
-                rgba(0,0,0,0.08) 1px,
+                rgba(0,0,0,0.06) 0px,
+                rgba(0,0,0,0.06) 1px,
                 transparent 1px,
-                transparent 3px
+                transparent 4px
             );
-            opacity: 0.6;
+            opacity: 0.4;
         }
 
         /* ── Background Grid ── */
@@ -195,18 +193,20 @@
         .container {
             max-width: 1040px;
             margin: 0 auto;
-            padding: 0 20px;
+            padding: 0 24px;
             position: relative;
             z-index: 1;
         }
 
-        /* ── Pixel Border Utility ── */
-        .pixel-border {
-            position: relative;
-            border: 3px solid var(--border);
-            box-shadow:
-                0 0 0 1px var(--border-bright),
-                inset 0 0 0 1px var(--border-bright);
+        /* ── Scroll Reveal ── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
         }
 
         /* ── Navigation ── */
@@ -238,7 +238,7 @@
             text-decoration: none;
         }
         .logo svg {
-            filter: drop-shadow(0 0 6px rgba(0,240,255,0.4));
+            filter: drop-shadow(0 0 4px rgba(0,240,255,0.3));
         }
         nav ul {
             display: flex;
@@ -263,6 +263,26 @@
             align-items: center;
         }
 
+        /* ── Mobile Hamburger ── */
+        .nav-toggle {
+            display: none;
+            background: none;
+            border: 2px solid var(--border);
+            color: var(--text-muted);
+            font-family: var(--font-game);
+            font-size: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .nav-toggle:hover {
+            color: var(--cyan);
+            border-color: var(--cyan);
+        }
+        .nav-mobile {
+            display: none;
+        }
+
         /* ── Buttons ── */
         .btn {
             display: inline-flex;
@@ -275,16 +295,8 @@
             cursor: pointer;
             border: none;
             position: relative;
-            transition: all 0.1s;
+            transition: all 0.15s ease;
             letter-spacing: 0.5px;
-            image-rendering: pixelated;
-        }
-        .btn::after {
-            content: '';
-            position: absolute;
-            inset: -3px;
-            border: 3px solid transparent;
-            pointer-events: none;
         }
         .btn-primary {
             background: var(--cyan);
@@ -301,13 +313,19 @@
             transform: translate(-1px, -1px);
             box-shadow:
                 0 0 0 1px #00aacc,
-                0 0 12px var(--cyan),
+                0 0 16px var(--cyan),
                 inset 0 2px 0 rgba(255,255,255,0.3),
                 inset 0 -2px 0 rgba(0,0,0,0.2),
                 6px 6px 0 #000;
+            animation: btn-glow 0.8s ease infinite alternate;
+        }
+        @keyframes btn-glow {
+            from { box-shadow: 0 0 0 1px #00aacc, 0 0 12px var(--cyan), inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.2), 6px 6px 0 #000; }
+            to   { box-shadow: 0 0 0 1px #00aacc, 0 0 24px var(--cyan), inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.2), 6px 6px 0 #000; }
         }
         .btn-primary:active {
             transform: translate(2px, 2px);
+            animation: none;
             box-shadow:
                 0 0 0 1px #0088aa,
                 inset 0 2px 0 rgba(255,255,255,0.3),
@@ -323,7 +341,7 @@
         .btn-ghost:hover {
             color: var(--cyan);
             border-color: var(--cyan);
-            box-shadow: 4px 4px 0 #001122;
+            box-shadow: 4px 4px 0 #001122, 0 0 12px var(--cyan-dim);
             text-shadow: 0 0 6px var(--cyan);
         }
         .btn-ghost:active {
@@ -337,7 +355,7 @@
 
         /* ── Hero / Title Screen ── */
         .hero {
-            padding: 140px 0 80px;
+            padding: 160px 0 100px;
             text-align: center;
             position: relative;
         }
@@ -346,7 +364,7 @@
             align-items: center;
             gap: 8px;
             padding: 6px 16px;
-            margin-bottom: 28px;
+            margin-bottom: 32px;
             background: var(--bg-card);
             border: 3px solid var(--border);
             font-family: var(--font-game);
@@ -365,51 +383,24 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
-        .hero-pixelart {
+        .hero-logo {
             display: inline-block;
-            margin-bottom: 28px;
-            position: relative;
+            margin-bottom: 32px;
         }
-        .pixel-sprite {
-            display: inline-block;
-            width: 4px;
-            height: 4px;
-            position: relative;
-            margin: 0 auto;
+        .hero-logo svg {
+            filter: drop-shadow(0 0 20px rgba(0,240,255,0.2));
+            animation: shield-pulse 3s ease-in-out infinite;
         }
-        .pixel-sprite::after {
-            content: '';
-            position: absolute;
-            width: 4px; height: 4px;
-            top: 0; left: 0;
-            box-shadow:
-                16px 0 var(--cyan), 20px 0 var(--cyan), 24px 0 var(--cyan), 28px 0 var(--cyan), 32px 0 var(--cyan), 36px 0 var(--cyan), 40px 0 var(--cyan), 44px 0 var(--cyan), 48px 0 var(--cyan), 52px 0 var(--cyan),
-                12px 4px var(--cyan), 56px 4px var(--cyan),
-                8px 8px var(--cyan), 60px 8px var(--cyan),
-                8px 12px var(--cyan), 60px 12px var(--cyan),
-                8px 16px var(--cyan), 60px 16px var(--cyan),
-                8px 20px var(--cyan), 60px 20px var(--cyan),
-                4px 24px var(--cyan), 64px 24px var(--cyan),
-                0 28px var(--cyan), 68px 28px var(--cyan),
-                0 32px var(--cyan), 8px 32px var(--cyan), 56px 32px var(--cyan), 68px 32px var(--cyan),
-                0 36px var(--yellow), 4px 36px var(--yellow), 12px 36px var(--yellow), 16px 36px var(--yellow), 20px 36px var(--yellow), 44px 36px var(--yellow), 48px 36px var(--yellow), 52px 36px var(--yellow), 56px 36px var(--yellow), 60px 36px var(--yellow), 64px 36px var(--yellow), 68px 36px var(--yellow),
-                0 40px var(--yellow), 68px 40px var(--yellow),
-                0 44px var(--yellow), 12px 44px var(--yellow), 16px 44px var(--yellow), 20px 44px var(--yellow), 24px 44px var(--yellow), 44px 44px var(--yellow), 48px 44px var(--yellow), 52px 44px var(--yellow), 56px 44px var(--yellow), 68px 44px var(--yellow),
-                0 48px var(--yellow), 68px 48px var(--yellow),
-                0 52px var(--yellow), 8px 52px var(--yellow), 12px 52px var(--yellow), 56px 52px var(--yellow), 68px 52px var(--yellow),
-                0 56px var(--yellow), 68px 56px var(--yellow),
-                4px 60px var(--orange), 64px 60px var(--orange),
-                8px 64px var(--orange), 60px 64px var(--orange),
-                12px 68px var(--orange), 56px 68px var(--orange),
-                16px 72px var(--orange), 20px 72px var(--orange), 24px 72px var(--orange), 28px 72px var(--orange), 32px 72px var(--orange), 36px 72px var(--orange), 40px 72px var(--orange), 44px 72px var(--orange), 48px 72px var(--orange), 52px 72px var(--orange),
-                20px 76px var(--orange), 24px 76px var(--orange), 28px 76px var(--orange), 32px 76px var(--orange), 36px 76px var(--orange), 40px 76px var(--orange), 44px 76px var(--orange), 48px 76px var(--orange);
+        @keyframes shield-pulse {
+            0%, 100% { filter: drop-shadow(0 0 16px rgba(0,240,255,0.15)); }
+            50% { filter: drop-shadow(0 0 28px rgba(0,240,255,0.35)); }
         }
         h1 {
             font-family: var(--font-game);
-            font-size: clamp(20px, 4vw, 32px);
+            font-size: clamp(18px, 4vw, 32px);
             font-weight: 400;
-            line-height: 1.5;
-            letter-spacing: -2px;
+            line-height: 1.6;
+            letter-spacing: -1px;
             margin-bottom: 20px;
             text-shadow:
                 0 0 20px var(--cyan),
@@ -463,7 +454,6 @@
             font-size: 18px;
         }
         .install-cmd .copy {
-            color: var(--text-dim);
             cursor: pointer;
             background: none;
             border: 2px solid var(--border);
@@ -491,11 +481,11 @@
         }
         h2 {
             font-family: var(--font-game);
-            font-size: clamp(18px, 3vw, 26px);
+            font-size: clamp(16px, 3vw, 26px);
             font-weight: 400;
             letter-spacing: -1px;
             margin-bottom: 14px;
-            line-height: 1.4;
+            line-height: 1.5;
         }
         .section-sub {
             color: var(--text-muted);
@@ -533,7 +523,6 @@
                 inset 0 0 60px rgba(0,255,65,0.03);
             position: relative;
             overflow: hidden;
-            border-radius: 0;
         }
         .crt::before {
             content: '';
@@ -543,8 +532,8 @@
                 0deg,
                 transparent,
                 transparent 2px,
-                rgba(0,0,0,0.15) 2px,
-                rgba(0,0,0,0.15) 4px
+                rgba(0,0,0,0.12) 2px,
+                rgba(0,0,0,0.12) 4px
             );
             z-index: 2;
             pointer-events: none;
@@ -553,7 +542,7 @@
             content: '';
             position: absolute;
             inset: 0;
-            background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.35) 100%);
+            background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.3) 100%);
             z-index: 3;
             pointer-events: none;
         }
@@ -568,8 +557,8 @@
             z-index: 1;
         }
         .crt-dot {
-            width: 14px;
-            height: 14px;
+            width: 12px;
+            height: 12px;
             background: #333;
             border: 2px solid #222;
         }
@@ -594,6 +583,7 @@
             min-height: 290px;
             color: var(--green);
             text-shadow: 0 0 4px rgba(0,255,65,0.4);
+            overflow-x: auto;
         }
         .crt-body .line { margin-bottom: 2px; }
         .crt-body .prompt { color: var(--green); }
@@ -619,13 +609,13 @@
 
         /* ── Stage Select (How It Works) ── */
         .how-section {
-            padding: 80px 0;
+            padding: 100px 0;
             position: relative;
         }
         .stages {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 28px;
             position: relative;
             max-width: 680px;
             margin: 0;
@@ -634,8 +624,8 @@
             content: '';
             position: absolute;
             left: 20px;
-            top: 36px;
-            bottom: 36px;
+            top: 44px;
+            bottom: 44px;
             width: 4px;
             background: repeating-linear-gradient(
                 0deg,
@@ -648,7 +638,7 @@
         .stage {
             display: flex;
             gap: 20px;
-            padding: 14px 0 14px 0;
+            padding: 8px 0;
         }
         .stage-num {
             min-width: 44px;
@@ -666,6 +656,11 @@
             z-index: 1;
             text-shadow: 0 0 8px var(--cyan);
             box-shadow: 3px 3px 0 #000;
+            transition: box-shadow 0.2s, text-shadow 0.2s;
+        }
+        .stage:hover .stage-num {
+            box-shadow: 3px 3px 0 #000, 0 0 12px var(--cyan-dim);
+            text-shadow: 0 0 14px var(--cyan);
         }
         .stage-content h3 {
             font-family: var(--font-game);
@@ -694,16 +689,25 @@
             border: 2px solid var(--border);
             color: var(--text-muted);
             box-shadow: 2px 2px 0 #000;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .pass-tag:hover {
+            transform: scale(1.08);
         }
         .pass-tag.s { border-color: var(--red); color: var(--red); text-shadow: 0 0 6px var(--red); }
+        .pass-tag.s:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--red-dim); }
         .pass-tag.c { border-color: var(--orange); color: var(--orange); text-shadow: 0 0 6px var(--orange); }
+        .pass-tag.c:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--orange-dim); }
         .pass-tag.p { border-color: var(--yellow); color: var(--yellow); text-shadow: 0 0 6px var(--yellow); }
+        .pass-tag.p:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--yellow-dim); }
         .pass-tag.st { border-color: var(--green); color: var(--green); text-shadow: 0 0 6px var(--green); }
+        .pass-tag.st:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--green-dim); }
         .pass-tag.a { border-color: var(--cyan); color: var(--cyan); text-shadow: 0 0 6px var(--cyan); }
+        .pass-tag.a:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--cyan-dim); }
 
         /* ── Power-ups (Features) ── */
         .features-section {
-            padding: 80px 0;
+            padding: 100px 0;
         }
         .powerups-grid {
             display: grid;
@@ -716,10 +720,12 @@
         .powerup {
             padding: 28px;
             background: var(--bg-card);
-            transition: background 0.15s;
+            transition: background 0.15s, border-color 0.15s;
+            border-top: 3px solid transparent;
         }
         .powerup:hover {
             background: var(--bg-elevated);
+            border-top-color: var(--cyan);
         }
         .powerup-icon {
             font-family: var(--font-game);
@@ -743,7 +749,7 @@
 
         /* ── Character Select (Agents) ── */
         .agents-section {
-            padding: 80px 0;
+            padding: 100px 0;
         }
         .char-grid {
             display: grid;
@@ -754,7 +760,7 @@
             padding: 24px;
             background: var(--bg-card);
             border: 3px solid var(--border);
-            transition: border-color 0.15s, box-shadow 0.15s;
+            transition: border-color 0.2s, box-shadow 0.2s;
             box-shadow: 4px 4px 0 #000;
             text-align: center;
         }
@@ -810,13 +816,14 @@
         }
         .cta-box {
             display: inline-block;
-            padding: 48px;
+            padding: 56px 48px;
             background: var(--bg-card);
             border: 3px solid var(--border);
             box-shadow:
                 0 0 0 1px var(--border-bright),
                 8px 8px 0 #000;
             max-width: 620px;
+            width: 100%;
         }
         .cta-box h2 {
             font-size: 22px;
@@ -830,6 +837,7 @@
         }
         .cta-box .install-cmd {
             margin-bottom: 20px;
+            display: flex;
         }
         .cta-actions {
             display: flex;
@@ -841,7 +849,7 @@
 
         /* ── Server Section ── */
         .server-section {
-            padding: 80px 0;
+            padding: 100px 0;
             border-top: 2px solid var(--border);
         }
         .server-term {
@@ -854,6 +862,7 @@
             color: var(--green);
             text-shadow: 0 0 4px rgba(0,255,65,0.3);
             box-shadow: inset 0 0 30px rgba(0,255,65,0.03);
+            overflow-x: auto;
         }
         .server-term .prompt { color: var(--cyan); }
 
@@ -868,7 +877,12 @@
             justify-content: space-between;
             align-items: center;
         }
-        footer p {
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .footer-brand p {
             color: var(--text-dim);
             font-family: var(--font-term);
             font-size: 18px;
@@ -889,56 +903,269 @@
             gap: 24px;
         }
 
-        /* ── Responsive ── */
-        @media (max-width: 768px) {
-            nav ul {
-                display: none;
-            }
-            nav .container {
-                justify-content: space-between;
-            }
-            nav {
-                padding: 8px 16px;
-            }
+        /* ══════════════════════════════════
+           RESPONSIVE BREAKPOINTS
+           ══════════════════════════════════ */
+
+        /* ── Tablet (≤900px) ── */
+        @media (max-width: 900px) {
             .char-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, 1fr);
             }
-            .hero {
-                padding: 110px 0 50px;
-            }
-            h1 {
-                letter-spacing: -1px;
-            }
-            .install-cmd code {
-                font-size: 15px;
-            }
-            .install-cmd {
-                font-size: 15px;
-                padding: 10px 14px;
-            }
-            footer .container {
-                flex-direction: column;
-                gap: 14px;
-                text-align: center;
-            }
-            .cta-box {
-                padding: 32px 20px;
+            .stages::before {
+                left: 16px;
             }
             .stage-num {
                 min-width: 36px;
                 height: 36px;
                 font-size: 10px;
             }
-            .pixel-sprite {
-                transform: scale(0.7);
+        }
+
+        /* ── Mobile (≤768px) ── */
+        @media (max-width: 768px) {
+            /* Nav: hide links, show hamburger */
+            nav ul {
+                display: none;
+            }
+            nav .nav-cta {
+                display: none;
+            }
+            .nav-toggle {
+                display: block;
+            }
+            /* Mobile menu panel */
+            .nav-mobile {
+                display: none;
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: var(--bg-card);
+                border: 3px solid var(--border);
+                border-top: none;
+                padding: 16px 24px;
+                box-shadow: 4px 4px 0 #000;
+            }
+            .nav-mobile.open {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .nav-mobile a {
+                display: block;
+                padding: 8px 0;
+                color: var(--text-muted);
+                text-decoration: none;
+                font-family: var(--font-game);
+                font-size: 9px;
+                letter-spacing: 0.5px;
+                transition: color 0.15s;
+            }
+            .nav-mobile a:hover {
+                color: var(--cyan);
+            }
+            .nav-mobile .nav-mobile-cta {
+                display: flex;
+                gap: 10px;
+                padding-top: 12px;
+                border-top: 1px solid var(--border);
+                margin-top: 4px;
+            }
+
+            nav {
+                padding: 8px 16px;
+            }
+
+            /* Hero */
+            .hero {
+                padding: 120px 0 60px;
+            }
+            h1 {
+                letter-spacing: -1px;
+                font-size: clamp(16px, 5vw, 24px);
+            }
+            .hero-sub {
+                font-size: 19px;
+            }
+            .hero-actions .btn {
+                padding: 12px 22px;
+                font-size: 9px;
+            }
+
+            /* Install command */
+            .install-cmd {
+                font-size: 15px;
+                padding: 10px 14px;
+                gap: 8px;
+            }
+            .install-cmd code {
+                font-size: 14px;
+            }
+
+            /* Sections */
+            .how-section,
+            .features-section,
+            .agents-section,
+            .server-section {
+                padding: 60px 0;
+            }
+            .cta-section {
+                padding: 60px 0;
+            }
+
+            /* Stages */
+            .stages {
+                gap: 20px;
+            }
+            .stages::before {
+                display: none;
+            }
+            .stage {
+                gap: 14px;
+            }
+
+            /* CTA */
+            .cta-box {
+                padding: 32px 20px;
+            }
+
+            /* Footer */
+            footer .container {
+                flex-direction: column;
+                gap: 14px;
+                text-align: center;
+            }
+            .footer-brand {
+                justify-content: center;
+            }
+
+            /* CRT terminal */
+            .crt-body {
+                font-size: 16px;
+                padding: 14px 16px;
+                min-height: auto;
+            }
+            .crt-body .line {
+                white-space: nowrap;
             }
         }
+
+        /* ── Small Mobile (≤480px) ── */
         @media (max-width: 480px) {
+            .container {
+                padding: 0 16px;
+            }
+            .hero {
+                padding: 100px 0 40px;
+            }
+            h1 {
+                font-size: 15px;
+                letter-spacing: 0;
+            }
+            .hero-sub {
+                font-size: 17px;
+            }
+            .hero-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            .hero-actions .btn {
+                width: 100%;
+                max-width: 260px;
+                justify-content: center;
+            }
+            .install-cmd {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .install-cmd code {
+                font-size: 13px;
+                word-break: break-all;
+                white-space: normal;
+            }
+            .section-label {
+                font-size: 7px;
+            }
+            h2 {
+                font-size: 15px;
+            }
+            .section-sub {
+                font-size: 17px;
+            }
+
+            /* Power-ups: single column */
             .powerups-grid {
                 grid-template-columns: 1fr;
             }
-            .hero-pixelart {
-                transform: scale(0.6);
+            .powerup {
+                padding: 20px;
+            }
+
+            /* Agents: single column */
+            .char-grid {
+                grid-template-columns: 1fr;
+            }
+
+            /* Stages */
+            .stage-num {
+                min-width: 32px;
+                height: 32px;
+                font-size: 9px;
+            }
+            .stage-content h3 {
+                font-size: 9px;
+            }
+            .stage-content p {
+                font-size: 16px;
+            }
+
+            /* Pass tags */
+            .pass-tag {
+                font-size: 6px;
+                padding: 3px 7px;
+            }
+
+            /* CRT */
+            .crt {
+                border-width: 4px;
+            }
+            .crt-body {
+                font-size: 14px;
+                padding: 12px;
+            }
+            .crt-dot {
+                width: 10px;
+                height: 10px;
+            }
+
+            /* Server */
+            .server-term {
+                font-size: 16px;
+                padding: 14px 16px;
+            }
+
+            /* CTA */
+            .cta-box h2 {
+                font-size: 17px;
+            }
+            .cta-box p {
+                font-size: 17px;
+            }
+            .cta-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            .cta-actions .btn {
+                width: 100%;
+                max-width: 260px;
+                justify-content: center;
+            }
+
+            /* Hero logo scale */
+            .hero-logo svg {
+                width: 180px;
+                height: auto;
             }
         }
     </style>
@@ -952,7 +1179,7 @@
     <nav>
         <div class="container">
             <a href="#" class="logo">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="100" height="36" shape-rendering="crispEdges" style="vertical-align: middle;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="90" height="34" style="vertical-align: middle;">
                     <clipPath id="shieldClipNav"><polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10"/></clipPath>
                     <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="#0a0a18"/>
                     <g clip-path="url(#shieldClipNav)">
@@ -963,6 +1190,15 @@
                         <rect x="138" y="0" width="14" height="120" fill="#00f0ff" opacity="0.9"/>
                     </g>
                     <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="none" stroke="#e8e8f0" stroke-width="2"/>
+                    <g transform="translate(120, 56)" opacity="0.85">
+                        <rect x="-12" y="-20" width="4" height="4" fill="#fff"/><rect x="-8" y="-20" width="4" height="4" fill="#fff"/><rect x="-4" y="-20" width="4" height="4" fill="#fff"/><rect x="0" y="-20" width="4" height="4" fill="#fff"/><rect x="4" y="-20" width="4" height="4" fill="#fff"/><rect x="8" y="-20" width="4" height="4" fill="#fff"/>
+                        <rect x="-12" y="-16" width="4" height="4" fill="#fff"/>
+                        <rect x="-12" y="-12" width="4" height="4" fill="#fff"/>
+                        <rect x="-12" y="-8" width="4" height="4" fill="#fff"/><rect x="-8" y="-8" width="4" height="4" fill="#fff"/><rect x="-4" y="-8" width="4" height="4" fill="#fff"/><rect x="0" y="-8" width="4" height="4" fill="#fff"/><rect x="4" y="-8" width="4" height="4" fill="#fff"/><rect x="8" y="-8" width="4" height="4" fill="#fff"/>
+                        <rect x="8" y="-4" width="4" height="4" fill="#fff"/>
+                        <rect x="8" y="0" width="4" height="4" fill="#fff"/>
+                        <rect x="-12" y="4" width="4" height="4" fill="#fff"/><rect x="-8" y="4" width="4" height="4" fill="#fff"/><rect x="-4" y="4" width="4" height="4" fill="#fff"/><rect x="0" y="4" width="4" height="4" fill="#fff"/><rect x="4" y="4" width="4" height="4" fill="#fff"/><rect x="8" y="4" width="4" height="4" fill="#fff"/>
+                    </g>
                 </svg>
             </a>
             <ul>
@@ -975,34 +1211,159 @@
                 <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost btn-sm">GITHUB</a>
                 <a href="#get-started" class="btn btn-primary btn-sm">START</a>
             </div>
+            <button class="nav-toggle" onclick="document.querySelector('.nav-mobile').classList.toggle('open')" aria-label="Menu">MENU</button>
+        </div>
+        <div class="nav-mobile">
+            <a href="#how" onclick="this.parentElement.classList.remove('open')">STAGES</a>
+            <a href="#features" onclick="this.parentElement.classList.remove('open')">POWER-UPS</a>
+            <a href="#agents" onclick="this.parentElement.classList.remove('open')">AGENTS</a>
+            <a href="#server" onclick="this.parentElement.classList.remove('open')">SERVER</a>
+            <div class="nav-mobile-cta">
+                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost btn-sm">GITHUB</a>
+                <a href="#get-started" class="btn btn-primary btn-sm" onclick="this.closest('.nav-mobile').classList.remove('open')">START</a>
+            </div>
         </div>
     </nav>
 
     <!-- ── Title Screen ── -->
     <section class="hero">
         <div class="container">
-            <div class="hero-badge">
+            <div class="hero-badge reveal">
                 <span class="dot"></span>
                 OPEN SOURCE — v1.0
             </div>
-            <div class="hero-pixelart">
-                <div class="pixel-sprite"></div>
+            <div class="hero-logo reveal">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="280" height="210">
+                    <defs>
+                        <filter id="heroShieldShadow" x="-10%" y="-10%" width="130%" height="130%">
+                            <feDropShadow dx="3" dy="3" stdDeviation="0" flood-color="#000" flood-opacity="0.6"/>
+                        </filter>
+                        <filter id="heroGlow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="2" result="blur"/>
+                            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                        </filter>
+                        <filter id="heroNeonGlow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="3" result="blur1"/>
+                            <feGaussianBlur stdDeviation="6" result="blur2"/>
+                            <feMerge><feMergeNode in="blur2"/><feMergeNode in="blur1"/><feMergeNode in="SourceGraphic"/></feMerge>
+                        </filter>
+                        <clipPath id="heroShieldClip"><polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10"/></clipPath>
+                    </defs>
+                    <g filter="url(#heroShieldShadow)">
+                        <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="#0a0a18"/>
+                        <g clip-path="url(#heroShieldClip)">
+                            <rect x="82" y="0" width="14" height="120" fill="#ff4466" opacity="0.9"/>
+                            <rect x="96" y="0" width="14" height="120" fill="#ff8833" opacity="0.9"/>
+                            <rect x="110" y="0" width="14" height="120" fill="#ffd700" opacity="0.9"/>
+                            <rect x="124" y="0" width="14" height="120" fill="#00ff41" opacity="0.9"/>
+                            <rect x="138" y="0" width="14" height="120" fill="#00f0ff" opacity="0.9"/>
+                            <g opacity="0.15">
+                                <line x1="70" y1="40" x2="170" y2="40" stroke="#fff" stroke-width="2"/>
+                                <line x1="70" y1="46" x2="170" y2="46" stroke="#fff" stroke-width="2"/>
+                                <line x1="70" y1="52" x2="170" y2="52" stroke="#fff" stroke-width="2"/>
+                                <line x1="70" y1="58" x2="170" y2="58" stroke="#fff" stroke-width="2"/>
+                                <line x1="70" y1="64" x2="170" y2="64" stroke="#fff" stroke-width="2"/>
+                                <line x1="70" y1="70" x2="170" y2="70" stroke="#fff" stroke-width="2"/>
+                                <line x1="70" y1="76" x2="170" y2="76" stroke="#fff" stroke-width="2"/>
+                            </g>
+                        </g>
+                        <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="none" stroke="#e8e8f0" stroke-width="2.5" stroke-linejoin="miter" filter="url(#heroNeonGlow)"/>
+                        <rect x="77" y="16" width="6" height="6" fill="#e8e8f0"/>
+                        <rect x="83" y="10" width="6" height="6" fill="#e8e8f0"/>
+                        <rect x="157" y="16" width="6" height="6" fill="#e8e8f0"/>
+                        <rect x="151" y="10" width="6" height="6" fill="#e8e8f0"/>
+                        <rect x="77" y="98" width="6" height="6" fill="#e8e8f0"/>
+                        <rect x="83" y="104" width="6" height="6" fill="#e8e8f0"/>
+                        <rect x="157" y="98" width="6" height="6" fill="#e8e8f0"/>
+                        <rect x="151" y="104" width="6" height="6" fill="#e8e8f0"/>
+                        <g transform="translate(120, 56)" opacity="0.85" filter="url(#heroGlow)">
+                            <rect x="-12" y="-20" width="4" height="4" fill="#fff"/><rect x="-8" y="-20" width="4" height="4" fill="#fff"/><rect x="-4" y="-20" width="4" height="4" fill="#fff"/><rect x="0" y="-20" width="4" height="4" fill="#fff"/><rect x="4" y="-20" width="4" height="4" fill="#fff"/><rect x="8" y="-20" width="4" height="4" fill="#fff"/>
+                            <rect x="-12" y="-16" width="4" height="4" fill="#fff"/>
+                            <rect x="-12" y="-12" width="4" height="4" fill="#fff"/>
+                            <rect x="-12" y="-8" width="4" height="4" fill="#fff"/><rect x="-8" y="-8" width="4" height="4" fill="#fff"/><rect x="-4" y="-8" width="4" height="4" fill="#fff"/><rect x="0" y="-8" width="4" height="4" fill="#fff"/><rect x="4" y="-8" width="4" height="4" fill="#fff"/><rect x="8" y="-8" width="4" height="4" fill="#fff"/>
+                            <rect x="8" y="-4" width="4" height="4" fill="#fff"/>
+                            <rect x="8" y="0" width="4" height="4" fill="#fff"/>
+                            <rect x="-12" y="4" width="4" height="4" fill="#fff"/><rect x="-8" y="4" width="4" height="4" fill="#fff"/><rect x="-4" y="4" width="4" height="4" fill="#fff"/><rect x="0" y="4" width="4" height="4" fill="#fff"/><rect x="4" y="4" width="4" height="4" fill="#fff"/><rect x="8" y="4" width="4" height="4" fill="#fff"/>
+                        </g>
+                    </g>
+                    <!-- Wordmark -->
+                    <g fill="#e8e8f0" filter="url(#heroShieldShadow)">
+                        <rect x="44" y="130" width="4" height="4"/><rect x="48" y="130" width="4" height="4"/><rect x="52" y="130" width="4" height="4"/>
+                        <rect x="40" y="134" width="4" height="4"/>
+                        <rect x="44" y="138" width="4" height="4"/><rect x="48" y="138" width="4" height="4"/><rect x="52" y="138" width="4" height="4"/>
+                        <rect x="56" y="142" width="4" height="4"/>
+                        <rect x="40" y="146" width="4" height="4"/><rect x="44" y="146" width="4" height="4"/><rect x="48" y="146" width="4" height="4"/><rect x="52" y="146" width="4" height="4"/>
+                        <rect x="64" y="130" width="4" height="4"/><rect x="72" y="130" width="4" height="4"/>
+                        <rect x="64" y="134" width="4" height="4"/><rect x="72" y="134" width="4" height="4"/>
+                        <rect x="64" y="138" width="4" height="4"/><rect x="72" y="138" width="4" height="4"/>
+                        <rect x="64" y="142" width="4" height="4"/><rect x="72" y="142" width="4" height="4"/>
+                        <rect x="68" y="146" width="4" height="4"/>
+                        <rect x="80" y="130" width="4" height="4"/><rect x="84" y="130" width="4" height="4"/><rect x="88" y="130" width="4" height="4"/>
+                        <rect x="80" y="134" width="4" height="4"/><rect x="88" y="134" width="4" height="4"/>
+                        <rect x="80" y="138" width="4" height="4"/><rect x="84" y="138" width="4" height="4"/><rect x="88" y="138" width="4" height="4"/>
+                        <rect x="80" y="142" width="4" height="4"/>
+                        <rect x="80" y="146" width="4" height="4"/>
+                        <rect x="96" y="130" width="4" height="4"/><rect x="100" y="130" width="4" height="4"/><rect x="104" y="130" width="4" height="4"/>
+                        <rect x="96" y="134" width="4" height="4"/>
+                        <rect x="96" y="138" width="4" height="4"/><rect x="100" y="138" width="4" height="4"/><rect x="104" y="138" width="4" height="4"/>
+                        <rect x="96" y="142" width="4" height="4"/>
+                        <rect x="96" y="146" width="4" height="4"/><rect x="100" y="146" width="4" height="4"/><rect x="104" y="146" width="4" height="4"/>
+                        <rect x="112" y="130" width="4" height="4"/><rect x="116" y="130" width="4" height="4"/><rect x="120" y="130" width="4" height="4"/>
+                        <rect x="112" y="134" width="4" height="4"/><rect x="120" y="134" width="4" height="4"/>
+                        <rect x="112" y="138" width="4" height="4"/><rect x="116" y="138" width="4" height="4"/><rect x="120" y="138" width="4" height="4"/>
+                        <rect x="112" y="142" width="4" height="4"/><rect x="116" y="142" width="4" height="4"/>
+                        <rect x="112" y="146" width="4" height="4"/><rect x="120" y="146" width="4" height="4"/>
+                        <rect x="128" y="130" width="4" height="4"/><rect x="132" y="130" width="4" height="4"/><rect x="136" y="130" width="4" height="4"/>
+                        <rect x="128" y="134" width="4" height="4"/>
+                        <rect x="128" y="138" width="4" height="4"/><rect x="132" y="138" width="4" height="4"/><rect x="136" y="138" width="4" height="4"/>
+                        <rect x="140" y="142" width="4" height="4"/>
+                        <rect x="128" y="146" width="4" height="4"/><rect x="132" y="146" width="4" height="4"/><rect x="136" y="146" width="4" height="4"/>
+                        <rect x="148" y="130" width="4" height="4"/><rect x="152" y="130" width="4" height="4"/><rect x="156" y="130" width="4" height="4"/>
+                        <rect x="148" y="134" width="4" height="4"/>
+                        <rect x="148" y="138" width="4" height="4"/><rect x="152" y="138" width="4" height="4"/><rect x="156" y="138" width="4" height="4"/>
+                        <rect x="148" y="142" width="4" height="4"/>
+                        <rect x="148" y="146" width="4" height="4"/><rect x="152" y="146" width="4" height="4"/><rect x="156" y="146" width="4" height="4"/>
+                        <rect x="164" y="130" width="4" height="4"/><rect x="168" y="130" width="4" height="4"/>
+                        <rect x="164" y="134" width="4" height="4"/><rect x="172" y="134" width="4" height="4"/>
+                        <rect x="164" y="138" width="4" height="4"/><rect x="172" y="138" width="4" height="4"/>
+                        <rect x="164" y="142" width="4" height="4"/><rect x="172" y="142" width="4" height="4"/>
+                        <rect x="164" y="146" width="4" height="4"/><rect x="168" y="146" width="4" height="4"/>
+                        <rect x="180" y="130" width="4" height="4"/><rect x="184" y="130" width="4" height="4"/><rect x="188" y="130" width="4" height="4"/>
+                        <rect x="180" y="134" width="4" height="4"/>
+                        <rect x="180" y="138" width="4" height="4"/><rect x="184" y="138" width="4" height="4"/><rect x="188" y="138" width="4" height="4"/>
+                        <rect x="180" y="142" width="4" height="4"/>
+                        <rect x="180" y="146" width="4" height="4"/><rect x="184" y="146" width="4" height="4"/><rect x="188" y="146" width="4" height="4"/>
+                        <rect x="196" y="130" width="4" height="4"/><rect x="200" y="130" width="4" height="4"/>
+                        <rect x="196" y="134" width="4" height="4"/><rect x="204" y="134" width="4" height="4"/>
+                        <rect x="196" y="138" width="4" height="4"/><rect x="204" y="138" width="4" height="4"/>
+                        <rect x="196" y="142" width="4" height="4"/><rect x="204" y="142" width="4" height="4"/>
+                        <rect x="196" y="146" width="4" height="4"/><rect x="200" y="146" width="4" height="4"/>
+                        <g opacity="0.6">
+                            <circle cx="48" cy="158" r="1.5" fill="#ff4466"/>
+                            <circle cx="60" cy="158" r="1.5" fill="#ff8833"/>
+                            <circle cx="72" cy="158" r="1.5" fill="#ffd700"/>
+                            <circle cx="84" cy="158" r="1.5" fill="#00ff41"/>
+                            <circle cx="96" cy="158" r="1.5" fill="#00f0ff"/>
+                        </g>
+                    </g>
+                    <text x="120" y="174" text-anchor="middle" font-family="monospace" font-size="7" fill="#555580" letter-spacing="3">AI CODE REVIEW</text>
+                </svg>
             </div>
-            <h1>
+            <h1 class="reveal">
                 <span class="hl-cyan">AI</span>
                 <span> code review </span><br>
                 <span>that </span>
                 <span class="hl-magenta">learns</span>
             </h1>
-            <p class="hero-sub">
+            <p class="hero-sub reveal">
                 5 parallel review passes &mdash; security, correctness, performance, style, architecture
                 &mdash; powered by Claude, Codex, or OpenCode. Gets smarter every time you dismiss a finding.
             </p>
-            <div class="hero-actions">
+            <div class="hero-actions reveal">
                 <a href="#get-started" class="btn btn-primary">&#9654; START</a>
                 <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost">GITHUB</a>
             </div>
-            <div class="install-cmd">
+            <div class="install-cmd reveal">
                 <span class="prompt">$</span>
                 <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
                 <button class="copy" onclick="navigator.clipboard.writeText('git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .')" title="Copy">COPY</button>
@@ -1015,7 +1376,7 @@
     <!-- ── CRT Terminal ── -->
     <section class="demo-section">
         <div class="container">
-            <div class="crt">
+            <div class="crt reveal">
                 <div class="crt-topbar">
                     <span class="crt-dot r"></span>
                     <span class="crt-dot y"></span>
@@ -1047,12 +1408,12 @@
     <!-- ── Stage Select ── -->
     <section class="how-section" id="how">
         <div class="container">
-            <div class="section-label">&gt; STAGE SELECT</div>
-            <h2>7 stages to review</h2>
-            <p class="section-sub">
+            <div class="section-label reveal">&gt; STAGE SELECT</div>
+            <h2 class="reveal">7 stages to review</h2>
+            <p class="section-sub reveal">
                 Each stage feeds the next. Five AI passes run in parallel. Findings merged, deduplicated, ranked.
             </p>
-            <div class="stages">
+            <div class="stages reveal">
                 <div class="stage">
                     <div class="stage-num">01</div>
                     <div class="stage-content">
@@ -1118,12 +1479,12 @@
     <!-- ── Power-ups ── -->
     <section class="features-section" id="features">
         <div class="container">
-            <div class="section-label">&gt; POWER-UPS</div>
-            <h2>Built for real workflows</h2>
-            <p class="section-sub">
+            <div class="section-label reveal">&gt; POWER-UPS</div>
+            <h2 class="reveal">Built for real workflows</h2>
+            <p class="section-sub reveal">
                 CLI for local dev. GitHub Actions for CI. Self-hosted server for teams. Memory that improves over time.
             </p>
-            <div class="powerups-grid">
+            <div class="powerups-grid reveal">
                 <div class="powerup">
                     <span class="powerup-icon">&#x2666;</span>
                     <h3>MULTI-PASS REVIEW</h3>
@@ -1183,12 +1544,12 @@
     <!-- ── Character Select ── -->
     <section class="agents-section" id="agents">
         <div class="container">
-            <div class="section-label">&gt; CHARACTER SELECT</div>
-            <h2>Choose your agent</h2>
-            <p class="section-sub">
+            <div class="section-label reveal">&gt; CHARACTER SELECT</div>
+            <h2 class="reveal">Choose your agent</h2>
+            <p class="section-sub reveal">
                 Superseded delegates to existing AI CLIs. No API key management — use what you already have configured.
             </p>
-            <div class="char-grid">
+            <div class="char-grid reveal">
                 <div class="char-card">
                     <div class="char-avatar">[C]</div>
                     <div class="char-name">CLAUDE CODE</div>
@@ -1216,7 +1577,7 @@
     <!-- ── Continue Screen ── -->
     <section class="cta-section" id="get-started">
         <div class="container">
-            <div class="cta-box">
+            <div class="cta-box reveal">
                 <div class="section-label">&gt; CONTINUE?</div>
                 <h2>INSERT COIN<br>TO START</h2>
                 <p>Clone, install, and run your first review in 30 seconds.</p>
@@ -1241,12 +1602,12 @@
     <!-- ── Server Section ── -->
     <section class="server-section" id="server">
         <div class="container">
-            <div class="section-label">&gt; BONUS STAGE</div>
-            <h2>Self-hosted for teams</h2>
-            <p class="section-sub">
+            <div class="section-label reveal">&gt; BONUS STAGE</div>
+            <h2 class="reveal">Self-hosted for teams</h2>
+            <p class="section-sub reveal">
                 Run Superseded as a GitHub App on your own server. Multiple repos install it and get automatic reviews on every PR.
             </p>
-            <div class="stages">
+            <div class="stages reveal">
                 <div class="stage">
                     <div class="stage-num">01</div>
                     <div class="stage-content">
@@ -1286,7 +1647,30 @@
     <!-- ── Footer ── -->
     <footer>
         <div class="container">
-            <p>&copy; 2026 SUPERSEDED &mdash; MIT LICENSE</p>
+            <div class="footer-brand">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="48" height="36">
+                    <clipPath id="shieldClipFooter"><polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10"/></clipPath>
+                    <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="#0a0a18"/>
+                    <g clip-path="url(#shieldClipFooter)">
+                        <rect x="82" y="0" width="14" height="120" fill="#ff4466" opacity="0.9"/>
+                        <rect x="96" y="0" width="14" height="120" fill="#ff8833" opacity="0.9"/>
+                        <rect x="110" y="0" width="14" height="120" fill="#ffd700" opacity="0.9"/>
+                        <rect x="124" y="0" width="14" height="120" fill="#00ff41" opacity="0.9"/>
+                        <rect x="138" y="0" width="14" height="120" fill="#00f0ff" opacity="0.9"/>
+                    </g>
+                    <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="none" stroke="#555580" stroke-width="2"/>
+                    <g transform="translate(120, 56)" opacity="0.7">
+                        <rect x="-12" y="-20" width="4" height="4" fill="#fff"/><rect x="-8" y="-20" width="4" height="4" fill="#fff"/><rect x="-4" y="-20" width="4" height="4" fill="#fff"/><rect x="0" y="-20" width="4" height="4" fill="#fff"/><rect x="4" y="-20" width="4" height="4" fill="#fff"/><rect x="8" y="-20" width="4" height="4" fill="#fff"/>
+                        <rect x="-12" y="-16" width="4" height="4" fill="#fff"/>
+                        <rect x="-12" y="-12" width="4" height="4" fill="#fff"/>
+                        <rect x="-12" y="-8" width="4" height="4" fill="#fff"/><rect x="-8" y="-8" width="4" height="4" fill="#fff"/><rect x="-4" y="-8" width="4" height="4" fill="#fff"/><rect x="0" y="-8" width="4" height="4" fill="#fff"/><rect x="4" y="-8" width="4" height="4" fill="#fff"/><rect x="8" y="-8" width="4" height="4" fill="#fff"/>
+                        <rect x="8" y="-4" width="4" height="4" fill="#fff"/>
+                        <rect x="8" y="0" width="4" height="4" fill="#fff"/>
+                        <rect x="-12" y="4" width="4" height="4" fill="#fff"/><rect x="-8" y="4" width="4" height="4" fill="#fff"/><rect x="-4" y="4" width="4" height="4" fill="#fff"/><rect x="0" y="4" width="4" height="4" fill="#fff"/><rect x="4" y="4" width="4" height="4" fill="#fff"/><rect x="8" y="4" width="4" height="4" fill="#fff"/>
+                    </g>
+                </svg>
+                <p>&copy; 2026 SUPERSEDED &mdash; MIT LICENSE</p>
+            </div>
             <div class="footer-links">
                 <a href="https://github.com/fabioesposito/superseded">GITHUB</a>
                 <a href="https://github.com/fabioesposito/superseded/issues">ISSUES</a>
@@ -1311,6 +1695,15 @@
                 }
             });
         });
+        // Scroll reveal
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+        document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
     </script>
 </body>
 </html>
