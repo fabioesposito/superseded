@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -54,3 +55,49 @@ def strip_blocklisted_sections(text: str) -> str:
     if cursor < len(text):
         kept.append(text[cursor:])
     return "".join(kept)
+
+
+def _read_optional(root: Path, filename: str) -> str | None:
+    """Read a root-level file, with case-insensitive filename lookup on Linux."""
+    path = root / filename
+    if not path.exists():
+        lower = filename.lower()
+        found = False
+        try:
+            for entry in root.iterdir():
+                if entry.is_file() and entry.name.lower() == lower:
+                    path = entry
+                    found = True
+                    break
+        except OSError:
+            return None
+        if not found:
+            return None
+    try:
+        return path.read_text()
+    except OSError as err:
+        logger.warning("Could not read convention doc %s: %s", path, err)
+        return None
+
+
+def discover_conventions(root: Path) -> str | None:
+    """Discover root-level convention docs, strip non-convention sections, concatenate, budget-cap."""
+    blocks: list[str] = []
+    for filename in CONVENTION_FILES:
+        text = _read_optional(root, filename)
+        if text is None:
+            continue
+        if filename.endswith(".md"):
+            text = strip_blocklisted_sections(text)
+        blocks.append(f"## {filename}\n{text.strip()}")
+
+    if not blocks:
+        return None
+
+    aggregate = "\n\n".join(blocks)
+    if len(aggregate) > CONVENTIONS_BUDGET:
+        omitted = len(aggregate) - CONVENTIONS_BUDGET
+        aggregate = aggregate[:CONVENTIONS_BUDGET] + (
+            f"\n… ({omitted} more chars omitted by conventions budget)"
+        )
+    return aggregate
