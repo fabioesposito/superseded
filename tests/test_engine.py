@@ -143,3 +143,32 @@ def test_review_raises_when_agent_unavailable(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda cmd: None)
     with pytest.raises(RuntimeError, match=r"agent|PATH|not found"):
         engine.review(diff="diff --git a/x.py b/x.py\n")
+
+
+def test_review_forwards_conventions_and_spec_signals(monkeypatch):
+    captured: dict[str, str | None] = {}
+
+    def fake_build_prompt(**kw):
+        captured.update(kw)
+        return "prompt"
+
+    monkeypatch.setattr("superseded.review.engine.build_prompt", fake_build_prompt)
+    monkeypatch.setattr(
+        "superseded.review.engine.subprocess.run",
+        lambda *a, **kw: MagicMock(returncode=0, stdout="[]", stderr=""),
+    )
+
+    agent = MagicMock()
+    agent.is_available.return_value = True
+    agent.build_command.return_value = ["echo"]
+    agent.parse_output.return_value = []
+    engine = ReviewEngine(agent=agent, config=MagicMock(is_pass_enabled=lambda n: True))
+
+    engine.review(
+        diff="diff",
+        conventions_signals="conv-block",
+        spec_signals="spec-block",
+        passes=["security"],
+    )
+    assert captured.get("conventions_signals") == "conv-block"
+    assert captured.get("spec_signals") == "spec-block"

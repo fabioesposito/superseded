@@ -95,6 +95,8 @@ class ReviewEngine:
         memory_context: str | None = None,
         static_signals: str | None = None,
         usage_signals: str | None = None,
+        conventions_signals: str | None = None,
+        spec_signals: str | None = None,
         passes: list[str] | None = None,
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
@@ -125,6 +127,8 @@ class ReviewEngine:
                     memory_context=memory_context,
                     static_signals=static_signals,
                     usage_signals=usage_signals,
+                    conventions_signals=conventions_signals,
+                    spec_signals=spec_signals,
                 )
                 future = executor.submit(self.run_pass, pass_name, prompt, timeout, progress)
                 future_to_pass[future] = pass_name
