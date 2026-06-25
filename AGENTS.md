@@ -29,6 +29,7 @@ There is no CI, no Makefile/Taskfile, and no pre-commit hooks configured. Verify
 - Pydantic v2 models for all data (`models.py`). `Finding.id` is auto-derived in `model_post_init` from pass/file/line/title via SHA-256 — don't set it manually unless you need a stable override.
 - pytest is configured with `asyncio_mode = "auto"`: async test functions run without an explicit `@pytest.mark.asyncio`. `pytest-asyncio` is a dev dep.
 - The 5 pass names are fixed `Literal`s in `models.py` (`PassName`): `security, correctness, performance, style, architecture`. Adding a pass means updating that Literal, `PassConfig` in `config.py`, and the default list in `review/engine.py`.
+- `Config.conventions` and `Config.spec_retrieval` (default `true`) inject repo-grounded convention docs and diff-relevant specs/plans/skills into every pass prompt. Disable with `.superseded.yaml` `conventions: false` / `spec_retrieval: false`, or `--no-conventions` / `--no-specs`. See `context/conventions.py` and `context/spec_retrieval.py`.
 
 ## Architecture notes
 
