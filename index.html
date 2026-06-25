@@ -644,10 +644,9 @@
             </div>
             <h1>AI code review<br>that <span class="accent">learns</span></h1>
             <p class="hero-sub">
-                Multi-pass review powered by Claude, GPT, or local models.
-                Feeds grounded context from linters and cross-file usage into every pass.
-                Remembers what you dismiss — and why.
-                Runs as a CLI, GitHub Action, or self-hosted server.
+                5 parallel review passes — security, correctness, performance, style, architecture — powered by Claude, Codex, or OpenCode.
+                Posts findings as PR comments. Gets smarter every time you dismiss a finding.
+                CLI, GitHub Action, or self-hosted server.
             </p>
             <div class="hero-actions">
                 <a href="#get-started" class="btn btn-primary">Get Started</a>
@@ -656,7 +655,7 @@
             <div class="install-cmd">
                 <span>$</span>
                 <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
-                <button class="copy" onclick="navigator.clipboard.writeText('git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .')" title="Copy"> Copy</button>
+                <button class="copy" onclick="navigator.clipboard.writeText('git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .')" title="Copy">Copy</button>
             </div>
         </div>
     </section>
@@ -696,7 +695,7 @@
             <div class="section-label">How it works</div>
             <h2>Five passes, one command</h2>
             <p class="section-sub">
-                Each pass sends a curated prompt to an AI agent in parallel — grounded in linter output, cross-file usage, and past feedback. Findings come back as structured JSON — merged, deduplicated, and sorted by severity.
+                Each pass sends a curated prompt to an AI agent in parallel. Findings come back as structured JSON — merged, deduplicated, and sorted by severity.
             </p>
             <div class="flow">
                 <div class="flow-step">
@@ -707,10 +706,10 @@
                     </div>
                 </div>
                 <div class="flow-step">
-                    <div class="flow-icon"> Feedback</div>
+                    <div class="flow-icon"> Memory</div>
                     <div class="flow-content">
                         <h3>Load feedback memory</h3>
-                        <p>Query the local SQLite store for previously dismissed findings — including why the agent flagged them. Inject as negative context so the agent avoids repeating patterns you've already flagged.</p>
+                        <p>Query the local SQLite store for previously dismissed findings. Inject as negative context so the agent avoids repeating patterns you've already rejected.</p>
                     </div>
                 </div>
                 <div class="flow-step">
@@ -770,12 +769,12 @@
                 <div class="feature">
                     <div class="feature-icon"> </div>
                     <h3>Multi-pass review</h3>
-                    <p>Five specialized passes with focused prompts. Security, correctness, performance, style, and architecture — each with domain-specific instructions.</p>
+                    <p>Five specialized passes with focused prompts. Security, correctness, performance, style, and architecture — each with domain-specific instructions. Catches issues a single generic pass would miss.</p>
                 </div>
                 <div class="feature">
                     <div class="feature-icon"> </div>
                     <h3>Feedback memory</h3>
-                    <p>SQLite store tracks which findings humans dismiss — and why the agent flagged them. Future reviews learn from your team's decisions, not just labels.</p>
+                    <p>Dismiss a finding once and it won't appear again. SQLite store tracks which findings humans reject — and why the agent flagged them. Future reviews learn from your team's decisions.</p>
                 </div>
                 <div class="feature">
                     <div class="feature-icon"> </div>
@@ -837,7 +836,7 @@
                 <div class="agent-card">
                     <div class="agent-name">OpenCode</div>
                     <div class="agent-cmd">opencode run</div>
-                    <div class="agent-auth">Auth: <code>ANTHROPIC_API_KEY</code> or provider-specific</div>
+                    <div class="agent-auth">Auth: Provider-specific</div>
                 </div>
                 <div class="agent-card">
                     <div class="agent-name">Codex</div>
@@ -850,11 +849,15 @@
 
     <section class="cta" id="get-started">
         <div class="container">
-            <h2>Start reviewing</h2>
-            <p>Install, configure, and run your first review in under a minute.</p>
+            <h2>Start reviewing in 30 seconds</h2>
+            <p>Clone, install, and run your first review.</p>
             <div class="install-cmd" style="margin-bottom: 24px;">
                 <span>$</span>
                 <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
+            </div>
+            <div class="install-cmd" style="margin-bottom: 24px;">
+                <span>$</span>
+                <code>superseded review --diff HEAD~1..HEAD</code>
             </div>
             <br>
             <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">

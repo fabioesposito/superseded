@@ -1,49 +1,29 @@
 # Superseded
 
-Multi-pass AI code review tool. Reviews PRs and diffs by delegating to AI CLIs (Claude Code, OpenCode, Codex) with focused prompts per review category.
+AI code review that learns from your feedback. Runs 5 parallel passes (security, correctness, performance, style, architecture) with Claude, Codex, or OpenCode. Posts findings as PR comments. Gets smarter every time you dismiss a finding.
 
-## How It Works
-
-Superseded runs **5 focused review passes in parallel**, each powered by an AI agent:
-
-```
- PR or local diff
-       │
-       ▼
- ┌─────────────────────────────────────────────┐
- │  concurrent review passes (ThreadPool)      │
- │                                             │
- │  security      injection, auth, secrets, XSS│
- │  correctness   logic bugs, edge cases       │
- │  performance   N+1 queries, blocking I/O    │
- │  style         naming, dead code, complexity│
- │  architecture  coupling, API contracts      │
- └─────────────────────────────────────────────┘
-       │
-       ▼
- merge + deduplicate findings
-       │
-       ▼
- structured output (table / JSON / markdown)
-       │
-       ▼
- optional: post as GitHub PR review comments
-```
-
-Each pass sends a targeted prompt to your chosen agent (Claude Code, OpenCode, or Codex). The agent returns structured JSON findings — severity, file, line, description, fix suggestion — which get merged and deduplicated.
-
-**Feedback loop**: dismiss a finding once and it won't appear in future reviews. Superseded tracks dismissed comments per-repo via a local SQLite store and injects them as negative context into subsequent runs.
-
-## Install
+## Quickstart (30 seconds)
 
 ```bash
 git clone https://github.com/fabioesposito/superseded
-cd superseded
-uv sync
-
-# Optional: install globally as a CLI tool
-uv tool install .
+cd superseded && uv sync && uv tool install .
+superseded review --diff HEAD~1..HEAD
 ```
+
+**Prerequisites:**
+- Python 3.14+
+- An AI CLI: `claude-code`, `opencode`, or `codex`
+- GitHub CLI (`gh`) authenticated: `gh auth login`
+
+## How It Works
+
+```
+PR or diff → 5 parallel passes → merge/deduplicate → structured output → optional PR comments
+```
+
+Each pass sends a targeted prompt to your chosen agent. Findings come back as structured JSON (severity, file, line, description, fix suggestion), merged and deduplicated.
+
+**Feedback loop:** Dismiss a finding once and it won't appear in future reviews. Superseded tracks dismissed comments per-repo via SQLite and injects them as negative context.
 
 ## Usage
 
@@ -56,9 +36,8 @@ superseded review --pr 123
 # Review a local diff
 superseded review --diff HEAD~3..HEAD
 
-# Review a branch (passes any git range to `git diff`)
+# Review a branch
 superseded review --diff main..feature-branch
-superseded review --diff origin/main..HEAD
 
 # Choose agent + model
 superseded review --pr 123 --agent claude-code --model claude-sonnet-4-20250514
@@ -100,9 +79,9 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-### Server Mode
+### Server Mode (Self-Hosted)
 
-Run Superseded as a persistent service that receives GitHub App webhooks. Multiple repos install your app and get automatic reviews on every PR.
+Run Superseded as a persistent GitHub App. Multiple repos install your app and get automatic reviews on every PR.
 
 ```bash
 # Install server dependencies
@@ -115,12 +94,6 @@ export SUPERSEDED_PRIVATE_KEY_PATH=/path/to/private-key.pem
 
 # Start the server
 superseded serve --port 8000
-```
-
-Or with a config file:
-
-```bash
-superseded serve --config /etc/superseded/server.yaml
 ```
 
 **Server config file** (`/etc/superseded/server.yaml`):
@@ -174,6 +147,27 @@ superseded feedback <comment-id> --helpful
 
 Dismissed findings are injected into future review prompts so the tool avoids repeating rejected comments.
 
+## Features
+
+- **Multi-pass review** — 5 specialized passes with focused prompts (security, correctness, performance, style, architecture)
+- **Feedback memory** — SQLite store tracks dismissed findings and their reasoning. Future reviews learn from your team's decisions
+- **GitHub integration** — Post findings as inline PR review comments. Critical issues request changes, suggestions post as comments
+- **Pluggable agents** — Use Claude Code, OpenCode, or Codex. Choose per-review or configure as default
+- **Structured output** — JSON for piping, markdown for docs, terminal table for quick scanning
+- **CI-native** — Docker-based GitHub Action. Runs on every PR, posts results as review comments
+- **Server mode** — Self-hosted GitHub App. Multiple repos, webhook-driven, configurable concurrency
+- **Static analysis pre-pass** — Auto-detects linters (ruff, mypy, eslint, bandit, gitleaks, go vet) and injects deterministic signals before AI review
+- **Cross-file usage retrieval** — Extracts symbols from changed code, uses ripgrep to find callers across the repo
+- **Reasoning trail** — Each finding includes agent rationale. Collapsible details in markdown and PR comments
+
+## Supported Agents
+
+| Agent | Invocation | Auth |
+|-------|-----------|------|
+| **claude-code** | `claude -p --bare --model` | `ANTHROPIC_API_KEY` |
+| **opencode** | `opencode run` | Provider-specific |
+| **codex** | `codex exec --json --model` | `CODEX_API_KEY` |
+
 ## Configuration
 
 `.superseded.yaml` in repo root:
@@ -195,47 +189,6 @@ memory: true
 Selection precedence for `agent`/`model`: **env vars > CLI flags > config**:
 
 - `SUPERSEDED_AGENT` / `SUPERSEDED_MODEL` — override config and CLI flags. Set these as GitHub Action secrets to configure the container without commit-side edits.
-
-## Supported Agents
-
-| Agent | Invocation | Auth |
-|-------|-----------|------|
-| **claude-code** | `claude -p --bare --model` | `ANTHROPIC_API_KEY` |
-| **opencode** | `opencode run` | Provider-specific |
-| **codex** | `codex exec --json --model` | `CODEX_API_KEY` |
-
-## Output Formats
-
-### Table (default)
-```
-Sev          Pass           File                           Line   Title
----------------------------------------------------------------------------
-🔴 critical  security       src/auth.py                    42     SQL injection
-🟡 suggestion style         src/utils.py                   15     Unclear naming
-
-Total: 2 findings
-  critical: 1
-  suggestion: 1
-```
-
-### JSON
-```json
-[
-  {
-    "severity": "critical",
-    "pass_name": "security",
-    "file": "src/auth.py",
-    "line": 42,
-    "end_line": 45,
-    "title": "SQL injection in user query",
-    "description": "User input interpolated into SQL string",
-    "suggestion": "Use parameterized queries"
-  }
-]
-```
-
-### Markdown
-Grouped by severity with inline code blocks and suggestions.
 
 ## Requirements
 
