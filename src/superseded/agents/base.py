@@ -15,11 +15,6 @@ class Agent(ABC):
     @abstractmethod
     def parse_output(self, raw: str, pass_name: str) -> list[dict]: ...
 
-    @property
-    def supports_stdin(self) -> bool:
-        """Whether the agent CLI supports receiving the prompt via stdin."""
-        return True
-
     def is_available(self) -> bool:
         binary = self.build_command()[0]
         return shutil.which(binary) is not None

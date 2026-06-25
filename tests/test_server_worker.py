@@ -179,13 +179,13 @@ async def test_run_review_for_job_passes_context():
     mock_engine.review.return_value = MagicMock(findings=[], summary={})
 
     with (
-        patch("superseded.server.checkout.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
         patch("superseded.config.load_config") as mock_load_config,
         patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
-        patch("superseded.diff.compute_file_context", return_value="file ctx"),
-        patch("superseded.context.static_analysis.run_static_analysis", return_value="static sig"),
-        patch("superseded.context.usage_retrieval.retrieve_usages", return_value="usage sig"),
-        patch("superseded.diff.parse_diff_files", return_value=[{"file": "x.py"}]),
+        patch("superseded.context.gathering.compute_file_context", return_value="file ctx"),
+        patch("superseded.context.gathering.run_static_analysis", return_value="static sig"),
+        patch("superseded.context.gathering.retrieve_usages", return_value="usage sig"),
+        patch("superseded.context.gathering.parse_diff_files", return_value=[{"file": "x.py"}]),
     ):
         mock_checkout.return_value = Path("/tmp/checkout")
         cfg = MagicMock()
@@ -229,15 +229,15 @@ async def test_run_review_for_job_forwards_conventions_and_specs():
     mock_engine.review.return_value = MagicMock(findings=[], summary={})
 
     with (
-        patch("superseded.server.checkout.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
         patch("superseded.config.load_config") as mock_load_config,
         patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
-        patch("superseded.diff.compute_file_context", return_value="file ctx"),
-        patch("superseded.context.static_analysis.run_static_analysis", return_value=None),
-        patch("superseded.context.usage_retrieval.retrieve_usages", return_value=None),
-        patch("superseded.context.conventions.discover_conventions", return_value="conv"),
-        patch("superseded.context.spec_retrieval.discover_repo_specs", return_value="spec"),
-        patch("superseded.diff.parse_diff_files", return_value=[{"file": "x.py"}]),
+        patch("superseded.context.gathering.compute_file_context", return_value="file ctx"),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
+        patch("superseded.context.gathering.discover_conventions", return_value="conv"),
+        patch("superseded.context.gathering.discover_repo_specs", return_value="spec"),
+        patch("superseded.context.gathering.parse_diff_files", return_value=[{"file": "x.py"}]),
     ):
         mock_checkout.return_value = Path("/tmp/checkout")
         cfg = MagicMock()
@@ -369,15 +369,15 @@ async def test_run_review_for_job_end_to_end(tmp_path):
 
     with (
         patch(
-            "superseded.server.checkout.checkout_repo",
+            "superseded.server.worker.checkout_repo",
             new_callable=AsyncMock,
             return_value=tmp_path,
         ),
         patch("superseded.config.load_config", return_value=Config()),
         patch("superseded.review.engine.ReviewEngine.select", return_value=fake_engine),
-        patch("superseded.diff.compute_file_context", return_value=None),
-        patch("superseded.context.static_analysis.run_static_analysis", return_value=None),
-        patch("superseded.context.usage_retrieval.retrieve_usages", return_value=None),
+        patch("superseded.context.gathering.compute_file_context", return_value=None),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
     ):
         outcome = await _run_review_for_job(
             github=github,

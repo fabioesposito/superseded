@@ -277,7 +277,7 @@ def run_static_analysis(
 
     detected_langs = repo_langs or _languages_in_files(changed_files)
 
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=min(len(TOOLS), 4)) as executor:
         futures = [
             executor.submit(_run_tool, tool, changed_files, root, detected_langs) for tool in TOOLS
         ]

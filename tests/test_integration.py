@@ -80,7 +80,7 @@ def _make_finding():
 @patch("superseded.cli.MemoryStore")
 @patch("superseded.cli.current_repo")
 @patch("superseded.cli.ReviewEngine")
-@patch("superseded.cli.compute_file_context")
+@patch("superseded.context.gathering.compute_file_context")
 @patch("superseded.cli.fetch_pr_description")
 @patch("superseded.cli.fetch_diff")
 def test_review_wires_memory_persistence_and_comment_ids(
@@ -150,7 +150,7 @@ def test_review_injects_dismissed_findings_as_memory(
 
 @patch("superseded.cli.fetch_diff")
 @patch("superseded.cli.ReviewEngine")
-@patch("superseded.cli.compute_file_context")
+@patch("superseded.context.gathering.compute_file_context")
 @patch("superseded.cli.fetch_pr_description")
 def test_review_passes_context_args_even_without_memory(
     mock_desc, mock_ctx, mock_engine_cls, mock_fetch
@@ -249,7 +249,9 @@ def test_context_enrichment_called(monkeypatch):
         lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
-    monkeypatch.setattr("superseded.cli.compute_file_context", lambda d, root=None: None)
+    monkeypatch.setattr(
+        "superseded.context.gathering.compute_file_context", lambda d, root=None: None
+    )
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
 
     called_static = []
@@ -263,8 +265,8 @@ def test_context_enrichment_called(monkeypatch):
         called_usage.append(True)
         return "usage output"
 
-    monkeypatch.setattr("superseded.cli.run_static_analysis", fake_static)
-    monkeypatch.setattr("superseded.cli.retrieve_usages", fake_usage)
+    monkeypatch.setattr("superseded.context.gathering.run_static_analysis", fake_static)
+    monkeypatch.setattr("superseded.context.gathering.retrieve_usages", fake_usage)
 
     mock_engine = MagicMock()
     mock_engine.review.return_value = MagicMock(findings=[])
@@ -294,16 +296,18 @@ def test_context_disabled_skips_enrichment(monkeypatch):
         lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
-    monkeypatch.setattr("superseded.cli.compute_file_context", lambda d, root=None: None)
+    monkeypatch.setattr(
+        "superseded.context.gathering.compute_file_context", lambda d, root=None: None
+    )
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
 
     called = []
     monkeypatch.setattr(
-        "superseded.cli.run_static_analysis",
+        "superseded.context.gathering.run_static_analysis",
         lambda *a, **kw: (called.append("static"), None)[1],
     )
     monkeypatch.setattr(
-        "superseded.cli.retrieve_usages",
+        "superseded.context.gathering.retrieve_usages",
         lambda *a, **kw: (called.append("usage"), None)[1],
     )
 
@@ -337,19 +341,21 @@ def test_conventions_and_specs_called_and_forwarded(monkeypatch):
         lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
-    monkeypatch.setattr("superseded.cli.compute_file_context", lambda d, root=None: None)
+    monkeypatch.setattr(
+        "superseded.context.gathering.compute_file_context", lambda d, root=None: None
+    )
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
-    monkeypatch.setattr("superseded.cli.run_static_analysis", lambda *a, **kw: None)
-    monkeypatch.setattr("superseded.cli.retrieve_usages", lambda *a, **kw: None)
+    monkeypatch.setattr("superseded.context.gathering.run_static_analysis", lambda *a, **kw: None)
+    monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda *a, **kw: None)
 
     called_conv = []
     called_spec = []
     monkeypatch.setattr(
-        "superseded.cli.discover_conventions",
+        "superseded.context.gathering.discover_conventions",
         lambda root: (called_conv.append(True), "conv block")[1],
     )
     monkeypatch.setattr(
-        "superseded.cli.discover_repo_specs",
+        "superseded.context.gathering.discover_repo_specs",
         lambda diff, root: (called_spec.append(True), "spec block")[1],
     )
 
@@ -380,18 +386,20 @@ def test_no_conventions_flag_skips_discover(monkeypatch):
         lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
-    monkeypatch.setattr("superseded.cli.compute_file_context", lambda d, root=None: None)
+    monkeypatch.setattr(
+        "superseded.context.gathering.compute_file_context", lambda d, root=None: None
+    )
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
-    monkeypatch.setattr("superseded.cli.run_static_analysis", lambda *a, **kw: None)
-    monkeypatch.setattr("superseded.cli.retrieve_usages", lambda *a, **kw: None)
+    monkeypatch.setattr("superseded.context.gathering.run_static_analysis", lambda *a, **kw: None)
+    monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda *a, **kw: None)
 
     called = []
     monkeypatch.setattr(
-        "superseded.cli.discover_conventions",
+        "superseded.context.gathering.discover_conventions",
         lambda root: (called.append("conv"), None)[1],
     )
     monkeypatch.setattr(
-        "superseded.cli.discover_repo_specs",
+        "superseded.context.gathering.discover_repo_specs",
         lambda diff, root: (called.append("spec"), None)[1],
     )
 

@@ -6,6 +6,12 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from superseded.config import load_config
+from superseded.context.gathering import gather_context
+from superseded.output.github_pr import build_review_payload
+from superseded.review.engine import ReviewEngine
+from superseded.server.checkout import checkout_repo
+
 if TYPE_CHECKING:
     from superseded.models import ReviewResult
     from superseded.server.github import GitHubApp
@@ -158,14 +164,9 @@ async def _run_review_for_job(
     job: ReviewJob,
     correlation_id: str,
 ) -> None:
-    from superseded.config import load_config
-    from superseded.review.engine import ReviewEngine
-
     tmp_dir = repo_manager.job_dir(job.installation_id, job.owner, job.repo, job.pr_number)
 
     try:
-        from superseded.server.checkout import checkout_repo
-
         if repo_manager.disk_usage() > DISK_USAGE_LIMIT:
             raise RuntimeError(
                 f"Disk usage above {DISK_USAGE_LIMIT:.0%} limit "
@@ -187,49 +188,19 @@ async def _run_review_for_job(
             token, job.owner, job.repo, job.pr_number
         )
 
-        from concurrent.futures import ThreadPoolExecutor
-
-        from superseded.context.conventions import discover_conventions
-        from superseded.context.spec_retrieval import discover_repo_specs
-        from superseded.context.static_analysis import run_static_analysis
-        from superseded.context.usage_retrieval import retrieve_usages
-        from superseded.diff import compute_file_context, parse_diff_files
-
-        changed_files = (
-            [e["file"] for e in parse_diff_files(diff)]
-            if (config.static_analysis or config.usage_retrieval)
-            else []
+        context = gather_context(
+            diff,
+            repo_path,
+            static_analysis=config.static_analysis,
+            usage_retrieval=config.usage_retrieval,
+            conventions=config.conventions,
+            spec_retrieval=config.spec_retrieval,
         )
-
-        with ThreadPoolExecutor(max_workers=4) as ctx_executor:
-            ctx_futures = {
-                "file_context": ctx_executor.submit(compute_file_context, diff, root=repo_path),
-                "static_signals": ctx_executor.submit(run_static_analysis, changed_files, repo_path)
-                if config.static_analysis
-                else None,
-                "usage_signals": ctx_executor.submit(retrieve_usages, diff, repo_path)
-                if config.usage_retrieval
-                else None,
-                "conventions_signals": ctx_executor.submit(discover_conventions, repo_path)
-                if config.conventions
-                else None,
-                "spec_signals": ctx_executor.submit(discover_repo_specs, diff, repo_path)
-                if config.spec_retrieval
-                else None,
-            }
-
-            def _result(key: str) -> str | None:
-                f = ctx_futures.get(key)
-                if f is None:
-                    return None
-                val = f.result()
-                return val or None
-
-            file_context = _result("file_context")
-            static_signals = _result("static_signals")
-            usage_signals = _result("usage_signals")
-            conventions_signals = _result("conventions_signals")
-            spec_signals = _result("spec_signals")
+        file_context = context["file_context"]
+        static_signals = context["static_signals"]
+        usage_signals = context["usage_signals"]
+        conventions_signals = context["conventions_signals"]
+        spec_signals = context["spec_signals"]
 
         engine = ReviewEngine.select(config.agent, model=config.model, config=config)
         result = engine.review(
@@ -241,8 +212,6 @@ async def _run_review_for_job(
             conventions_signals=conventions_signals,
             spec_signals=spec_signals,
         )
-
-        from superseded.output.github_pr import build_review_payload
 
         payload = build_review_payload(result)
 
