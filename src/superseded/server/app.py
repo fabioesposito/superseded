@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING
 
 from fastapi import BackgroundTasks, FastAPI, Request, Response
@@ -22,8 +23,9 @@ def create_app(
     worker: ReviewWorker,
     repo_manager: RepoManager,
     store: MemoryStore,
+    lifespan: Callable[[FastAPI], AsyncIterator[None]] | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="Superseded", version="0.1.0")
+    app = FastAPI(title="Superseded", version="0.1.0", lifespan=lifespan)
     start_time = time.time()
 
     @app.get("/health")

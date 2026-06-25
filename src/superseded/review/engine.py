@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,10 @@ if TYPE_CHECKING:
     from superseded.config import Config
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_PASS_TIMEOUT = 300
+
+ProgressFn = Callable[[str, str], None]
 
 AGENT_MAP: dict[str, type[Agent]] = {
     "claude-code": ClaudeCodeAgent,
@@ -42,17 +47,27 @@ class ReviewEngine:
         agent = agent_cls(model=model)
         return cls(agent=agent, config=config or Config())
 
-    def run_pass(self, pass_name: str, prompt: str) -> list[Finding]:
+    def run_pass(
+        self,
+        pass_name: str,
+        prompt: str,
+        timeout: int = DEFAULT_PASS_TIMEOUT,
+        progress: ProgressFn | None = None,
+    ) -> list[Finding]:
         cmd = self.agent.build_command(prompt)
+        if progress is not None:
+            progress(pass_name, "start")
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         except FileNotFoundError as err:
             raise RuntimeError(
                 f"Agent CLI '{cmd[0]}' not found on PATH. "
                 f"Install it or choose a different agent with --agent."
             ) from err
         except subprocess.TimeoutExpired as err:
-            raise RuntimeError(f"Agent timed out after 300 seconds for pass: {pass_name}") from err
+            raise RuntimeError(
+                f"Agent timed out after {timeout} seconds for pass: {pass_name}"
+            ) from err
 
         if result.returncode != 0:
             stderr = result.stderr.strip()
@@ -68,6 +83,8 @@ class ReviewEngine:
                 findings.append(Finding(**item))
             except Exception as err:
                 logger.warning("Skipping malformed finding item in pass %s: %s", pass_name, err)
+        if progress is not None:
+            progress(pass_name, "done")
         return findings
 
     def review(
@@ -79,13 +96,15 @@ class ReviewEngine:
         static_signals: str | None = None,
         usage_signals: str | None = None,
         passes: list[str] | None = None,
+        timeout: int = DEFAULT_PASS_TIMEOUT,
+        progress: ProgressFn | None = None,
     ) -> ReviewResult:
         if not self.agent.is_available():
             raise RuntimeError(
                 f"Agent CLI '{self.agent.name}' not found on PATH. "
                 "Install it or choose a different agent with --agent."
             )
-        if passes is None:
+        if passes is None or len(passes) == 0:
             passes = [
                 n
                 for n in ["security", "correctness", "performance", "style", "architecture"]
@@ -107,7 +126,7 @@ class ReviewEngine:
                     static_signals=static_signals,
                     usage_signals=usage_signals,
                 )
-                future = executor.submit(self.run_pass, pass_name, prompt)
+                future = executor.submit(self.run_pass, pass_name, prompt, timeout, progress)
                 future_to_pass[future] = pass_name
 
             for future in as_completed(future_to_pass):
@@ -118,6 +137,8 @@ class ReviewEngine:
                     msg = f"Review pass '{pass_name}' failed and was skipped: {err}"
                     logger.warning(msg)
                     warnings.append(msg)
+                    if progress is not None:
+                        progress(pass_name, "failed")
 
         result = self.merge_findings(all_findings)
         result.warnings = warnings

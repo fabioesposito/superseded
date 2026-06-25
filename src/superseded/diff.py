@@ -7,12 +7,26 @@ from pathlib import Path
 DEFAULT_CONTEXT_PADDING = 20
 
 
-def fetch_diff(pr: int | None = None, diff_range: str | None = None) -> str:
+def fetch_diff(
+    pr: int | None = None,
+    diff_range: str | None = None,
+    files: list[str] | None = None,
+) -> str:
+    """Fetch a diff.
+
+    ``pr`` and ``diff_range`` are mutually exclusive. ``files`` restricts a
+    local ``--diff`` to the given pathspecs (cannot be combined with ``--pr``);
+    when only ``files`` are given, the diff defaults to the working tree vs
+    ``HEAD``.
+    """
     if pr is not None:
+        if files:
+            raise ValueError("positional FILES cannot be combined with --pr")
         return _fetch_pr_diff(pr)
-    if diff_range is not None:
-        return _fetch_git_diff(diff_range)
-    raise ValueError("Either --pr or --diff must be provided")
+    if diff_range is not None or files:
+        rng = diff_range or "HEAD"
+        return _fetch_git_diff(rng, files)
+    raise ValueError("Either --pr, --diff, or FILES must be provided")
 
 
 def _fetch_pr_diff(pr: int) -> str:
@@ -30,10 +44,13 @@ def _fetch_pr_diff(pr: int) -> str:
     return result.stdout
 
 
-def _fetch_git_diff(diff_range: str) -> str:
+def _fetch_git_diff(diff_range: str, files: list[str] | None = None) -> str:
+    cmd = ["git", "diff", diff_range]
+    if files:
+        cmd += ["--", *files]
     try:
         result = subprocess.run(
-            ["git", "diff", diff_range],
+            cmd,
             capture_output=True,
             text=True,
             check=True,

@@ -3,7 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
 import sys
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+from typing import get_args
 
 import click
 
@@ -19,7 +23,7 @@ from superseded.diff import (
 )
 from superseded.memory.feedback import check_pr_feedback
 from superseded.memory.store import MemoryStore
-from superseded.models import ReviewResult
+from superseded.models import PassName, ReviewResult
 from superseded.output.github_pr import current_repo, post_review_to_pr
 from superseded.output.json_out import format_json
 from superseded.output.markdown import format_markdown
@@ -28,8 +32,24 @@ from superseded.review.engine import ReviewEngine
 
 AGENT_ENV = "SUPERSEDED_AGENT"
 MODEL_ENV = "SUPERSEDED_MODEL"
+DEFAULT_TIMEOUT = 300
+KNOWN_PASSES: list[str] = list(get_args(PassName))
+
+try:
+    _VERSION = version("superseded")
+except PackageNotFoundError:  # pragma: no cover - editable/installed environments
+    _VERSION = "0.0.0+unknown"
 
 logger = logging.getLogger(__name__)
+
+
+def _status(message: str) -> None:
+    """Emit a human-readable status message.
+
+    Routed to stderr so it never pollutes structured stdout output
+    (e.g. ``--format json | jq``).
+    """
+    click.echo(message, err=True)
 
 
 def resolve_agent(agent_flag: str | None, config: Config) -> str:
@@ -38,6 +58,55 @@ def resolve_agent(agent_flag: str | None, config: Config) -> str:
 
 def resolve_model(model_flag: str | None, config: Config) -> str | None:
     return os.environ.get(MODEL_ENV) or model_flag or config.model
+
+
+def _parse_passes(raw: str | None) -> list[str] | None:
+    """Parse and validate a comma-separated --passes string.
+
+    Returns ``None`` when no flag was supplied (caller should fall back to
+    config-enabled passes). Exits with a clear error on unknown pass names so
+    typos don't silently run zero passes.
+    """
+    if raw is None:
+        return None
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if not parts:
+        return []
+    unknown = [p for p in parts if p not in KNOWN_PASSES]
+    if unknown:
+        click.echo(
+            f"Error: unknown pass name(s): {', '.join(unknown)}. "
+            f"Choose from: {', '.join(KNOWN_PASSES)}",
+            err=True,
+        )
+        sys.exit(2)
+    return parts
+
+
+def _detect_current_pr() -> int | None:
+    """Auto-detect the PR for the current branch via ``gh``.
+
+    Returns ``None`` if gh is unavailable, not authenticated, or the branch has
+    no open PR. Never raises — it's a best-effort convenience for
+    ``feedback --check`` without ``--pr``.
+    """
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", "--json", "number", "-q", ".number"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+    except subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired:
+        return None
+    body = result.stdout.strip()
+    return int(body) if body.isdigit() else None
+
+
+def _progress(pass_name: str, status: str) -> None:
+    """Per-pass progress callback streamed to stderr."""
+    _status(f"[{pass_name}] {status}")
 
 
 def format_memory_context(dismissed: list[dict]) -> str | None:
@@ -59,7 +128,7 @@ def format_memory_context(dismissed: list[dict]) -> str | None:
 
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version=_VERSION)
 def cli() -> None:
     """Superseded — multi-pass AI code review tool."""
 
@@ -76,8 +145,29 @@ def cli() -> None:
     default=None,
     help="Output format",
 )
-@click.option("--post", is_flag=True, help="Post review to GitHub PR")
-@click.option("--passes", default=None, help="Comma-separated passes to run")
+@click.option("--post", is_flag=True, help="Post review to GitHub PR (requires --pr)")
+@click.option(
+    "--passes",
+    default=None,
+    help=f"Comma-separated passes to run (one of: {', '.join(KNOWN_PASSES)})",
+)
+@click.option(
+    "--timeout",
+    type=int,
+    default=None,
+    help=f"Per-pass agent timeout in seconds (default: {DEFAULT_TIMEOUT})",
+)
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Path to config file (default: .superseded.yaml in repo root)",
+)
+@click.option("--no-memory", is_flag=True, help="Disable memory feedback injection")
+@click.option("--no-static", is_flag=True, help="Disable static analysis")
+@click.option("--no-usage", is_flag=True, help="Disable usage retrieval")
+@click.argument("files", nargs=-1, type=click.Path(exists=True, dir_okay=False))
 def review(
     pr: int | None,
     diff_range: str | None,
@@ -86,11 +176,36 @@ def review(
     output_format: str | None,
     post: bool,
     passes: str | None,
+    timeout: int | None,
+    config_path: Path | None,
+    no_memory: bool,
+    no_static: bool,
+    no_usage: bool,
+    files: tuple[str, ...],
 ) -> None:
-    """Review code changes."""
-    if pr is None and diff_range is None:
-        click.echo("Error: Either --pr or --diff must be provided.", err=True)
-        sys.exit(1)
+    """Review code changes.
+
+    Review a PR (`--pr 123`), a local diff (`--diff HEAD~3..HEAD`), or specific
+    files (`superseded review src/auth.py`). File paths are combined with
+    `--diff` (defaulting to `HEAD` if only files are given) and cannot be used
+    with `--pr`.
+    """
+    if pr is None and diff_range is None and not files:
+        click.echo(
+            "Error: Provide either --pr, --diff, or one or more FILES to review.",
+            err=True,
+        )
+        sys.exit(2)
+
+    if post and pr is None:
+        click.echo("Error: --post requires --pr (cannot post from a local diff).", err=True)
+        sys.exit(2)
+
+    if pr is not None and files:
+        click.echo("Error: positional FILES cannot be combined with --pr.", err=True)
+        sys.exit(2)
+
+    pass_list = _parse_passes(passes)
 
     _run_review(
         pr=pr,
@@ -99,7 +214,13 @@ def review(
         model=model,
         output_format=output_format,
         post=post,
-        passes=passes,
+        passes=pass_list,
+        timeout=timeout,
+        config_path=config_path,
+        no_memory=no_memory,
+        no_static=no_static,
+        no_usage=no_usage,
+        files=list(files) or None,
     )
 
 
@@ -110,41 +231,64 @@ def _run_review(
     model: str | None,
     output_format: str | None,
     post: bool,
-    passes: str | None,
+    passes: list[str] | None,
+    *,
+    timeout: int | None = None,
+    config_path: Path | None = None,
+    no_memory: bool = False,
+    no_static: bool = False,
+    no_usage: bool = False,
+    files: list[str] | None = None,
 ) -> None:
-    config = load_config()
+    config = load_config(config_path)
     agent_name = resolve_agent(agent, config)
     model_name = resolve_model(model, config)
     fmt = output_format or config.format
 
-    click.echo("Fetching diff...")
-    diff = fetch_diff(pr=pr, diff_range=diff_range)
+    # Select the agent and verify it is installed BEFORE doing expensive context
+    # work. Failing fast here saves wasted diff fetch / static analysis when the
+    # user simply forgot to install the CLI.
+    try:
+        engine = ReviewEngine.select(agent_name, model=model_name, config=config)
+    except ValueError as err:
+        click.echo(f"Error: {err}", err=True)
+        sys.exit(2)
+    if not engine.agent.is_available():
+        click.echo(
+            f"Error: Agent CLI '{engine.agent.name}' not found on PATH. "
+            "Install it or choose a different agent with --agent.",
+            err=True,
+        )
+        sys.exit(2)
 
-    pass_list = passes.split(",") if passes else None
+    _status("Fetching diff...")
+    diff = fetch_diff(pr=pr, diff_range=diff_range, files=files)
 
-    click.echo("Gathering context...")
+    _status("Gathering context...")
     root = repo_root()
     file_context = compute_file_context(diff, root=root) or None
     pr_description = fetch_pr_description(pr) if pr is not None else None
 
+    enable_static = config.static_analysis and not no_static
+    enable_usage = config.usage_retrieval and not no_usage
     static_signals: str | None = None
     usage_signals: str | None = None
-    if config.static_analysis:
+    if enable_static:
         changed_files = [e["file"] for e in parse_diff_files(diff)]
         static_signals = run_static_analysis(changed_files, root)
-    if config.usage_retrieval:
+    if enable_usage:
         usage_signals = retrieve_usages(diff, root)
 
     repo = current_repo()
     memory_context: str | None = None
     store: MemoryStore | None = None
-    if config.memory and repo:
+    if config.memory and not no_memory and repo:
         store = MemoryStore()
         dismissed = asyncio.run(_load_dismissed(store, repo))
         memory_context = format_memory_context(dismissed)
 
-    click.echo(f"Running review with {agent_name}...")
-    engine = ReviewEngine.select(agent_name, model=model_name, config=config)
+    pass_timeout = timeout if timeout is not None else DEFAULT_TIMEOUT
+    _status(f"Running review with {agent_name} (timeout {pass_timeout}s per pass)...")
     try:
         result = engine.review(
             diff=diff,
@@ -153,7 +297,9 @@ def _run_review(
             memory_context=memory_context,
             static_signals=static_signals,
             usage_signals=usage_signals,
-            passes=pass_list,
+            passes=passes,
+            timeout=pass_timeout,
+            progress=_progress,
         )
     except RuntimeError as err:
         click.echo(f"Error: {err}", err=True)
@@ -173,11 +319,11 @@ def _run_review(
         asyncio.run(_persist_findings(store, result, repo))
 
     if post and pr is not None:
-        click.echo("Posting to GitHub PR...")
+        _status("Posting to GitHub PR...")
         comment_ids = post_review_to_pr(pr=pr, result=result)
         if store is not None:
             asyncio.run(_link_comment_ids(store, result, comment_ids))
-        click.echo(f"Done. Posted {len(comment_ids)} comment(s).")
+        _status(f"Done. Posted {len(comment_ids)} comment(s).")
 
 
 async def _load_dismissed(store: MemoryStore, repo: str) -> list[dict]:
@@ -210,29 +356,48 @@ async def _link_comment_ids(
 
 @cli.command()
 @click.option("--check", is_flag=True, help="Check for feedback on past reviews")
-@click.option("--pr", type=int, default=None, help="PR number to check for feedback")
+@click.option(
+    "--pr",
+    type=int,
+    default=None,
+    help="PR number to check for feedback (auto-detected from current branch if omitted)",
+)
 @click.argument("comment_id", required=False)
 @click.option("--helpful", is_flag=True)
 @click.option("--dismiss", is_flag=True)
+@click.pass_context
 def feedback(
-    check: bool, pr: int | None, comment_id: str | None, helpful: bool, dismiss: bool
+    ctx: click.Context,
+    check: bool,
+    pr: int | None,
+    comment_id: str | None,
+    helpful: bool,
+    dismiss: bool,
 ) -> None:
     """Manage review feedback."""
     if check:
-        if pr is None:
-            click.echo("Error: --check requires --pr <number>.", err=True)
-            sys.exit(1)
-        _run_feedback_check(pr)
+        pr_number = pr if pr is not None else _detect_current_pr()
+        if pr_number is None:
+            click.echo(
+                "Error: --check requires --pr <number>, or run inside a branch with an "
+                "open PR (auto-detection via 'gh pr view' failed).",
+                err=True,
+            )
+            sys.exit(2)
+        _run_feedback_check(pr_number)
         return
 
-    if comment_id and (helpful or dismiss):
+    if helpful and dismiss:
+        click.echo("Error: --helpful and --dismiss are mutually exclusive.", err=True)
+        sys.exit(2)
+
+    if comment_id is not None and (helpful ^ dismiss):
         action = "helpful" if helpful else "dismiss"
         _run_feedback_manual(comment_id, action)
         return
 
-    click.echo(
-        "Usage: superseded feedback --check --pr N  OR  superseded feedback <comment-id> --helpful/--dismiss"
-    )
+    click.echo(ctx.get_help())
+    ctx.exit(2)
 
 
 def _run_feedback_check(pr: int) -> None:
@@ -273,7 +438,7 @@ async def _process_feedback(store: MemoryStore, comments: list[dict]) -> None:
 @click.option("--config", "config_path", default=None, help="Server config file path")
 def serve(port: int | None, host: str | None, config_path: str | None) -> None:
     """Start the Superseded review server."""
-    from pathlib import Path
+    from contextlib import asynccontextmanager
 
     from superseded.server.config import ServerConfig
     from superseded.server.github import GitHubApp
@@ -304,18 +469,24 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
     from superseded.server.app import create_app
     from superseded.server.lifecycle import JsonFormatter, ServerLifecycle
 
-    app = create_app(
-        config=config, github=github, worker=worker, repo_manager=repo_manager, store=MemoryStore()
-    )
-    lifecycle = ServerLifecycle(app=app, worker=worker)
+    lifecycle = ServerLifecycle(worker=worker)
 
-    @app.on_event("startup")
-    async def on_startup() -> None:
+    @asynccontextmanager
+    async def lifespan(_app):
         await lifecycle.startup()
+        try:
+            yield
+        finally:
+            await lifecycle.shutdown()
 
-    @app.on_event("shutdown")
-    async def on_shutdown() -> None:
-        await lifecycle.shutdown()
+    app = create_app(
+        config=config,
+        github=github,
+        worker=worker,
+        repo_manager=repo_manager,
+        store=MemoryStore(),
+        lifespan=lifespan,
+    )
 
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
@@ -324,7 +495,7 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
         handlers=[handler],
     )
 
-    click.echo(f"Starting Superseded server on {config.host}:{config.port}")
+    _status(f"Starting Superseded server on {config.host}:{config.port}")
     uvicorn.run(app, host=config.host, port=config.port, log_level=config.log_level)
 
 

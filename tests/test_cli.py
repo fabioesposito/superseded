@@ -126,7 +126,8 @@ def test_persist_findings_passes_reasoning(monkeypatch):
 
 def test_run_review_exits_cleanly_when_agent_unavailable(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
-        "superseded.cli.fetch_diff", lambda pr=None, diff_range=None: "diff --git a/x.py b/x.py\n"
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr("superseded.cli.compute_file_context", lambda diff, root=None: None)
@@ -148,7 +149,7 @@ def test_run_review_exits_cleanly_when_agent_unavailable(tmp_path, monkeypatch, 
             post=False,
             passes=None,
         )
-    assert exc.value.code == 1
+    assert exc.value.code == 2
     err = capsys.readouterr().err
     assert "agent" in err.lower() or "path" in err.lower()
 
@@ -159,7 +160,8 @@ def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, mo
     monkeypatch.chdir(tmp_path)
 
     monkeypatch.setattr(
-        "superseded.cli.fetch_diff", lambda pr=None, diff_range=None: "diff --git a/x.py b/x.py\n"
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr("superseded.cli.compute_file_context", lambda diff, root=None: None)
@@ -167,11 +169,14 @@ def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, mo
     monkeypatch.setattr("superseded.cli.run_static_analysis", lambda files, root: None)
     monkeypatch.setattr("superseded.cli.retrieve_usages", lambda diff, root: None)
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/claude")
 
     invoked: list[str] = []
 
-    def fake_run_pass(self, pass_name, prompt):
+    def fake_run_pass(self, pass_name, prompt, timeout=300, progress=None):
         invoked.append(pass_name)
+        if progress is not None:
+            progress(pass_name, "done")
         return []
 
     monkeypatch.setattr("superseded.review.engine.ReviewEngine.run_pass", fake_run_pass)

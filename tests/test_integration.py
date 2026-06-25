@@ -244,7 +244,10 @@ def test_feedback_manual_unknown_comment_id_reports_error():
 
 def test_context_enrichment_called(monkeypatch):
     """Verify run_static_analysis and retrieve_usages are called and kwargs forwarded."""
-    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "diff --git a/x.py b/x.py\n+x")
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
+    )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr("superseded.cli.compute_file_context", lambda d, root=None: None)
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
@@ -286,7 +289,10 @@ def test_context_enrichment_called(monkeypatch):
 
 def test_context_disabled_skips_enrichment(monkeypatch):
     """When config disables enrichment, functions are not called."""
-    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "diff --git a/x.py b/x.py\n+x")
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
+    )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr("superseded.cli.compute_file_context", lambda d, root=None: None)
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
@@ -308,7 +314,8 @@ def test_context_disabled_skips_enrichment(monkeypatch):
     from superseded.config import Config
 
     monkeypatch.setattr(
-        "superseded.cli.load_config", lambda: Config(static_analysis=False, usage_retrieval=False)
+        "superseded.cli.load_config",
+        lambda path=None: Config(static_analysis=False, usage_retrieval=False),
     )
 
     _run_review(

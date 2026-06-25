@@ -8,7 +8,6 @@ import signal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from superseded.server.app import FastAPI
     from superseded.server.worker import ReviewWorker
 
 logger = logging.getLogger(__name__)
@@ -58,7 +57,15 @@ class JsonFormatter(logging.Formatter):
 
 
 class ServerLifecycle:
-    def __init__(self, app: FastAPI, worker: ReviewWorker, shutdown_timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        worker: ReviewWorker,
+        shutdown_timeout: float = 10.0,
+        app: object | None = None,
+    ) -> None:
+        # ``app`` is accepted for backward compatibility; the lifecycle no
+        # longer needs an app reference (FastAPI drives startup/shutdown via
+        # the lifespan context manager supplied by the CLI).
         self.app = app
         self.worker = worker
         self.shutdown_timeout = shutdown_timeout
