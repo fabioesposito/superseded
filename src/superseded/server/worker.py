@@ -187,6 +187,8 @@ async def _run_review_for_job(
             token, job.owner, job.repo, job.pr_number
         )
 
+        from superseded.context.conventions import discover_conventions
+        from superseded.context.spec_retrieval import discover_repo_specs
         from superseded.context.static_analysis import run_static_analysis
         from superseded.context.usage_retrieval import retrieve_usages
         from superseded.diff import compute_file_context, parse_diff_files
@@ -201,6 +203,13 @@ async def _run_review_for_job(
         if config.usage_retrieval:
             usage_signals = retrieve_usages(diff, repo_path)
 
+        conventions_signals: str | None = None
+        spec_signals: str | None = None
+        if config.conventions:
+            conventions_signals = discover_conventions(repo_path)
+        if config.spec_retrieval:
+            spec_signals = discover_repo_specs(diff, repo_path)
+
         engine = ReviewEngine.select(config.agent, model=config.model, config=config)
         result = engine.review(
             diff=diff,
@@ -208,6 +217,8 @@ async def _run_review_for_job(
             file_context=file_context,
             static_signals=static_signals,
             usage_signals=usage_signals,
+            conventions_signals=conventions_signals,
+            spec_signals=spec_signals,
         )
 
         from superseded.output.github_pr import build_review_payload

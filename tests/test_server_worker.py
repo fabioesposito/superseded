@@ -211,6 +211,59 @@ async def test_run_review_for_job_passes_context():
 
 
 @pytest.mark.asyncio
+async def test_run_review_for_job_forwards_conventions_and_specs():
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    job = ReviewJob(
+        installation_id=123,
+        owner="octocat",
+        repo="hello-world",
+        pr_number=42,
+        head_sha="abc123",
+        base_sha="def456",
+    )
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[], summary={})
+
+    with (
+        patch("superseded.server.checkout.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch("superseded.config.load_config") as mock_load_config,
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.diff.compute_file_context", return_value="file ctx"),
+        patch("superseded.context.static_analysis.run_static_analysis", return_value=None),
+        patch("superseded.context.usage_retrieval.retrieve_usages", return_value=None),
+        patch("superseded.context.conventions.discover_conventions", return_value="conv"),
+        patch("superseded.context.spec_retrieval.discover_repo_specs", return_value="spec"),
+        patch("superseded.diff.parse_diff_files", return_value=[{"file": "x.py"}]),
+    ):
+        mock_checkout.return_value = Path("/tmp/checkout")
+        cfg = MagicMock()
+        cfg.agent = "claude-code"
+        cfg.model = None
+        cfg.static_analysis = False
+        cfg.usage_retrieval = False
+        cfg.conventions = True
+        cfg.spec_retrieval = True
+        mock_load_config.return_value = cfg
+
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="ghp_test",
+            job=job,
+            correlation_id="test123",
+        )
+
+    mock_engine.review.assert_called_once()
+    call_kwargs = mock_engine.review.call_args
+    assert call_kwargs.kwargs.get("conventions_signals") == "conv"
+    assert call_kwargs.kwargs.get("spec_signals") == "spec"
+
+
+@pytest.mark.asyncio
 async def test_run_review_skips_clone_when_disk_full():
     from superseded.server.worker import _run_review_for_job
 
