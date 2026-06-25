@@ -187,28 +187,49 @@ async def _run_review_for_job(
             token, job.owner, job.repo, job.pr_number
         )
 
+        from concurrent.futures import ThreadPoolExecutor
+
         from superseded.context.conventions import discover_conventions
         from superseded.context.spec_retrieval import discover_repo_specs
         from superseded.context.static_analysis import run_static_analysis
         from superseded.context.usage_retrieval import retrieve_usages
         from superseded.diff import compute_file_context, parse_diff_files
 
-        file_context = compute_file_context(diff, root=repo_path) or None
+        changed_files = (
+            [e["file"] for e in parse_diff_files(diff)]
+            if (config.static_analysis or config.usage_retrieval)
+            else []
+        )
 
-        static_signals: str | None = None
-        usage_signals: str | None = None
-        if config.static_analysis:
-            changed_files = [e["file"] for e in parse_diff_files(diff)]
-            static_signals = run_static_analysis(changed_files, repo_path)
-        if config.usage_retrieval:
-            usage_signals = retrieve_usages(diff, repo_path)
+        with ThreadPoolExecutor(max_workers=4) as ctx_executor:
+            ctx_futures = {
+                "file_context": ctx_executor.submit(compute_file_context, diff, root=repo_path),
+                "static_signals": ctx_executor.submit(run_static_analysis, changed_files, repo_path)
+                if config.static_analysis
+                else None,
+                "usage_signals": ctx_executor.submit(retrieve_usages, diff, repo_path)
+                if config.usage_retrieval
+                else None,
+                "conventions_signals": ctx_executor.submit(discover_conventions, repo_path)
+                if config.conventions
+                else None,
+                "spec_signals": ctx_executor.submit(discover_repo_specs, diff, repo_path)
+                if config.spec_retrieval
+                else None,
+            }
 
-        conventions_signals: str | None = None
-        spec_signals: str | None = None
-        if config.conventions:
-            conventions_signals = discover_conventions(repo_path)
-        if config.spec_retrieval:
-            spec_signals = discover_repo_specs(diff, repo_path)
+            def _result(key: str) -> str | None:
+                f = ctx_futures.get(key)
+                if f is None:
+                    return None
+                val = f.result()
+                return val or None
+
+            file_context = _result("file_context")
+            static_signals = _result("static_signals")
+            usage_signals = _result("usage_signals")
+            conventions_signals = _result("conventions_signals")
+            spec_signals = _result("spec_signals")
 
         engine = ReviewEngine.select(config.agent, model=config.model, config=config)
         result = engine.review(

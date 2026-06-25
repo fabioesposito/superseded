@@ -54,11 +54,13 @@ class ReviewEngine:
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
     ) -> list[Finding]:
-        cmd = self.agent.build_command(prompt)
+        cmd = self.agent.build_command()
         if progress is not None:
             progress(pass_name, "start")
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            result = subprocess.run(
+                cmd, input=prompt, capture_output=True, text=True, timeout=timeout
+            )
         except FileNotFoundError as err:
             raise RuntimeError(
                 f"Agent CLI '{cmd[0]}' not found on PATH. "

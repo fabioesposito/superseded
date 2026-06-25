@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import ClassVar, Protocol
 
@@ -236,6 +237,36 @@ def _languages_in_files(changed_files: list[str]) -> set[str]:
     return langs
 
 
+def _run_tool(
+    tool: Tool, changed_files: list[str], root: Path, detected_langs: set[str]
+) -> str | None:
+    tool_langs = set(tool.languages)
+    if not (tool_langs & detected_langs or LANG_ANY in tool_langs):
+        return None
+    if not tool.detect(root):
+        return None
+    cmd = tool.build_command(changed_files, root)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except FileNotFoundError:
+        logger.warning("Static tool %s not on PATH, skipping", tool.name)
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("Static tool %s timed out after 30s, skipping", tool.name)
+        return None
+
+    if result.returncode != 0 and not result.stdout.strip() and not result.stderr.strip():
+        logger.warning(
+            "Static tool %s exited %d with no output, skipping",
+            tool.name,
+            result.returncode,
+        )
+        return None
+
+    block = tool.parse_output(result.stdout, result.stderr, root, changed_files)
+    return f"### {tool.name}\n{block}" if block else None
+
+
 def run_static_analysis(
     changed_files: list[str],
     root: Path,
@@ -245,35 +276,16 @@ def run_static_analysis(
         return None
 
     detected_langs = repo_langs or _languages_in_files(changed_files)
-    blocks: list[str] = []
 
-    for tool in TOOLS:
-        tool_langs = set(tool.languages)
-        if not (tool_langs & detected_langs or LANG_ANY in tool_langs):
-            continue
-        if not tool.detect(root):
-            continue
-        cmd = tool.build_command(changed_files, root)
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        except FileNotFoundError:
-            logger.warning("Static tool %s not on PATH, skipping", tool.name)
-            continue
-        except subprocess.TimeoutExpired:
-            logger.warning("Static tool %s timed out after 30s, skipping", tool.name)
-            continue
-
-        if result.returncode != 0 and not result.stdout.strip() and not result.stderr.strip():
-            logger.warning(
-                "Static tool %s exited %d with no output, skipping",
-                tool.name,
-                result.returncode,
-            )
-            continue
-
-        block = tool.parse_output(result.stdout, result.stderr, root, changed_files)
-        if block:
-            blocks.append(f"### {tool.name}\n{block}")
+    with ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(_run_tool, tool, changed_files, root, detected_langs) for tool in TOOLS
+        ]
+        blocks: list[str] = []
+        for future in futures:
+            block = future.result()
+            if block:
+                blocks.append(block)
 
     if not blocks:
         return None

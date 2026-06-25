@@ -14,8 +14,12 @@ class ClaudeCodeAgent(Agent):
     def name(self) -> str:
         return "claude-code"
 
-    def build_command(self, prompt: str) -> list[str]:
-        cmd = ["claude", "-p", prompt]
+    def build_command(self, prompt: str | None = None) -> list[str]:
+        cmd = ["claude"]
+        if prompt is not None:
+            cmd.extend(["-p", prompt])
+        else:
+            cmd.extend(["-p", "-"])
         if os.environ.get("ANTHROPIC_API_KEY"):
             cmd.append("--bare")
         cmd.extend(["--model", self._model])

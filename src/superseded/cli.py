@@ -5,6 +5,7 @@ import logging
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import get_args
@@ -276,27 +277,49 @@ def _run_review(
 
     _status("Gathering context...")
     root = repo_root()
-    file_context = compute_file_context(diff, root=root) or None
-    pr_description = fetch_pr_description(pr) if pr is not None else None
 
     enable_static = config.static_analysis and not no_static
     enable_usage = config.usage_retrieval and not no_usage
-    static_signals: str | None = None
-    usage_signals: str | None = None
-    if enable_static:
-        changed_files = [e["file"] for e in parse_diff_files(diff)]
-        static_signals = run_static_analysis(changed_files, root)
-    if enable_usage:
-        usage_signals = retrieve_usages(diff, root)
-
     enable_conventions = config.conventions and not no_conventions
     enable_specs = config.spec_retrieval and not no_specs
-    conventions_signals: str | None = None
-    spec_signals: str | None = None
-    if enable_conventions:
-        conventions_signals = discover_conventions(root)
-    if enable_specs:
-        spec_signals = discover_repo_specs(diff, root)
+
+    changed_files = (
+        [e["file"] for e in parse_diff_files(diff)] if (enable_static or enable_usage) else []
+    )
+
+    with ThreadPoolExecutor(max_workers=4) as ctx_executor:
+        ctx_futures = {
+            "file_context": ctx_executor.submit(compute_file_context, diff, root=root),
+            "pr_description": ctx_executor.submit(fetch_pr_description, pr)
+            if pr is not None
+            else None,
+            "static_signals": ctx_executor.submit(run_static_analysis, changed_files, root)
+            if enable_static
+            else None,
+            "usage_signals": ctx_executor.submit(retrieve_usages, diff, root)
+            if enable_usage
+            else None,
+            "conventions_signals": ctx_executor.submit(discover_conventions, root)
+            if enable_conventions
+            else None,
+            "spec_signals": ctx_executor.submit(discover_repo_specs, diff, root)
+            if enable_specs
+            else None,
+        }
+
+        def _result(key: str) -> str | None:
+            f = ctx_futures.get(key)
+            if f is None:
+                return None
+            val = f.result()
+            return val or None
+
+        file_context = _result("file_context")
+        pr_description = _result("pr_description")
+        static_signals = _result("static_signals")
+        usage_signals = _result("usage_signals")
+        conventions_signals = _result("conventions_signals")
+        spec_signals = _result("spec_signals")
 
     repo = current_repo()
     memory_context: str | None = None
