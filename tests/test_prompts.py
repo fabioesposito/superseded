@@ -79,3 +79,97 @@ def test_existing_sections_unchanged():
     assert "some context" in prompt
     assert "### Past Feedback" in prompt
     assert "some memory" in prompt
+
+
+def test_conventions_section_present_when_kwarg_non_empty():
+    prompt = build_prompt(
+        pass_name="security",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+        conventions_signals="## AGENTS.md\nuse double quotes",
+    )
+    assert "### Project Conventions" in prompt
+    assert "use double quotes" in prompt
+
+
+def test_conventions_placeholder_when_none():
+    prompt = build_prompt(
+        pass_name="security",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+    )
+    assert "No project conventions discovered." in prompt
+
+
+def test_spec_section_present_when_kwarg_non_empty():
+    prompt = build_prompt(
+        pass_name="correctness",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+        spec_signals="## docs/spec.md\nintent: do foo",
+    )
+    assert "### Relevant Design Specs & Plans" in prompt
+    assert "intent: do foo" in prompt
+
+
+def test_spec_placeholder_when_none():
+    prompt = build_prompt(
+        pass_name="correctness",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+    )
+    assert "No relevant specs/plans found." in prompt
+
+
+def test_conventions_and_spec_before_pr_description():
+    prompt = build_prompt(
+        pass_name="architecture",
+        diff="x",
+        pr_description="my PR",
+        file_context=None,
+        memory_context=None,
+        conventions_signals="conv",
+        spec_signals="spec",
+    )
+    conv_pos = prompt.index("### Project Conventions")
+    spec_pos = prompt.index("### Relevant Design Specs & Plans")
+    pr_pos = prompt.index("### PR Description")
+    assert conv_pos < spec_pos < pr_pos
+
+
+def test_enforcement_rules_present():
+    prompt = build_prompt(
+        pass_name="style",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+    )
+    assert "Enforce the Project Conventions" in prompt
+    assert "except deviations from the Project Conventions" in prompt
+    assert "authoritative intent" in prompt
+
+
+def test_old_sections_unchanged_when_new_kwargs_none():
+    prompt = build_prompt(
+        pass_name="performance",
+        diff="diff --git a/x.py b/x.py\n+old",
+        pr_description="My PR",
+        file_context="some context",
+        memory_context="some memory",
+    )
+    assert "### PR Description" in prompt
+    assert "My PR" in prompt
+    assert "### Changed Files (diff)" in prompt
+    assert "### File Context" in prompt
+    assert "some context" in prompt
+    assert "### Past Feedback" in prompt
+    assert "some memory" in prompt
