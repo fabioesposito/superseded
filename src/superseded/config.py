@@ -23,6 +23,8 @@ class Config(BaseModel):
     memory: bool = True
     static_analysis: bool = True
     usage_retrieval: bool = True
+    conventions: bool = True
+    spec_retrieval: bool = True
 
     def is_pass_enabled(self, name: str) -> bool:
         return getattr(self.passes, name, False)

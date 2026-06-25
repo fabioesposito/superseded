@@ -45,3 +45,18 @@ def test_load_config_with_enrichment_flags(tmp_path):
     c = load_config(cfg)
     assert c.static_analysis is False
     assert c.usage_retrieval is False
+
+
+def test_conventions_default_true():
+    from superseded.config import Config
+
+    assert Config().conventions is True
+    assert Config().spec_retrieval is True
+
+
+def test_conventions_can_be_disabled():
+    from superseded.config import Config
+
+    cfg = Config(conventions=False, spec_retrieval=False)
+    assert cfg.conventions is False
+    assert cfg.spec_retrieval is False
