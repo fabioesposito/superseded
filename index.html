@@ -6,28 +6,38 @@
     <title>Superseded — Multi-pass AI Code Review</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="logo.svg">
     <style>
         :root {
-            --bg: #0a0a0b;
-            --bg-elevated: #111113;
-            --bg-card: #18181b;
-            --border: #27272a;
-            --border-subtle: #1c1c1f;
-            --text: #fafafa;
-            --text-muted: #a1a1aa;
-            --text-dim: #71717a;
-            --accent: #22d3ee;
-            --accent-dim: #0e7490;
-            --red: #f87171;
-            --orange: #fb923c;
-            --yellow: #fbbf24;
-            --green: #4ade80;
-            --font-mono: 'JetBrains Mono', monospace;
-            --font-sans: 'DM Sans', sans-serif;
+            --bg: #080810;
+            --bg-card: #10101f;
+            --bg-elevated: #181830;
+            --border: #282850;
+            --border-bright: #404078;
+            --text: #e8e8f0;
+            --text-muted: #8888b8;
+            --text-dim: #555580;
+            --cyan: #00f0ff;
+            --cyan-dim: #004466;
+            --green: #00ff41;
+            --green-dim: #004411;
+            --magenta: #ff5eff;
+            --magenta-dim: #440044;
+            --yellow: #ffd700;
+            --yellow-dim: #443300;
+            --red: #ff4466;
+            --red-dim: #440011;
+            --orange: #ff8833;
+            --orange-dim: #442200;
+            --white: #f0f0ff;
+            --font-game: 'Press Start 2P', monospace;
+            --font-term: 'VT323', monospace;
+            --font-code: 'Fira Code', monospace;
+            --px: 4px;
         }
 
-        * {
+        *, *::before, *::after {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
@@ -35,738 +45,1067 @@
 
         html {
             scroll-behavior: smooth;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
         }
 
         body {
-            font-family: var(--font-sans);
+            font-family: var(--font-code);
             background: var(--bg);
             color: var(--text);
-            line-height: 1.6;
+            line-height: 1.7;
             overflow-x: hidden;
+            position: relative;
         }
 
+        /* ── CRT Scanline Overlay ── */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 9999;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0,0,0,0.08) 0px,
+                rgba(0,0,0,0.08) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            opacity: 0.6;
+        }
+
+        /* ── Background Grid ── */
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background-image:
+                radial-gradient(circle, var(--border) 1px, transparent 1px);
+            background-size: 24px 24px;
+            opacity: 0.3;
+        }
+
+        /* ── Pixel Stars ── */
+        .bg-stars {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .bg-stars::before {
+            content: '';
+            position: absolute;
+            width: 2px; height: 2px;
+            box-shadow:
+                120px 80px 0 var(--cyan-dim),
+                450px 140px 0 var(--cyan),
+                800px 60px 0 var(--magenta-dim),
+                1100px 200px 0 var(--yellow),
+                200px 400px 0 var(--cyan-dim),
+                600px 380px 0 var(--magenta),
+                950px 500px 0 var(--cyan),
+                300px 700px 0 var(--yellow-dim),
+                750px 650px 0 var(--cyan-dim),
+                1050px 800px 0 var(--magenta-dim),
+                150px 950px 0 var(--yellow),
+                500px 900px 0 var(--cyan),
+                900px 1000px 0 var(--magenta),
+                1150px 350px 0 var(--cyan-dim),
+                80px 1100px 0 var(--magenta-dim),
+                400px 1200px 0 var(--yellow-dim),
+                650px 1150px 0 var(--cyan),
+                1000px 1250px 0 var(--magenta),
+                180px 1400px 0 var(--cyan-dim),
+                550px 1350px 0 var(--yellow),
+                850px 1500px 0 var(--magenta),
+                1100px 1450px 0 var(--cyan),
+                100px 1700px 0 var(--magenta-dim),
+                700px 1650px 0 var(--yellow-dim),
+                300px 1900px 0 var(--cyan-dim),
+                600px 2000px 0 var(--magenta),
+                900px 1950px 0 var(--yellow),
+                1050px 2200px 0 var(--cyan-dim),
+                120px 2300px 0 var(--magenta-dim),
+                500px 2400px 0 var(--cyan),
+                800px 2500px 0 var(--yellow),
+                1000px 2600px 0 var(--magenta),
+                200px 2700px 0 var(--cyan-dim),
+                450px 2850px 0 var(--magenta-dim),
+                650px 2750px 0 var(--yellow);
+            animation: twinkle 3s steps(1) infinite;
+        }
+        .bg-stars::after {
+            content: '';
+            position: absolute;
+            width: 2px; height: 2px;
+            box-shadow:
+                350px 60px 0 var(--yellow-dim),
+                700px 100px 0 var(--cyan-dim),
+                1000px 180px 0 var(--magenta),
+                250px 350px 0 var(--yellow),
+                550px 250px 0 var(--cyan),
+                850px 320px 0 var(--magenta-dim),
+                1150px 280px 0 var(--magenta),
+                100px 550px 0 var(--cyan),
+                450px 480px 0 var(--yellow),
+                750px 550px 0 var(--cyan),
+                1050px 600px 0 var(--magenta),
+                180px 750px 0 var(--yellow-dim),
+                500px 850px 0 var(--cyan-dim),
+                800px 780px 0 var(--magenta),
+                1150px 900px 0 var(--yellow),
+                80px 1050px 0 var(--cyan),
+                550px 1000px 0 var(--magenta-dim),
+                900px 1100px 0 var(--cyan-dim),
+                220px 1250px 0 var(--magenta),
+                650px 1200px 0 var(--yellow),
+                1000px 1300px 0 var(--cyan),
+                120px 1450px 0 var(--magenta-dim),
+                750px 1400px 0 var(--cyan),
+                300px 1600px 0 var(--yellow-dim),
+                600px 1550px 0 var(--magenta),
+                950px 1650px 0 var(--cyan),
+                150px 1800px 0 var(--magenta-dim),
+                500px 1750px 0 var(--yellow),
+                850px 1850px 0 var(--cyan-dim),
+                1100px 1900px 0 var(--magenta),
+                100px 2050px 0 var(--cyan),
+                400px 2100px 0 var(--magenta),
+                700px 2150px 0 var(--yellow-dim),
+                1050px 2100px 0 var(--cyan-dim),
+                250px 2350px 0 var(--magenta),
+                600px 2300px 0 var(--cyan),
+                950px 2400px 0 var(--yellow),
+                150px 2550px 0 var(--magenta-dim),
+                450px 2600px 0 var(--cyan-dim),
+                800px 2550px 0 var(--magenta),
+                1150px 2700px 0 var(--cyan),
+                350px 2800px 0 var(--yellow);
+            animation: twinkle 3s steps(1) infinite 1.5s;
+        }
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+            60% { opacity: 0.1; }
+        }
+
+        /* ── Container ── */
         .container {
-            max-width: 1100px;
+            max-width: 1040px;
             margin: 0 auto;
-            padding: 0 24px;
+            padding: 0 20px;
+            position: relative;
+            z-index: 1;
         }
 
-        /* Nav */
+        /* ── Pixel Border Utility ── */
+        .pixel-border {
+            position: relative;
+            border: 3px solid var(--border);
+            box-shadow:
+                0 0 0 1px var(--border-bright),
+                inset 0 0 0 1px var(--border-bright);
+        }
+
+        /* ── Navigation ── */
         nav {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 100;
-            background: rgba(10, 10, 11, 0.85);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+            border: 3px solid var(--border);
+            box-shadow:
+                0 0 0 1px var(--border-bright),
+                inset 0 0 0 1px rgba(255,255,255,0.03),
+                4px 4px 0 #000;
+            padding: 8px 24px;
+            width: calc(100% - 32px);
+            max-width: 1000px;
         }
-
         nav .container {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            height: 56px;
+            padding: 0;
         }
-
         .logo {
-            font-family: var(--font-mono);
-            font-weight: 700;
-            font-size: 18px;
-            color: var(--text);
+            display: inline-flex;
+            align-items: center;
             text-decoration: none;
-            letter-spacing: -0.5px;
         }
-
-        .logo span {
-            color: var(--accent);
+        .logo svg {
+            filter: drop-shadow(0 0 6px rgba(0,240,255,0.4));
         }
-
         nav ul {
             display: flex;
             list-style: none;
-            gap: 32px;
+            gap: 28px;
         }
-
         nav a {
             color: var(--text-muted);
             text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: color 0.2s;
+            font-family: var(--font-game);
+            font-size: 8px;
+            transition: color 0.15s, text-shadow 0.15s;
+            letter-spacing: 0.5px;
         }
-
         nav a:hover {
-            color: var(--text);
+            color: var(--cyan);
+            text-shadow: 0 0 6px var(--cyan);
         }
-
         .nav-cta {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: center;
         }
 
+        /* ── Buttons ── */
         .btn {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: var(--font-sans);
+            gap: 6px;
+            padding: 10px 18px;
+            font-family: var(--font-game);
+            font-size: 9px;
             text-decoration: none;
-            transition: all 0.2s;
             cursor: pointer;
             border: none;
+            position: relative;
+            transition: all 0.1s;
+            letter-spacing: 0.5px;
+            image-rendering: pixelated;
         }
-
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border: 3px solid transparent;
+            pointer-events: none;
+        }
+        .btn-primary {
+            background: var(--cyan);
+            color: #000;
+            border: 3px solid #00c0d0;
+            box-shadow:
+                0 0 0 1px #0088aa,
+                inset 0 2px 0 rgba(255,255,255,0.3),
+                inset 0 -2px 0 rgba(0,0,0,0.2),
+                4px 4px 0 #000;
+        }
+        .btn-primary:hover {
+            background: #00ffff;
+            transform: translate(-1px, -1px);
+            box-shadow:
+                0 0 0 1px #00aacc,
+                0 0 12px var(--cyan),
+                inset 0 2px 0 rgba(255,255,255,0.3),
+                inset 0 -2px 0 rgba(0,0,0,0.2),
+                6px 6px 0 #000;
+        }
+        .btn-primary:active {
+            transform: translate(2px, 2px);
+            box-shadow:
+                0 0 0 1px #0088aa,
+                inset 0 2px 0 rgba(255,255,255,0.3),
+                inset 0 -2px 0 rgba(0,0,0,0.2),
+                2px 2px 0 #000;
+        }
         .btn-ghost {
             background: transparent;
             color: var(--text-muted);
+            border: 3px solid var(--border);
+            box-shadow: 4px 4px 0 #000;
         }
-
         .btn-ghost:hover {
-            color: var(--text);
-            background: var(--bg-card);
+            color: var(--cyan);
+            border-color: var(--cyan);
+            box-shadow: 4px 4px 0 #001122;
+            text-shadow: 0 0 6px var(--cyan);
+        }
+        .btn-ghost:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0 #000;
+        }
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 7px;
         }
 
-        .btn-primary {
-            background: var(--accent);
-            color: var(--bg);
-        }
-
-        .btn-primary:hover {
-            background: #06b6d4;
-            transform: translateY(-1px);
-        }
-
-        /* Hero */
+        /* ── Hero / Title Screen ── */
         .hero {
-            padding: 160px 0 100px;
+            padding: 140px 0 80px;
             text-align: center;
             position: relative;
         }
-
-        .hero::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 800px;
-            height: 600px;
-            background: radial-gradient(ellipse, rgba(34, 211, 238, 0.06) 0%, transparent 70%);
-            pointer-events: none;
-        }
-
-        .badge {
+        .hero-badge {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 4px 12px;
-            border-radius: 100px;
-            border: 1px solid var(--border);
-            background: var(--bg-elevated);
+            gap: 8px;
+            padding: 6px 16px;
+            margin-bottom: 28px;
+            background: var(--bg-card);
+            border: 3px solid var(--border);
+            font-family: var(--font-game);
+            font-size: 8px;
             color: var(--text-muted);
-            font-size: 13px;
-            font-weight: 500;
-            margin-bottom: 24px;
+            box-shadow: 4px 4px 0 #000;
         }
-
-        .badge-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
+        .hero-badge .dot {
+            width: 8px;
+            height: 8px;
             background: var(--green);
-            animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 8px var(--green);
+            animation: pulse 1.5s steps(2) infinite;
         }
-
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+            50% { opacity: 0.3; }
         }
-
+        .hero-pixelart {
+            display: inline-block;
+            margin-bottom: 28px;
+            position: relative;
+        }
+        .pixel-sprite {
+            display: inline-block;
+            width: 4px;
+            height: 4px;
+            position: relative;
+            margin: 0 auto;
+        }
+        .pixel-sprite::after {
+            content: '';
+            position: absolute;
+            width: 4px; height: 4px;
+            top: 0; left: 0;
+            box-shadow:
+                16px 0 var(--cyan), 20px 0 var(--cyan), 24px 0 var(--cyan), 28px 0 var(--cyan), 32px 0 var(--cyan), 36px 0 var(--cyan), 40px 0 var(--cyan), 44px 0 var(--cyan), 48px 0 var(--cyan), 52px 0 var(--cyan),
+                12px 4px var(--cyan), 56px 4px var(--cyan),
+                8px 8px var(--cyan), 60px 8px var(--cyan),
+                8px 12px var(--cyan), 60px 12px var(--cyan),
+                8px 16px var(--cyan), 60px 16px var(--cyan),
+                8px 20px var(--cyan), 60px 20px var(--cyan),
+                4px 24px var(--cyan), 64px 24px var(--cyan),
+                0 28px var(--cyan), 68px 28px var(--cyan),
+                0 32px var(--cyan), 8px 32px var(--cyan), 56px 32px var(--cyan), 68px 32px var(--cyan),
+                0 36px var(--yellow), 4px 36px var(--yellow), 12px 36px var(--yellow), 16px 36px var(--yellow), 20px 36px var(--yellow), 44px 36px var(--yellow), 48px 36px var(--yellow), 52px 36px var(--yellow), 56px 36px var(--yellow), 60px 36px var(--yellow), 64px 36px var(--yellow), 68px 36px var(--yellow),
+                0 40px var(--yellow), 68px 40px var(--yellow),
+                0 44px var(--yellow), 12px 44px var(--yellow), 16px 44px var(--yellow), 20px 44px var(--yellow), 24px 44px var(--yellow), 44px 44px var(--yellow), 48px 44px var(--yellow), 52px 44px var(--yellow), 56px 44px var(--yellow), 68px 44px var(--yellow),
+                0 48px var(--yellow), 68px 48px var(--yellow),
+                0 52px var(--yellow), 8px 52px var(--yellow), 12px 52px var(--yellow), 56px 52px var(--yellow), 68px 52px var(--yellow),
+                0 56px var(--yellow), 68px 56px var(--yellow),
+                4px 60px var(--orange), 64px 60px var(--orange),
+                8px 64px var(--orange), 60px 64px var(--orange),
+                12px 68px var(--orange), 56px 68px var(--orange),
+                16px 72px var(--orange), 20px 72px var(--orange), 24px 72px var(--orange), 28px 72px var(--orange), 32px 72px var(--orange), 36px 72px var(--orange), 40px 72px var(--orange), 44px 72px var(--orange), 48px 72px var(--orange), 52px 72px var(--orange),
+                20px 76px var(--orange), 24px 76px var(--orange), 28px 76px var(--orange), 32px 76px var(--orange), 36px 76px var(--orange), 40px 76px var(--orange), 44px 76px var(--orange), 48px 76px var(--orange);
+        }
         h1 {
-            font-family: var(--font-mono);
-            font-size: clamp(40px, 6vw, 72px);
-            font-weight: 700;
-            line-height: 1.25;
+            font-family: var(--font-game);
+            font-size: clamp(20px, 4vw, 32px);
+            font-weight: 400;
+            line-height: 1.5;
             letter-spacing: -2px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
+            text-shadow:
+                0 0 20px var(--cyan),
+                0 0 40px var(--cyan-dim);
         }
-
-        h1 .accent {
-            color: var(--accent);
-        }
-
+        h1 .hl-cyan { color: var(--cyan); }
+        h1 .hl-magenta { color: var(--magenta); text-shadow: 0 0 20px var(--magenta), 0 0 40px var(--magenta-dim); }
+        h1 .hl-yellow { color: var(--yellow); text-shadow: 0 0 20px var(--yellow), 0 0 40px var(--yellow-dim); }
+        h1 .hl-green { color: var(--green); text-shadow: 0 0 20px var(--green), 0 0 40px var(--green-dim); }
         .hero-sub {
-            font-size: 18px;
+            font-family: var(--font-term);
+            font-size: 22px;
             color: var(--text-muted);
-            max-width: 560px;
-            margin: 0 auto 40px;
-            line-height: 1.7;
+            max-width: 620px;
+            margin: 0 auto 36px;
+            line-height: 1.6;
         }
-
         .hero-actions {
             display: flex;
             gap: 12px;
             justify-content: center;
             flex-wrap: wrap;
+            margin-bottom: 32px;
         }
-
         .hero-actions .btn {
-            padding: 12px 24px;
-            font-size: 15px;
+            padding: 14px 28px;
+            font-size: 10px;
         }
-
         .install-cmd {
             display: inline-flex;
             align-items: center;
-            gap: 12px;
-            margin-top: 32px;
-            padding: 12px 20px;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-family: var(--font-mono);
-            font-size: 14px;
-            color: var(--text-muted);
+            gap: 10px;
+            padding: 14px 20px;
+            background: #000;
+            border: 3px solid var(--border);
+            color: var(--green);
+            font-family: var(--font-term);
+            font-size: 18px;
             max-width: 100%;
             overflow-x: auto;
+            box-shadow: inset 0 0 20px rgba(0,255,65,0.05);
         }
-
-        .install-cmd code {
-            color: var(--text);
-            white-space: nowrap;
-        }
-
-        .install-cmd > span {
+        .install-cmd .prompt {
+            color: var(--green);
             flex-shrink: 0;
         }
-
+        .install-cmd code {
+            color: var(--white);
+            white-space: nowrap;
+            font-family: var(--font-term);
+            font-size: 18px;
+        }
         .install-cmd .copy {
             color: var(--text-dim);
             cursor: pointer;
-            transition: color 0.2s;
             background: none;
-            border: none;
-            font-size: 16px;
+            border: 2px solid var(--border);
+            color: var(--text-muted);
+            font-family: var(--font-game);
+            font-size: 7px;
+            padding: 4px 8px;
+            flex-shrink: 0;
+            transition: all 0.15s;
         }
-
         .install-cmd .copy:hover {
-            color: var(--accent);
+            color: var(--cyan);
+            border-color: var(--cyan);
+            text-shadow: 0 0 6px var(--cyan);
         }
 
-        /* Terminal Demo */
-        .demo {
-            padding: 60px 0 80px;
+        /* ── Section Header ── */
+        .section-label {
+            font-family: var(--font-game);
+            font-size: 9px;
+            color: var(--cyan);
+            letter-spacing: 1px;
+            margin-bottom: 14px;
+            text-shadow: 0 0 10px var(--cyan-dim);
+        }
+        h2 {
+            font-family: var(--font-game);
+            font-size: clamp(18px, 3vw, 26px);
+            font-weight: 400;
+            letter-spacing: -1px;
+            margin-bottom: 14px;
+            line-height: 1.4;
+        }
+        .section-sub {
+            color: var(--text-muted);
+            font-family: var(--font-term);
+            font-size: 20px;
+            max-width: 560px;
+            margin-bottom: 40px;
         }
 
-        .terminal {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-            max-width: 800px;
+        /* ── Horizontal Rule (pixel) ── */
+        .pixel-hr {
+            border: none;
+            height: 7px;
+            background:
+                repeating-linear-gradient(90deg,
+                    var(--border) 0px, var(--border) 6px,
+                    var(--bg) 6px, var(--bg) 7px);
+            margin: 0;
+        }
+
+        /* ── Terminal CRT Demo ── */
+        .demo-section {
+            padding: 60px 0;
+            position: relative;
+        }
+        .crt {
+            max-width: 780px;
             margin: 0 auto;
+            background: #000a00;
+            border: 6px solid #1a1a2a;
+            box-shadow:
+                0 0 0 2px #333,
+                0 0 0 4px #111,
+                0 0 40px rgba(0,255,65,0.08),
+                inset 0 0 60px rgba(0,255,65,0.03);
+            position: relative;
+            overflow: hidden;
+            border-radius: 0;
         }
-
-        .terminal-bar {
+        .crt::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.15) 2px,
+                rgba(0,0,0,0.15) 4px
+            );
+            z-index: 2;
+            pointer-events: none;
+        }
+        .crt::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.35) 100%);
+            z-index: 3;
+            pointer-events: none;
+        }
+        .crt-topbar {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 12px 16px;
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border);
+            padding: 8px 14px;
+            background: #0a0a14;
+            border-bottom: 2px solid #1a1a2a;
+            position: relative;
+            z-index: 1;
         }
-
-        .terminal-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: var(--border);
+        .crt-dot {
+            width: 14px;
+            height: 14px;
+            background: #333;
+            border: 2px solid #222;
         }
-
-        .terminal-title {
+        .crt-dot.r { background: #ff4466; }
+        .crt-dot.y { background: #ffd700; }
+        .crt-dot.g { background: #00ff41; }
+        .crt-title {
             flex: 1;
             text-align: center;
-            font-family: var(--font-mono);
-            font-size: 12px;
+            font-family: var(--font-game);
+            font-size: 7px;
             color: var(--text-dim);
+            letter-spacing: 1px;
         }
-
-        .terminal-body {
-            padding: 20px 24px;
-            font-family: var(--font-mono);
-            font-size: 13px;
-            line-height: 1.8;
-            min-height: 280px;
-        }
-
-        .terminal-body .prompt {
-            color: var(--accent);
-        }
-
-        .terminal-body .cmd {
-            color: var(--text);
-        }
-
-        .terminal-body .comment {
-            color: var(--text-dim);
-        }
-
-        .terminal-body .output {
-            color: var(--text-muted);
-        }
-
-        .terminal-body .critical {
-            color: var(--red);
-        }
-
-        .terminal-body .suggestion {
-            color: var(--yellow);
-        }
-
-        .terminal-body .file {
-            color: var(--orange);
-        }
-
-        .terminal-body .success {
+        .crt-body {
+            padding: 20px 22px;
+            font-family: var(--font-term);
+            font-size: 20px;
+            line-height: 1.7;
+            position: relative;
+            z-index: 1;
+            min-height: 290px;
             color: var(--green);
+            text-shadow: 0 0 4px rgba(0,255,65,0.4);
+        }
+        .crt-body .line { margin-bottom: 2px; }
+        .crt-body .prompt { color: var(--green); }
+        .crt-body .cmd { color: var(--white); }
+        .crt-body .comment { color: var(--text-dim); }
+        .crt-body .critical { color: var(--red); text-shadow: 0 0 6px rgba(255,68,102,0.4); }
+        .crt-body .suggestion { color: var(--yellow); text-shadow: 0 0 6px rgba(255,215,0,0.3); }
+        .crt-body .file { color: var(--orange); }
+        .crt-body .success { color: var(--green); }
+        .crt-cursor {
+            display: inline-block;
+            width: 10px;
+            height: 20px;
+            background: var(--green);
+            animation: crt-blink 0.8s steps(2) infinite;
+            vertical-align: middle;
+            margin-left: 2px;
+        }
+        @keyframes crt-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
         }
 
-        /* How It Works */
-        .how {
+        /* ── Stage Select (How It Works) ── */
+        .how-section {
             padding: 80px 0;
+            position: relative;
         }
-
-        .section-label {
-            font-family: var(--font-mono);
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--accent);
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 16px;
-        }
-
-        h2 {
-            font-family: var(--font-mono);
-            font-size: 36px;
-            font-weight: 700;
-            letter-spacing: -1px;
-            margin-bottom: 16px;
-        }
-
-        .section-sub {
-            color: var(--text-muted);
-            font-size: 16px;
-            max-width: 520px;
-            margin-bottom: 48px;
-        }
-
-        .flow {
+        .stages {
             display: flex;
             flex-direction: column;
-            gap: 0;
+            gap: 20px;
             position: relative;
-            max-width: 700px;
+            max-width: 680px;
+            margin: 0;
         }
-
-        .flow::before {
+        .stages::before {
             content: '';
             position: absolute;
-            left: 23px;
-            top: 48px;
-            bottom: 48px;
-            width: 1px;
-            background: linear-gradient(to bottom, var(--accent), var(--border));
+            left: 20px;
+            top: 36px;
+            bottom: 36px;
+            width: 4px;
+            background: repeating-linear-gradient(
+                0deg,
+                var(--border) 0px,
+                var(--border) 6px,
+                transparent 6px,
+                transparent 12px
+            );
         }
-
-        .flow-step {
+        .stage {
             display: flex;
             gap: 20px;
-            padding: 20px 0;
+            padding: 14px 0 14px 0;
         }
-
-        .flow-icon {
-            min-width: 48px;
-            height: 48px;
-            border-radius: 10px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
+        .stage-num {
+            min-width: 44px;
+            height: 44px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-family: var(--font-game);
+            font-size: 12px;
+            color: var(--cyan);
+            background: var(--bg-card);
+            border: 3px solid var(--border);
             flex-shrink: 0;
             position: relative;
             z-index: 1;
-            padding: 0 8px;
+            text-shadow: 0 0 8px var(--cyan);
+            box-shadow: 3px 3px 0 #000;
         }
-
-        .flow-content h3 {
-            font-family: var(--font-mono);
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 4px;
+        .stage-content h3 {
+            font-family: var(--font-game);
+            font-size: 11px;
+            font-weight: 400;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
         }
-
-        .flow-content p {
+        .stage-content p {
             color: var(--text-muted);
-            font-size: 14px;
+            font-family: var(--font-term);
+            font-size: 18px;
+            line-height: 1.5;
         }
-
         .passes {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 12px;
+            gap: 6px;
+            margin-top: 10px;
         }
-
         .pass-tag {
             padding: 4px 10px;
-            border-radius: 4px;
-            font-family: var(--font-mono);
-            font-size: 12px;
-            font-weight: 500;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
+            font-family: var(--font-game);
+            font-size: 7px;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
             color: var(--text-muted);
+            box-shadow: 2px 2px 0 #000;
         }
+        .pass-tag.s { border-color: var(--red); color: var(--red); text-shadow: 0 0 6px var(--red); }
+        .pass-tag.c { border-color: var(--orange); color: var(--orange); text-shadow: 0 0 6px var(--orange); }
+        .pass-tag.p { border-color: var(--yellow); color: var(--yellow); text-shadow: 0 0 6px var(--yellow); }
+        .pass-tag.st { border-color: var(--green); color: var(--green); text-shadow: 0 0 6px var(--green); }
+        .pass-tag.a { border-color: var(--cyan); color: var(--cyan); text-shadow: 0 0 6px var(--cyan); }
 
-        .pass-tag.security { border-color: var(--red); color: var(--red); }
-        .pass-tag.correctness { border-color: var(--orange); color: var(--orange); }
-        .pass-tag.performance { border-color: var(--yellow); color: var(--yellow); }
-        .pass-tag.style { border-color: var(--green); color: var(--green); }
-        .pass-tag.architecture { border-color: var(--accent); color: var(--accent); }
-
-        /* Features */
-        .features {
+        /* ── Power-ups (Features) ── */
+        .features-section {
             padding: 80px 0;
         }
-
-        .features-grid {
+        .powerups-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2px;
             background: var(--border);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
+            border: 3px solid var(--border);
+            box-shadow: 6px 6px 0 #000;
         }
-
-        .feature {
-            padding: 32px;
+        .powerup {
+            padding: 28px;
+            background: var(--bg-card);
+            transition: background 0.15s;
+        }
+        .powerup:hover {
             background: var(--bg-elevated);
         }
-
-        .feature-icon {
-            font-size: 24px;
-            margin-bottom: 16px;
+        .powerup-icon {
+            font-family: var(--font-game);
+            font-size: 18px;
+            margin-bottom: 14px;
+            display: block;
         }
-
-        .feature h3 {
-            font-family: var(--font-mono);
-            font-size: 15px;
-            font-weight: 600;
+        .powerup h3 {
+            font-family: var(--font-game);
+            font-size: 10px;
+            font-weight: 400;
             margin-bottom: 8px;
+            letter-spacing: 0.5px;
         }
-
-        .feature p {
+        .powerup p {
             color: var(--text-muted);
-            font-size: 14px;
-            line-height: 1.6;
+            font-family: var(--font-term);
+            font-size: 17px;
+            line-height: 1.5;
         }
 
-        /* Agents */
-        .agents {
+        /* ── Character Select (Agents) ── */
+        .agents-section {
             padding: 80px 0;
         }
-
-        .agents-grid {
+        .char-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
+            gap: 12px;
         }
-
-        .agent-card {
+        .char-card {
             padding: 24px;
+            background: var(--bg-card);
+            border: 3px solid var(--border);
+            transition: border-color 0.15s, box-shadow 0.15s;
+            box-shadow: 4px 4px 0 #000;
+            text-align: center;
+        }
+        .char-card:hover {
+            border-color: var(--cyan);
+            box-shadow: 4px 4px 0 #002233, 0 0 16px var(--cyan-dim);
+        }
+        .char-avatar {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 14px;
             background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            transition: border-color 0.2s;
-        }
-
-        .agent-card:hover {
-            border-color: var(--accent-dim);
-        }
-
-        .agent-name {
-            font-family: var(--font-mono);
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .agent-cmd {
-            font-family: var(--font-mono);
-            font-size: 12px;
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-game);
+            font-size: 8px;
             color: var(--text-dim);
-            background: var(--bg);
-            padding: 6px 10px;
-            border-radius: 4px;
-            margin-bottom: 12px;
         }
-
-        .agent-auth {
-            font-size: 13px;
+        .char-name {
+            font-family: var(--font-game);
+            font-size: 11px;
+            font-weight: 400;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+        .char-cmd {
+            font-family: var(--font-term);
+            font-size: 16px;
+            color: var(--text-dim);
+            background: #000;
+            padding: 6px 10px;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+        .char-auth {
+            font-family: var(--font-term);
+            font-size: 16px;
             color: var(--text-muted);
         }
-
-        .agent-auth code {
-            font-family: var(--font-mono);
-            color: var(--accent);
-            font-size: 12px;
+        .char-auth code {
+            font-family: var(--font-term);
+            color: var(--cyan);
+            font-size: 16px;
         }
 
-        /* CTA */
-        .cta {
+        /* ── Continue Screen (CTA) ── */
+        .cta-section {
             padding: 100px 0;
             text-align: center;
             position: relative;
         }
-
-        .cta::before {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 600px;
-            height: 400px;
-            background: radial-gradient(ellipse, rgba(34, 211, 238, 0.04) 0%, transparent 70%);
-            pointer-events: none;
+        .cta-box {
+            display: inline-block;
+            padding: 48px;
+            background: var(--bg-card);
+            border: 3px solid var(--border);
+            box-shadow:
+                0 0 0 1px var(--border-bright),
+                8px 8px 0 #000;
+            max-width: 620px;
         }
-
-        .cta h2 {
-            font-size: 42px;
-            margin-bottom: 16px;
+        .cta-box h2 {
+            font-size: 22px;
+            margin-bottom: 14px;
         }
-
-        .cta p {
+        .cta-box p {
             color: var(--text-muted);
-            font-size: 16px;
-            margin-bottom: 32px;
-            max-width: 560px;
-            margin-left: auto;
-            margin-right: auto;
+            font-family: var(--font-term);
+            font-size: 20px;
+            margin-bottom: 28px;
+        }
+        .cta-box .install-cmd {
+            margin-bottom: 20px;
+        }
+        .cta-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 24px;
         }
 
-        .cta .btn-primary {
-            padding: 14px 32px;
-            font-size: 16px;
+        /* ── Server Section ── */
+        .server-section {
+            padding: 80px 0;
+            border-top: 2px solid var(--border);
         }
+        .server-term {
+            margin-top: 36px;
+            padding: 20px 24px;
+            background: #000;
+            border: 3px solid var(--border);
+            font-family: var(--font-term);
+            font-size: 20px;
+            color: var(--green);
+            text-shadow: 0 0 4px rgba(0,255,65,0.3);
+            box-shadow: inset 0 0 30px rgba(0,255,65,0.03);
+        }
+        .server-term .prompt { color: var(--cyan); }
 
-        /* Footer */
+        /* ── Footer ── */
         footer {
-            padding: 40px 0;
-            border-top: 1px solid var(--border-subtle);
+            padding: 32px 0;
+            border-top: 2px solid var(--border);
+            background: var(--bg-card);
         }
-
         footer .container {
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-
         footer p {
             color: var(--text-dim);
-            font-size: 14px;
+            font-family: var(--font-term);
+            font-size: 18px;
         }
-
         footer a {
             color: var(--text-muted);
             text-decoration: none;
-            font-size: 14px;
-            transition: color 0.2s;
+            font-family: var(--font-game);
+            font-size: 8px;
+            transition: color 0.15s;
         }
-
         footer a:hover {
-            color: var(--text);
+            color: var(--cyan);
+            text-shadow: 0 0 6px var(--cyan);
         }
-
         .footer-links {
             display: flex;
             gap: 24px;
         }
 
-        /* Responsive */
+        /* ── Responsive ── */
         @media (max-width: 768px) {
             nav ul {
                 display: none;
             }
-
-            .agents-grid {
+            nav .container {
+                justify-content: space-between;
+            }
+            nav {
+                padding: 8px 16px;
+            }
+            .char-grid {
                 grid-template-columns: 1fr;
             }
-
             .hero {
-                padding: 120px 0 60px;
+                padding: 110px 0 50px;
             }
-
             h1 {
                 letter-spacing: -1px;
             }
-
-            .install-cmd {
-                font-size: 12px;
-                padding: 10px 16px;
+            .install-cmd code {
+                font-size: 15px;
             }
-
+            .install-cmd {
+                font-size: 15px;
+                padding: 10px 14px;
+            }
             footer .container {
                 flex-direction: column;
-                gap: 16px;
+                gap: 14px;
                 text-align: center;
+            }
+            .cta-box {
+                padding: 32px 20px;
+            }
+            .stage-num {
+                min-width: 36px;
+                height: 36px;
+                font-size: 10px;
+            }
+            .pixel-sprite {
+                transform: scale(0.7);
+            }
+        }
+        @media (max-width: 480px) {
+            .powerups-grid {
+                grid-template-columns: 1fr;
+            }
+            .hero-pixelart {
+                transform: scale(0.6);
             }
         }
     </style>
 </head>
 <body>
+
+    <div class="bg-grid"></div>
+    <div class="bg-stars"></div>
+
+    <!-- ── Navigation ── -->
     <nav>
         <div class="container">
-            <a href="#" class="logo">superseded<span>.</span></a>
+            <a href="#" class="logo">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="100" height="36" shape-rendering="crispEdges" style="vertical-align: middle;">
+                    <clipPath id="shieldClipNav"><polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10"/></clipPath>
+                    <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="#0a0a18"/>
+                    <g clip-path="url(#shieldClipNav)">
+                        <rect x="82" y="0" width="14" height="120" fill="#ff4466" opacity="0.9"/>
+                        <rect x="96" y="0" width="14" height="120" fill="#ff8833" opacity="0.9"/>
+                        <rect x="110" y="0" width="14" height="120" fill="#ffd700" opacity="0.9"/>
+                        <rect x="124" y="0" width="14" height="120" fill="#00ff41" opacity="0.9"/>
+                        <rect x="138" y="0" width="14" height="120" fill="#00f0ff" opacity="0.9"/>
+                    </g>
+                    <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="none" stroke="#e8e8f0" stroke-width="2"/>
+                </svg>
+            </a>
             <ul>
-                <li><a href="#how">How it works</a></li>
-                <li><a href="#features">Features</a></li>
-                <li><a href="#agents">Agents</a></li>
-                <li><a href="#server">Server</a></li>
-                <li><a href="https://github.com/fabioesposito/superseded">Docs</a></li>
+                <li><a href="#how">STAGES</a></li>
+                <li><a href="#features">POWER-UPS</a></li>
+                <li><a href="#agents">AGENTS</a></li>
+                <li><a href="#server">SERVER</a></li>
             </ul>
             <div class="nav-cta">
-                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost">GitHub</a>
-                <a href="#get-started" class="btn btn-primary">Get Started</a>
+                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost btn-sm">GITHUB</a>
+                <a href="#get-started" class="btn btn-primary btn-sm">START</a>
             </div>
         </div>
     </nav>
 
+    <!-- ── Title Screen ── -->
     <section class="hero">
         <div class="container">
-            <div class="badge">
-                <span class="badge-dot"></span>
-                Open source
+            <div class="hero-badge">
+                <span class="dot"></span>
+                OPEN SOURCE — v1.0
             </div>
-            <h1>AI code review<br>that <span class="accent">learns</span></h1>
+            <div class="hero-pixelart">
+                <div class="pixel-sprite"></div>
+            </div>
+            <h1>
+                <span class="hl-cyan">AI</span>
+                <span> code review </span><br>
+                <span>that </span>
+                <span class="hl-magenta">learns</span>
+            </h1>
             <p class="hero-sub">
-                5 parallel review passes — security, correctness, performance, style, architecture — powered by Claude, Codex, or OpenCode.
-                Posts findings as PR comments. Gets smarter every time you dismiss a finding.
-                CLI, GitHub Action, or self-hosted server.
+                5 parallel review passes &mdash; security, correctness, performance, style, architecture
+                &mdash; powered by Claude, Codex, or OpenCode. Gets smarter every time you dismiss a finding.
             </p>
             <div class="hero-actions">
-                <a href="#get-started" class="btn btn-primary">Get Started</a>
-                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost">View on GitHub</a>
+                <a href="#get-started" class="btn btn-primary">&#9654; START</a>
+                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost">GITHUB</a>
             </div>
             <div class="install-cmd">
-                <span>$</span>
+                <span class="prompt">$</span>
                 <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
-                <button class="copy" onclick="navigator.clipboard.writeText('git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .')" title="Copy">Copy</button>
+                <button class="copy" onclick="navigator.clipboard.writeText('git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .')" title="Copy">COPY</button>
             </div>
         </div>
     </section>
 
-    <section class="demo">
+    <hr class="pixel-hr">
+
+    <!-- ── CRT Terminal ── -->
+    <section class="demo-section">
         <div class="container">
-            <div class="terminal">
-                <div class="terminal-bar">
-                    <span class="terminal-dot"></span>
-                    <span class="terminal-dot"></span>
-                    <span class="terminal-dot"></span>
-                    <span class="terminal-title">Terminal</span>
+            <div class="crt">
+                <div class="crt-topbar">
+                    <span class="crt-dot r"></span>
+                    <span class="crt-dot y"></span>
+                    <span class="crt-dot g"></span>
+                    <span class="crt-title">TERMINAL</span>
                 </div>
-                <div class="terminal-body">
-                    <div><span class="prompt">$ </span><span class="cmd">superseded review --pr 42 --agent claude-code</span></div>
-                    <div style="margin-top: 4px;"><span class="prompt">$ </span><span class="cmd">superseded review --diff main..feature-branch</span></div>
-                    <div class="output">&nbsp;</div>
-                    <div class="output">Fetching diff...</div>
-                    <div class="output">Gathering context...</div>
-                    <div class="output">Running review with claude-code...</div>
-                    <div class="output">&nbsp;</div>
-                    <div class="output">Sev          Pass           File                           Line   Title</div>
-                    <div class="output">---------------------------------------------------------------------------</div>
-                    <div><span class="critical">&#x1F534; critical  </span><span class="output">security       </span><span class="file">src/auth.py                    </span><span class="output">42     </span><span class="critical">SQL injection in query</span></div>
-                    <div><span class="suggestion">&#x1F7E1; suggestion</span><span class="output"> style         </span><span class="file">src/utils.py                   </span><span class="output">15     </span><span class="suggestion">Unclear variable naming</span></div>
-                    <div class="output">&nbsp;</div>
-                    <div class="success">Total: 2 findings</div>
-                    <div class="output">  critical: 1</div>
-                    <div class="output">  suggestion: 1</div>
+                <div class="crt-body">
+                    <div class="line"><span class="prompt">$ </span><span class="cmd">superseded review --pr 42 --agent claude-code</span></div>
+                    <div class="line"><span class="prompt">$ </span><span class="cmd">superseded review --diff main..feature-branch</span></div>
+                    <div class="line">&nbsp;</div>
+                    <div class="line comment">// fetching diff...</div>
+                    <div class="line comment">// gathering context...</div>
+                    <div class="line comment">// running 5 parallel review passes...</div>
+                    <div class="line">&nbsp;</div>
+                    <div class="line comment">// ── RESULTS ──</div>
+                    <div class="line">&nbsp;</div>
+                    <div class="line"><span class="critical">&#9632; CRITICAL  </span><span class="comment">security      </span><span class="file">src/auth.py            </span><span class="comment">:42   </span><span class="critical">SQL injection in query</span></div>
+                    <div class="line"><span class="suggestion">&#9632; SUGGEST   </span><span class="comment">style         </span><span class="file">src/utils.py           </span><span class="comment">:15   </span><span class="suggestion">Unclear variable naming</span></div>
+                    <div class="line">&nbsp;</div>
+                    <div class="line"><span class="success">2 findings &mdash; 1 critical, 1 suggestion</span></div>
+                    <div class="line"><span class="prompt">_</span><span class="crt-cursor"></span></div>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="how" id="how">
+    <hr class="pixel-hr">
+
+    <!-- ── Stage Select ── -->
+    <section class="how-section" id="how">
         <div class="container">
-            <div class="section-label">How it works</div>
-            <h2>Five passes, one command</h2>
+            <div class="section-label">&gt; STAGE SELECT</div>
+            <h2>7 stages to review</h2>
             <p class="section-sub">
-                Each pass sends a curated prompt to an AI agent in parallel. Findings come back as structured JSON — merged, deduplicated, and sorted by severity.
+                Each stage feeds the next. Five AI passes run in parallel. Findings merged, deduplicated, ranked.
             </p>
-            <div class="flow">
-                <div class="flow-step">
-                    <div class="flow-icon"> Diff</div>
-                    <div class="flow-content">
-                        <h3>Fetch the diff</h3>
-                        <p>Pull from a GitHub PR via <code>gh</code> or a local <code>git diff</code> range.</p>
+            <div class="stages">
+                <div class="stage">
+                    <div class="stage-num">01</div>
+                    <div class="stage-content">
+                        <h3>FETCH THE DIFF</h3>
+                        <p>Pull from a GitHub PR via <code style="font-family:var(--font-term); color:var(--cyan)">gh</code> or a local <code style="font-family:var(--font-term); color:var(--cyan)">git diff</code> range.</p>
                     </div>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-icon"> Memory</div>
-                    <div class="flow-content">
-                        <h3>Load feedback memory</h3>
-                        <p>Query the local SQLite store for previously dismissed findings. Inject as negative context so the agent avoids repeating patterns you've already rejected.</p>
+                <div class="stage">
+                    <div class="stage-num">02</div>
+                    <div class="stage-content">
+                        <h3>LOAD FEEDBACK MEMORY</h3>
+                        <p>Query SQLite store for previously dismissed findings. Inject as negative context so the agent avoids repeating patterns you've already rejected.</p>
                     </div>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-icon">⚡</div>
-                    <div class="flow-content">
-                        <h3>Run static analysis</h3>
-                        <p>Auto-detect linters and scanners (ruff, mypy, eslint, bandit, gitleaks, go vet, …) and run them over changed files. Deterministic signals injected as context before the AI sees the diff.</p>
+                <div class="stage">
+                    <div class="stage-num">03</div>
+                    <div class="stage-content">
+                        <h3>RUN STATIC ANALYSIS</h3>
+                        <p>Auto-detect linters &amp; scanners (ruff, mypy, eslint, bandit, gitleaks, go vet, &hellip;) and run them over changed files. Deterministic signals injected as context.</p>
                     </div>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-icon"> </div>
-                    <div class="flow-content">
-                        <h3>Retrieve cross-file usages</h3>
-                        <p>Extract symbols from changed code, then use ripgrep to find callers across the repository. Surfaces breakage risk that a human reviewer might miss.</p>
+                <div class="stage">
+                    <div class="stage-num">04</div>
+                    <div class="stage-content">
+                        <h3>RETRIEVE CROSS-FILE USAGES</h3>
+                        <p>Extract symbols from changed code, then ripgrep to find callers across the repo. Surfaces breakage risk a human reviewer might miss.</p>
                     </div>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-icon"> Review</div>
-                    <div class="flow-content">
-                        <h3>Run 5 passes in parallel</h3>
+                <div class="stage">
+                    <div class="stage-num">05</div>
+                    <div class="stage-content">
+                        <h3>RUN 5 PASSES IN PARALLEL</h3>
                         <p>Each pass focuses on one concern with a domain-specific prompt. All five run concurrently via ThreadPool.</p>
                         <div class="passes">
-                            <span class="pass-tag security">security</span>
-                            <span class="pass-tag correctness">correctness</span>
-                            <span class="pass-tag performance">performance</span>
-                            <span class="pass-tag style">style</span>
-                            <span class="pass-tag architecture">architecture</span>
+                            <span class="pass-tag s">SECURITY</span>
+                            <span class="pass-tag c">CORRECTNESS</span>
+                            <span class="pass-tag p">PERFORMANCE</span>
+                            <span class="pass-tag st">STYLE</span>
+                            <span class="pass-tag a">ARCHITECTURE</span>
                         </div>
                     </div>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-icon"> Merge</div>
-                    <div class="flow-content">
-                        <h3>Merge and deduplicate</h3>
+                <div class="stage">
+                    <div class="stage-num">06</div>
+                    <div class="stage-content">
+                        <h3>MERGE &amp; DEDUPLICATE</h3>
                         <p>Combine findings across all passes. Sort by severity. Drop duplicates found by multiple passes.</p>
                     </div>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-icon"> Output</div>
-                    <div class="flow-content">
-                        <h3>Output results</h3>
+                <div class="stage">
+                    <div class="stage-num">07</div>
+                    <div class="stage-content">
+                        <h3>OUTPUT RESULTS</h3>
                         <p>Terminal table for quick scanning, JSON for piping, or markdown for docs. Optionally post inline review comments to the GitHub PR.</p>
                     </div>
                 </div>
@@ -774,180 +1113,195 @@
         </div>
     </section>
 
-    <section class="features" id="features">
+    <hr class="pixel-hr">
+
+    <!-- ── Power-ups ── -->
+    <section class="features-section" id="features">
         <div class="container">
-            <div class="section-label">Features</div>
+            <div class="section-label">&gt; POWER-UPS</div>
             <h2>Built for real workflows</h2>
             <p class="section-sub">
                 CLI for local dev. GitHub Actions for CI. Self-hosted server for teams. Memory that improves over time.
             </p>
-            <div class="features-grid">
-                <div class="feature">
-                    <div class="feature-icon"> </div>
-                    <h3>Multi-pass review</h3>
-                    <p>Five specialized passes with focused prompts. Security, correctness, performance, style, and architecture — each with domain-specific instructions. Catches issues a single generic pass would miss.</p>
+            <div class="powerups-grid">
+                <div class="powerup">
+                    <span class="powerup-icon">&#x2666;</span>
+                    <h3>MULTI-PASS REVIEW</h3>
+                    <p>Five specialized passes with focused prompts. Security, correctness, performance, style, architecture — each with domain-specific instructions.</p>
                 </div>
-                <div class="feature">
-                    <div class="feature-icon"> </div>
-                    <h3>Feedback memory</h3>
-                    <p>Dismiss a finding once and it won't appear again. SQLite store tracks which findings humans reject — and why the agent flagged them. Future reviews learn from your team's decisions.</p>
+                <div class="powerup">
+                    <span class="powerup-icon">&#x2663;</span>
+                    <h3>FEEDBACK MEMORY</h3>
+                    <p>Dismiss a finding once and it won't appear again. SQLite store tracks which findings humans reject — future reviews learn from your team.</p>
                 </div>
-                <div class="feature">
-                    <div class="feature-icon"> </div>
-                    <h3>GitHub integration</h3>
-                    <p>Post findings as inline PR review comments. Critical issues request changes. Suggestions post as comments. Uses <code>gh</code> CLI — no API keys to manage.</p>
+                <div class="powerup">
+                    <span class="powerup-icon">&#x2665;</span>
+                    <h3>GITHUB INTEGRATION</h3>
+                    <p>Post findings as inline PR review comments. Critical issues request changes. Uses <code style="font-family:var(--font-term); color:var(--cyan)">gh</code> CLI — no API keys to manage.</p>
                 </div>
-                <div class="feature">
-                    <div class="feature-icon"> </div>
-                    <h3>Pluggable agents</h3>
-                    <p>Use Claude Code, OpenCode, or Codex. Each has its own adapter. Choose per-review or configure as default. Bring your own API keys.</p>
+                <div class="powerup">
+                    <span class="powerup-icon">&#x2660;</span>
+                    <h3>PLUGGABLE AGENTS</h3>
+                    <p>Use Claude Code, OpenCode, or Codex. Each has its own adapter. Choose per-review or configure as default.</p>
                 </div>
-                <div class="feature">
-                    <div class="feature-icon"> </div>
-                    <h3>Structured output</h3>
+                <div class="powerup">
+                    <span class="powerup-icon">&#x25CB;</span>
+                    <h3>STRUCTURED OUTPUT</h3>
                     <p>JSON for piping to other tools. Markdown for docs. Terminal table for quick scanning. Every finding has severity, file, line, and suggestion.</p>
                 </div>
-                <div class="feature">
-                    <div class="feature-icon"> </div>
-                    <h3>CI-native</h3>
-                    <p>Docker-based GitHub Action. Runs on every PR. Configurable passes and agents. Results posted directly to the PR as review comments.</p>
+                <div class="powerup">
+                    <span class="powerup-icon">&#x25A3;</span>
+                    <h3>CI-NATIVE</h3>
+                    <p>Docker-based GitHub Action. Runs on every PR. Configurable passes and agents. Results posted directly to the PR.</p>
                 </div>
-                <div class="feature">
-                    <div class="feature-icon"> </div>
-                    <h3>Server mode</h3>
-                    <p>Run as a persistent GitHub App. Multiple repos install your app and get automatic reviews on every PR. Webhook-driven, configurable concurrency, status checks.</p>
+                <div class="powerup">
+                    <span class="powerup-icon">&#x25C9;</span>
+                    <h3>SERVER MODE</h3>
+                    <p>Run as a persistent GitHub App. Multiple repos install your app and get automatic reviews on every PR. Webhook-driven.</p>
                 </div>
-                <div class="feature">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Static analysis pre-pass</h3>
-                    <p>Auto-detects linters and security scanners from your repo config. Runs them over changed files before the AI sees the diff. Deterministic signals, zero config.</p>
+                <div class="powerup">
+                    <span class="powerup-icon">&#x25B3;</span>
+                    <h3>STATIC ANALYSIS PRE-PASS</h3>
+                    <p>Auto-detects linters and security scanners from your repo config. Runs them over changed files before the AI sees the diff.</p>
                 </div>
-                <div class="feature">
-                    <div class="feature-icon"> </div>
-                    <h3>Cross-file usage retrieval</h3>
-                    <p>Extracts symbols from changed code, then uses ripgrep to find callers across the repository. Surfaces breakage risk that a human reviewer might miss.</p>
+                <div class="powerup">
+                    <span class="powerup-icon">&#x25A1;</span>
+                    <h3>CROSS-FILE USAGE RETRIEVAL</h3>
+                    <p>Extracts symbols from changed code, then ripgrep to find callers across the repository. Surfaces breakage risk.</p>
                 </div>
-                <div class="feature">
-                    <div class="feature-icon"> </div>
-                    <h3>Reasoning trail</h3>
-                    <p>Each finding includes the agent's rationale. When humans dismiss a finding, the reasoning is persisted and fed back as context. Collapsible details in markdown and PR comments.</p>
+                <div class="powerup">
+                    <span class="powerup-icon">&#x25BD;</span>
+                    <h3>REASONING TRAIL</h3>
+                    <p>Each finding includes the agent's rationale. When humans dismiss a finding, the reasoning is persisted and fed back as context.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="agents" id="agents">
+    <hr class="pixel-hr">
+
+    <!-- ── Character Select ── -->
+    <section class="agents-section" id="agents">
         <div class="container">
-            <div class="section-label">Agents</div>
-            <h2>Use your favorite AI CLI</h2>
+            <div class="section-label">&gt; CHARACTER SELECT</div>
+            <h2>Choose your agent</h2>
             <p class="section-sub">
                 Superseded delegates to existing AI CLIs. No API key management — use what you already have configured.
             </p>
-            <div class="agents-grid">
-                <div class="agent-card">
-                    <div class="agent-name">Claude Code</div>
-                    <div class="agent-cmd">claude -p --bare --model</div>
-                    <div class="agent-auth">Auth: <code>ANTHROPIC_API_KEY</code></div>
+            <div class="char-grid">
+                <div class="char-card">
+                    <div class="char-avatar">[C]</div>
+                    <div class="char-name">CLAUDE CODE</div>
+                    <div class="char-cmd">claude -p --bare --model</div>
+                    <div class="char-auth">AUTH: <code>ANTHROPIC_API_KEY</code></div>
                 </div>
-                <div class="agent-card">
-                    <div class="agent-name">OpenCode</div>
-                    <div class="agent-cmd">opencode run</div>
-                    <div class="agent-auth">Auth: Provider-specific</div>
+                <div class="char-card">
+                    <div class="char-avatar">[O]</div>
+                    <div class="char-name">OPENCODE</div>
+                    <div class="char-cmd">opencode run</div>
+                    <div class="char-auth">AUTH: Provider-specific</div>
                 </div>
-                <div class="agent-card">
-                    <div class="agent-name">Codex</div>
-                    <div class="agent-cmd">codex exec --json --model</div>
-                    <div class="agent-auth">Auth: <code>CODEX_API_KEY</code></div>
+                <div class="char-card">
+                    <div class="char-avatar">[X]</div>
+                    <div class="char-name">CODEX</div>
+                    <div class="char-cmd">codex exec --json --model</div>
+                    <div class="char-auth">AUTH: <code>CODEX_API_KEY</code></div>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="cta" id="get-started">
+    <hr class="pixel-hr">
+
+    <!-- ── Continue Screen ── -->
+    <section class="cta-section" id="get-started">
         <div class="container">
-            <h2>Start reviewing in 30 seconds</h2>
-            <p>Clone, install, and run your first review.</p>
-            <div class="install-cmd" style="margin-bottom: 24px;">
-                <span>$</span>
-                <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
-            </div>
-            <div class="install-cmd" style="margin-bottom: 24px;">
-                <span>$</span>
-                <code>superseded review --diff HEAD~1..HEAD</code>
-            </div>
-            <br>
-            <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                <a href="https://github.com/fabioesposito/superseded" class="btn btn-primary">Read the docs</a>
-                <a href="#server" class="btn btn-ghost">Server mode</a>
+            <div class="cta-box">
+                <div class="section-label">&gt; CONTINUE?</div>
+                <h2>INSERT COIN<br>TO START</h2>
+                <p>Clone, install, and run your first review in 30 seconds.</p>
+                <div class="install-cmd">
+                    <span class="prompt">$</span>
+                    <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
+                </div>
+                <div class="install-cmd">
+                    <span class="prompt">$</span>
+                    <code>superseded review --diff HEAD~1..HEAD</code>
+                </div>
+                <div class="cta-actions">
+                    <a href="https://github.com/fabioesposito/superseded" class="btn btn-primary">&#9654; READ THE DOCS</a>
+                    <a href="#server" class="btn btn-ghost">SERVER MODE</a>
+                </div>
             </div>
         </div>
     </section>
 
-    <section class="how" id="server" style="padding: 80px 0; border-top: 1px solid var(--border-subtle);">
+    <hr class="pixel-hr">
+
+    <!-- ── Server Section ── -->
+    <section class="server-section" id="server">
         <div class="container">
-            <div class="section-label">Server mode</div>
+            <div class="section-label">&gt; BONUS STAGE</div>
             <h2>Self-hosted for teams</h2>
             <p class="section-sub">
                 Run Superseded as a GitHub App on your own server. Multiple repos install it and get automatic reviews on every PR.
             </p>
-            <div class="flow">
-                <div class="flow-step">
-                    <div class="flow-icon"> </div>
-                    <div class="flow-content">
-                        <h3>Create a GitHub App</h3>
+            <div class="stages">
+                <div class="stage">
+                    <div class="stage-num">01</div>
+                    <div class="stage-content">
+                        <h3>CREATE A GITHUB APP</h3>
                         <p>Set up a GitHub App with webhook URL pointing to your server. Subscribe to PR and installation events.</p>
                     </div>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-icon"> </div>
-                    <div class="flow-content">
-                        <h3>Install on repos</h3>
+                <div class="stage">
+                    <div class="stage-num">02</div>
+                    <div class="stage-content">
+                        <h3>INSTALL ON REPOS</h3>
                         <p>Other repos install your app with one click. The server tracks installations automatically.</p>
                     </div>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-icon">⚡</div>
-                    <div class="flow-content">
-                        <h3>Webhook triggers review</h3>
+                <div class="stage">
+                    <div class="stage-num">03</div>
+                    <div class="stage-content">
+                        <h3>WEBHOOK TRIGGERS REVIEW</h3>
                         <p>PR opened or updated — webhook arrives, job queued, review runs in background. Results posted as PR comments and status checks.</p>
                     </div>
                 </div>
-                <div class="flow-step">
-                    <div class="flow-icon"> </div>
-                    <div class="flow-content">
-                        <h3>Configurable concurrency</h3>
+                <div class="stage">
+                    <div class="stage-num">04</div>
+                    <div class="stage-content">
+                        <h3>CONFIGURABLE CONCURRENCY</h3>
                         <p>Control how many reviews run in parallel. Jobs queue when at capacity. Each review gets its own shallow clone and agent subprocess.</p>
                     </div>
                 </div>
             </div>
-            <div style="margin-top: 40px; padding: 20px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--text-muted);">
-                <div><span style="color: var(--accent);">$</span> superseded serve --port 8000</div>
+            <div class="server-term">
+                <div><span class="prompt">$</span> superseded serve --port 8000</div>
                 <div style="color: var(--text-dim);">Starting Superseded server on 0.0.0.0:8000</div>
             </div>
         </div>
     </section>
 
+    <!-- ── Footer ── -->
     <footer>
         <div class="container">
-            <p>&copy; 2026 Superseded. Open source under MIT.</p>
+            <p>&copy; 2026 SUPERSEDED &mdash; MIT LICENSE</p>
             <div class="footer-links">
-                <a href="https://github.com/fabioesposito/superseded">GitHub</a>
-                <a href="https://github.com/fabioesposito/superseded/issues">Issues</a>
+                <a href="https://github.com/fabioesposito/superseded">GITHUB</a>
+                <a href="https://github.com/fabioesposito/superseded/issues">ISSUES</a>
             </div>
         </div>
     </footer>
 
     <script>
-        // Copy button feedback
         document.querySelectorAll('.copy').forEach(btn => {
             btn.addEventListener('click', function() {
                 const original = this.textContent;
-                this.textContent = 'Copied!';
-                setTimeout(() => this.textContent = original, 1500);
+                this.textContent = 'OK!';
+                setTimeout(() => this.textContent = original, 1200);
             });
         });
-
-        // Smooth scroll for anchor links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function(e) {
                 e.preventDefault();
