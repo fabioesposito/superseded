@@ -1,5 +1,5 @@
-agent: claude-code
-model: null
+agent: opencode
+model: opencode/big-pickle
 passes:
   security: true
   correctness: true
