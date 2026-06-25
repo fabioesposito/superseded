@@ -15,8 +15,8 @@ class PassConfig(BaseModel):
 
 
 class Config(BaseModel):
-    agent: str = "claude-code"
-    model: str | None = None
+    agent: str = "opencode"
+    model: str | None = "deepseek-v4-pro"
     passes: PassConfig = PassConfig()
     post_to_pr: bool = False
     format: str = "table"

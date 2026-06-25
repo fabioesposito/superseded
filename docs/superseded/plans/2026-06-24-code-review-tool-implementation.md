@@ -417,8 +417,8 @@ class PassConfig(BaseModel):
 
 
 class Config(BaseModel):
-    agent: str = "claude-code"
-    model: str | None = None
+    agent: str = "opencode"
+    model: str | None = "deepseek-v4-pro"
     passes: PassConfig = PassConfig()
     post_to_pr: bool = False
     format: str = "table"
@@ -2021,7 +2021,7 @@ inputs:
   agent:
     description: "AI CLI agent (claude-code, opencode, codex)"
     required: false
-    default: "claude-code"
+    default: "opencode"
   model:
     description: "Model to use"
     required: false
@@ -2076,8 +2076,8 @@ Create `entrypoint.sh`:
 #!/bin/bash
 set -e
 
-AGENT="${INPUT_AGENT:-claude-code}"
-MODEL="${INPUT_MODEL:-}"
+AGENT="${INPUT_AGENT:-opencode}"
+MODEL="${INPUT_MODEL:-deepseek-v4-pro}"
 PASSES="${INPUT_PASSES:-security,correctness,performance,style,architecture}"
 POST="${INPUT_POST:-true}"
 
@@ -2147,8 +2147,8 @@ git commit -m "feat: add GitHub Action for PR code review"
 - [x] **Step 1: Write default config**
 
 ```yaml
-agent: claude-code
-model: null
+agent: opencode
+model: deepseek-v4-pro
 passes:
   security: true
   correctness: true

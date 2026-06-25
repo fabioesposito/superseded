@@ -40,7 +40,7 @@ def test_resolve_agent_env_overrides_flag_and_config():
 
 def test_resolve_agent_flag_overrides_config_no_env():
     with patch.dict("os.environ", {}, clear=True):
-        assert resolve_agent(None, Config()) == "claude-code"
+        assert resolve_agent(None, Config()) == "opencode"
         assert resolve_agent("codex", Config()) == "codex"
 
 

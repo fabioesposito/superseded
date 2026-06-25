@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-AGENT="${INPUT_AGENT:-claude-code}"
-MODEL="${INPUT_MODEL:-}"
+AGENT="${INPUT_AGENT:-opencode}"
+MODEL="${INPUT_MODEL:-deepseek-v4-pro}"
 PASSES="${INPUT_PASSES:-security,correctness,performance,style,architecture}"
 POST="${INPUT_POST:-true}"
 

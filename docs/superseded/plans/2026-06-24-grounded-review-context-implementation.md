@@ -169,8 +169,8 @@ Expected: FAIL — `Config.__init__() got unexpected keyword argument 'static_an
 # src/superseded/config.py — add two fields to Config class after memory
 
 class Config(BaseModel):
-    agent: str = "claude-code"
-    model: str | None = None
+    agent: str = "opencode"
+    model: str | None = "deepseek-v4-pro"
     passes: PassConfig = PassConfig()
     post_to_pr: bool = False
     format: str = "table"

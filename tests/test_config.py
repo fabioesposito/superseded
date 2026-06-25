@@ -9,8 +9,8 @@ from superseded.config import Config, load_config
 
 def test_default_config():
     cfg = Config()
-    assert cfg.agent == "claude-code"
-    assert cfg.model is None
+    assert cfg.agent == "opencode"
+    assert cfg.model == "deepseek-v4-pro"
     assert cfg.passes.security is True
     assert cfg.post_to_pr is False
     assert cfg.format == "table"

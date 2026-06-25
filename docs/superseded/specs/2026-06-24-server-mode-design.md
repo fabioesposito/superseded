@@ -279,8 +279,8 @@ log_level: info
 
 # Default settings for repos without .superseded.yaml
 defaults:
-  agent: claude-code
-  model: claude-sonnet-4-20250514
+  agent: opencode
+  model: deepseek-v4-pro
   passes: [security, correctness, performance, style, architecture]
 ```
 

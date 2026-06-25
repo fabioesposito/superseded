@@ -4,11 +4,11 @@ inputs:
   agent:
     description: "AI CLI agent (claude-code, opencode, codex)"
     required: false
-    default: "claude-code"
+    default: "opencode"
   model:
     description: "Model to use"
     required: false
-    default: ""
+    default: "deepseek-v4-pro"
   passes:
     description: "Comma-separated passes to run"
     required: false

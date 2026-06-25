@@ -52,7 +52,7 @@ superseded review --diff HEAD~3..HEAD
 superseded review src/auth.py src/api.py
 
 # Choose agent + model
-superseded review --pr 123 --agent claude-code --model claude-sonnet-4-20250514
+superseded review --pr 123 --agent opencode --model deepseek-v4-pro
 
 # Output format
 superseded review --pr 123 --format json
@@ -86,8 +86,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: superseded/review@v1
         with:
-          agent: claude-code
-          model: claude-sonnet-4-20250514
+          agent: opencode
+          model: deepseek-v4-pro
           passes: security,correctness,performance
           post: true
         env:
@@ -217,8 +217,8 @@ Extract JSON array from AI response using regex. Fallback to markdown parsing if
 
 ### Agent/Model Selection
 
-- CLI: `--agent claude-code --model claude-sonnet-4-20250514`
-- Config: `agent: claude-code` + `model: claude-sonnet-4-20250514`
+- CLI: `--agent opencode --model deepseek-v4-pro`
+- Config: `agent: opencode` + `model: deepseek-v4-pro`
 - Env: `SUPERSEDED_AGENT` + `SUPERSEDED_MODEL`
 
 ## Output Format
@@ -315,8 +315,8 @@ This prevents the tool from repeating findings humans have already rejected.
 `.superseded.yaml` in repo root:
 
 ```yaml
-agent: claude-code
-model: claude-sonnet-4-20250514
+agent: opencode
+model: deepseek-v4-pro
 passes:
   security: true
   correctness: true
