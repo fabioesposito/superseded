@@ -14,18 +14,30 @@ def test_agent_is_abstract():
 
 
 def test_claude_code_agent_name():
-    agent = ClaudeCodeAgent(model="claude-sonnet-4-20250514")
+    agent = ClaudeCodeAgent(model="claude-sonnet-4-6")
     assert agent.name == "claude-code"
 
 
-def test_claude_code_build_command():
-    agent = ClaudeCodeAgent(model="claude-sonnet-4-20250514")
+def test_claude_code_build_command_with_key(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    agent = ClaudeCodeAgent(model="claude-sonnet-4-6")
     cmd = agent.build_command("Review this code")
     assert cmd[0] == "claude"
     assert "-p" in cmd
     assert "--bare" in cmd
     assert "--model" in cmd
-    assert "claude-sonnet-4-20250514" in cmd
+    assert "claude-sonnet-4-6" in cmd
+
+
+def test_claude_code_build_command_without_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    agent = ClaudeCodeAgent(model="claude-sonnet-4-6")
+    cmd = agent.build_command("Review this code")
+    assert cmd[0] == "claude"
+    assert "-p" in cmd
+    assert "--bare" not in cmd
+    assert "--model" in cmd
+    assert "claude-sonnet-4-6" in cmd
 
 
 def test_claude_code_parse_output():
@@ -54,18 +66,18 @@ def test_opencode_build_command():
 
 
 def test_codex_agent_name():
-    agent = CodexAgent(model="gpt-4o")
+    agent = CodexAgent(model="gpt-5.4-mini")
     assert agent.name == "codex"
 
 
 def test_codex_build_command():
-    agent = CodexAgent(model="gpt-4o")
+    agent = CodexAgent(model="gpt-5.4-mini")
     cmd = agent.build_command("Review this code")
     assert cmd[0] == "codex"
     assert "exec" in cmd
     assert "--json" in cmd
     assert "--model" in cmd
-    assert "gpt-4o" in cmd
+    assert "gpt-5.4-mini" in cmd
 
 
 def test_codex_parses_jsonl_assistant_message():

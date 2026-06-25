@@ -6,7 +6,7 @@ from superseded.agents.parsing import extract_assistant_text_jsonl, extract_find
 
 class CodexAgent(Agent):
     def __init__(self, model: str | None = None) -> None:
-        self._model = model or "gpt-4o"
+        self._model = model or "gpt-5.4-mini"
 
     @property
     def name(self) -> str:
