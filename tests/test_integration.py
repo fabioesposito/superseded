@@ -329,3 +329,89 @@ def test_context_disabled_skips_enrichment(monkeypatch):
     )
 
     assert not called
+
+
+def test_conventions_and_specs_called_and_forwarded(monkeypatch):
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
+    )
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr("superseded.cli.compute_file_context", lambda d, root=None: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+    monkeypatch.setattr("superseded.cli.run_static_analysis", lambda *a, **kw: None)
+    monkeypatch.setattr("superseded.cli.retrieve_usages", lambda *a, **kw: None)
+
+    called_conv = []
+    called_spec = []
+    monkeypatch.setattr(
+        "superseded.cli.discover_conventions",
+        lambda root: (called_conv.append(True), "conv block")[1],
+    )
+    monkeypatch.setattr(
+        "superseded.cli.discover_repo_specs",
+        lambda diff, root: (called_spec.append(True), "spec block")[1],
+    )
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[])
+    monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
+
+    _run_review(
+        pr=None,
+        diff_range="HEAD~1..HEAD",
+        agent=None,
+        model=None,
+        output_format="json",
+        post=False,
+        passes=None,
+    )
+
+    assert called_conv
+    assert called_spec
+    call_kwargs = mock_engine.review.call_args
+    assert call_kwargs[1].get("conventions_signals") == "conv block"
+    assert call_kwargs[1].get("spec_signals") == "spec block"
+
+
+def test_no_conventions_flag_skips_discover(monkeypatch):
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
+    )
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr("superseded.cli.compute_file_context", lambda d, root=None: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+    monkeypatch.setattr("superseded.cli.run_static_analysis", lambda *a, **kw: None)
+    monkeypatch.setattr("superseded.cli.retrieve_usages", lambda *a, **kw: None)
+
+    called = []
+    monkeypatch.setattr(
+        "superseded.cli.discover_conventions",
+        lambda root: (called.append("conv"), None)[1],
+    )
+    monkeypatch.setattr(
+        "superseded.cli.discover_repo_specs",
+        lambda diff, root: (called.append("spec"), None)[1],
+    )
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[])
+    monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
+
+    _run_review(
+        pr=None,
+        diff_range="HEAD~1..HEAD",
+        agent=None,
+        model=None,
+        output_format="json",
+        post=False,
+        passes=None,
+        no_conventions=True,
+        no_specs=True,
+    )
+
+    assert not called
+    call_kwargs = mock_engine.review.call_args
+    assert call_kwargs[1].get("conventions_signals") is None
+    assert call_kwargs[1].get("spec_signals") is None

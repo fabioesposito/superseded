@@ -12,6 +12,8 @@ from typing import get_args
 import click
 
 from superseded.config import Config, load_config
+from superseded.context.conventions import discover_conventions
+from superseded.context.spec_retrieval import discover_repo_specs
 from superseded.context.static_analysis import run_static_analysis
 from superseded.context.usage_retrieval import retrieve_usages
 from superseded.diff import (
@@ -167,6 +169,8 @@ def cli() -> None:
 @click.option("--no-memory", is_flag=True, help="Disable memory feedback injection")
 @click.option("--no-static", is_flag=True, help="Disable static analysis")
 @click.option("--no-usage", is_flag=True, help="Disable usage retrieval")
+@click.option("--no-conventions", is_flag=True, help="Disable project conventions injection")
+@click.option("--no-specs", is_flag=True, help="Disable design spec/plan retrieval")
 @click.argument("files", nargs=-1, type=click.Path(exists=True, dir_okay=False))
 def review(
     pr: int | None,
@@ -181,6 +185,8 @@ def review(
     no_memory: bool,
     no_static: bool,
     no_usage: bool,
+    no_conventions: bool,
+    no_specs: bool,
     files: tuple[str, ...],
 ) -> None:
     """Review code changes.
@@ -220,6 +226,8 @@ def review(
         no_memory=no_memory,
         no_static=no_static,
         no_usage=no_usage,
+        no_conventions=no_conventions,
+        no_specs=no_specs,
         files=list(files) or None,
     )
 
@@ -238,6 +246,8 @@ def _run_review(
     no_memory: bool = False,
     no_static: bool = False,
     no_usage: bool = False,
+    no_conventions: bool = False,
+    no_specs: bool = False,
     files: list[str] | None = None,
 ) -> None:
     config = load_config(config_path)
@@ -279,6 +289,15 @@ def _run_review(
     if enable_usage:
         usage_signals = retrieve_usages(diff, root)
 
+    enable_conventions = config.conventions and not no_conventions
+    enable_specs = config.spec_retrieval and not no_specs
+    conventions_signals: str | None = None
+    spec_signals: str | None = None
+    if enable_conventions:
+        conventions_signals = discover_conventions(root)
+    if enable_specs:
+        spec_signals = discover_repo_specs(diff, root)
+
     repo = current_repo()
     memory_context: str | None = None
     store: MemoryStore | None = None
@@ -297,6 +316,8 @@ def _run_review(
             memory_context=memory_context,
             static_signals=static_signals,
             usage_signals=usage_signals,
+            conventions_signals=conventions_signals,
+            spec_signals=spec_signals,
             passes=passes,
             timeout=pass_timeout,
             progress=_progress,
