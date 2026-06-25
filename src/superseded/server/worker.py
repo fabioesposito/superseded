@@ -188,7 +188,8 @@ async def _run_review_for_job(
             token, job.owner, job.repo, job.pr_number
         )
 
-        context = gather_context(
+        context = await asyncio.to_thread(
+            gather_context,
             diff,
             repo_path,
             static_analysis=config.static_analysis,
@@ -203,7 +204,8 @@ async def _run_review_for_job(
         spec_signals = context["spec_signals"]
 
         engine = ReviewEngine.select(config.agent, model=config.model, config=config)
-        result = engine.review(
+        result = await asyncio.to_thread(
+            engine.review,
             diff=diff,
             pr_description=pr_description,
             file_context=file_context,

@@ -12,11 +12,8 @@ class CodexAgent(Agent):
     def name(self) -> str:
         return "codex"
 
-    def build_command(self, prompt: str | None = None) -> list[str]:
-        cmd = ["codex", "exec"]
-        if prompt is not None:
-            cmd.append(prompt)
-        cmd.extend(["--json", "--model", self._model])
+    def build_command(self) -> list[str]:
+        cmd = ["codex", "exec", "--json", "--model", self._model]
         return cmd
 
     def parse_output(self, raw: str, pass_name: str) -> list[dict]:

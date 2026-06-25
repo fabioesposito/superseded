@@ -21,9 +21,10 @@ def test_claude_code_agent_name():
 def test_claude_code_build_command_with_key(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     agent = ClaudeCodeAgent(model="claude-sonnet-4-6")
-    cmd = agent.build_command("Review this code")
+    cmd = agent.build_command()
     assert cmd[0] == "claude"
     assert "-p" in cmd
+    assert "-" in cmd
     assert "--bare" in cmd
     assert "--model" in cmd
     assert "claude-sonnet-4-6" in cmd
@@ -32,9 +33,10 @@ def test_claude_code_build_command_with_key(monkeypatch):
 def test_claude_code_build_command_without_key(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     agent = ClaudeCodeAgent(model="claude-sonnet-4-6")
-    cmd = agent.build_command("Review this code")
+    cmd = agent.build_command()
     assert cmd[0] == "claude"
     assert "-p" in cmd
+    assert "-" in cmd
     assert "--bare" not in cmd
     assert "--model" in cmd
     assert "claude-sonnet-4-6" in cmd
@@ -60,7 +62,7 @@ def test_opencode_agent_name():
 
 def test_opencode_build_command():
     agent = OpenCodeAgent()
-    cmd = agent.build_command("Review this code")
+    cmd = agent.build_command()
     assert cmd[0] == "opencode"
     assert "run" in cmd
 
@@ -72,7 +74,7 @@ def test_codex_agent_name():
 
 def test_codex_build_command():
     agent = CodexAgent(model="gpt-5.4-mini")
-    cmd = agent.build_command("Review this code")
+    cmd = agent.build_command()
     assert cmd[0] == "codex"
     assert "exec" in cmd
     assert "--json" in cmd

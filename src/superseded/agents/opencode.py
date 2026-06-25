@@ -12,10 +12,8 @@ class OpenCodeAgent(Agent):
     def name(self) -> str:
         return "opencode"
 
-    def build_command(self, prompt: str | None = None) -> list[str]:
+    def build_command(self) -> list[str]:
         cmd = ["opencode", "run"]
-        if prompt is not None:
-            cmd.append(prompt)
         if self._model:
             cmd.extend(["--model", self._model])
         return cmd

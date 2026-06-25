@@ -10,10 +10,14 @@ class Agent(ABC):
     def name(self) -> str: ...
 
     @abstractmethod
-    def build_command(self, prompt: str | None = None) -> list[str]: ...
+    def build_command(self) -> list[str]: ...
 
     @abstractmethod
     def parse_output(self, raw: str, pass_name: str) -> list[dict]: ...
+
+    @property
+    def prompt_via_stdin(self) -> bool:
+        return True
 
     def is_available(self) -> bool:
         binary = self.build_command()[0]
