@@ -11,8 +11,14 @@ from typing import get_args
 
 import click
 
-from superseded.config import Config, load_config
+from superseded.config import Config, load_config, write_config
 from superseded.context.gathering import gather_context
+from superseded.detection import (
+    default_model_for,
+    detect_agents,
+    detect_gh,
+    pick_agent,
+)
 from superseded.diff import (
     fetch_diff,
     fetch_pr_description,
@@ -371,6 +377,73 @@ async def _link_comment_ids(
         for finding, comment_id in zip(result.findings, comment_ids, strict=True):
             if comment_id is not None:
                 await store.set_comment_id(finding.id, comment_id)
+
+
+@cli.command()
+@click.option("--force", is_flag=True, help="Overwrite an existing .superseded.yaml")
+@click.option(
+    "--agent",
+    "agent_override",
+    default=None,
+    help="Force a specific agent (claude-code, opencode, codex)",
+)
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Path to write (default: .superseded.yaml in cwd)",
+)
+def init(force: bool, agent_override: str | None, config_path: Path | None) -> None:
+    """Detect installed AI CLIs and write a .superseded.yaml config file."""
+    _run_init(force=force, agent_override=agent_override, config_path=config_path)
+
+
+def _run_init(force: bool, agent_override: str | None, config_path: Path | None) -> None:
+    from superseded.review.engine import AGENT_MAP
+
+    target = config_path or Path(".superseded.yaml")
+
+    if target.exists() and not force:
+        _status(f"Error: {target} already exists. Use --force to overwrite.")
+        sys.exit(2)
+
+    statuses = detect_agents()
+    available = [s.name for s in statuses if s.available]
+    missing = [s.name for s in statuses if not s.available]
+    if available:
+        _status(f"Detected agent CLIs: {', '.join(available)}")
+    if missing:
+        _status(f"Missing: {', '.join(missing)}")
+
+    gh_ok = detect_gh()
+    if gh_ok:
+        _status("gh CLI: found")
+    else:
+        _status("gh CLI: not found (PR features will be disabled)")
+
+    if agent_override is not None:
+        if agent_override not in AGENT_MAP:
+            _status(f"Error: unknown agent '{agent_override}'. Choose from: {', '.join(AGENT_MAP)}")
+            sys.exit(2)
+        if agent_override not in available:
+            _status(f"Error: selected agent '{agent_override}' is not installed on PATH.")
+            sys.exit(2)
+        chosen = agent_override
+    else:
+        chosen = pick_agent(available)
+        if chosen is None:
+            _status(
+                "Error: no supported AI CLI found on PATH. Install one of: claude, opencode, codex."
+            )
+            sys.exit(1)
+
+    model = default_model_for(chosen)
+    cfg = Config(agent=chosen, model=model)
+    write_config(cfg, target)
+
+    _status(f"Selected agent: {chosen}" + (f" ({model})" if model else ""))
+    _status(f"Wrote {target}")
 
 
 @cli.command()
