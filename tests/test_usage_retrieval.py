@@ -34,11 +34,11 @@ def test_retrieve_usages_single_rg_call():
     """Spec wants batched ripgrep, not one call per symbol."""
     mock_result = MagicMock()
     mock_result.returncode = 0
-    mock_result.stdout = "a.py:1:foo\n"
+    mock_result.stdout = "a.py:1:foobar\n"
 
     with patch("subprocess.run", return_value=mock_result) as mock_run:
-        retrieve_usages("+def foo(): pass\n+def bar(): pass", Path("/tmp"))
+        retrieve_usages("+def foobar(): pass\n+def bazqux(): pass", Path("/tmp"))
         assert mock_run.call_count == 1
         cmd = mock_run.call_args[0][0]
-        assert "foo" in cmd[-1] or "foo" in str(cmd)
-        assert "bar" in cmd[-1] or "bar" in str(cmd)
+        assert "foobar" in cmd[-1] or "foobar" in str(cmd)
+        assert "bazqux" in cmd[-1] or "bazqux" in str(cmd)

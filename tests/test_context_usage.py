@@ -104,16 +104,16 @@ def test_generic_fallback_boosts_known_language_symbols():
 def test_rg_invocation(monkeypatch):
     def fake_run(cmd, **kwargs):
         if "rg" in cmd[0]:
-            return MagicMock(returncode=0, stdout="other.py:10: foo()\n", stderr="")
+            return MagicMock(returncode=0, stdout="other.py:10: foobar()\n", stderr="")
         return MagicMock(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr("subprocess.run", fake_run)
     result = retrieve_usages(
-        "@@ -1,3 +1,5 @@\n+def foo():\n+    pass\n",
+        "@@ -1,3 +1,5 @@\n+def foobar():\n+    pass\n",
         Path("/repo"),
     )
     assert result is not None
-    assert "foo()" in result
+    assert "foobar()" in result
 
 
 def test_rg_missing_returns_none(monkeypatch, caplog):
@@ -122,13 +122,13 @@ def test_rg_missing_returns_none(monkeypatch, caplog):
 
     monkeypatch.setattr("subprocess.run", fail)
     with caplog.at_level("WARNING"):
-        result = retrieve_usages("@@ -1,3 +1,5 @@\n+def foo():\n", Path("/repo"))
+        result = retrieve_usages("@@ -1,3 +1,5 @@\n+def foobar():\n", Path("/repo"))
     assert result is None
     assert "ripgrep not on PATH" in caplog.text
 
 
 def test_budget_truncation(monkeypatch):
-    big_match = "file.py:{}: sym()\n"
+    big_match = "file.py:{}: symbol()\n"
     matches = "".join(big_match.format(i) for i in range(400))
 
     def fake_run(cmd, **kwargs):
@@ -138,7 +138,7 @@ def test_budget_truncation(monkeypatch):
 
     monkeypatch.setattr("subprocess.run", fake_run)
     result = retrieve_usages(
-        "@@ -1,3 +1,5 @@\n+def sym():\n",
+        "@@ -1,3 +1,5 @@\n+def symbol():\n",
         Path("/repo"),
     )
     assert result is not None
@@ -226,6 +226,30 @@ def test_unknown_language_uses_generic_symbol_extraction(monkeypatch):
     )
     assert result is not None
     assert "process_request" in result
+
+
+def test_no_entries_fallback_is_language_agnostic(monkeypatch):
+    """When no file entries parse, the fallback symbol extraction must use the
+    generic regex (case-sensitive), not Python's (case-insensitive). With
+    case-insensitive dedup, `Widget` and `widget` collapse to one symbol; the
+    generic path keeps both, so ripgrep should search for both."""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        if "rg" in cmd[0]:
+            calls.append(cmd)
+            return MagicMock(returncode=0, stdout="f:1: Widget widget\n", stderr="")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    # Raw hunk, no diff --git header -> parse_diff_files returns no entries.
+    diff = "@@ -1,1 +1,2 @@\n+Widget widget\n"
+    retrieve_usages(diff, Path("/repo"))
+
+    assert calls, "ripgrep was never invoked"
+    pattern = calls[0][4]  # the rg pattern is the 5th element: rg -n --max-count 4 <pattern> ...
+    assert "Widget" in pattern
+    assert "widget" in pattern
 
 
 def test_timeout_on_batched_rg_returns_none(monkeypatch):

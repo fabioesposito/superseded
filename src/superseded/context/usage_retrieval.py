@@ -131,7 +131,7 @@ def retrieve_usages(diff: str, root: Path) -> str | None:
         symbols = symbols[-MAX_SYMBOLS:]
     else:
         changed_files = []
-        symbols = extract_symbols(diff, "python")
+        symbols = extract_symbols(diff, None)
 
     if not symbols:
         return None
