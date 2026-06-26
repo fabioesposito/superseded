@@ -253,6 +253,18 @@ def test_fetch_pr_diff_raises_when_gh_not_found():
         _fetch_pr_diff(1)
 
 
+def test_fetch_pr_diff_surfaces_gh_failure():
+    err = subprocess.CalledProcessError(
+        returncode=4, cmd=["gh", "pr", "diff", "1"], output="", stderr="auth required"
+    )
+
+    with (
+        patch("subprocess.run", side_effect=err),
+        pytest.raises(RuntimeError, match=r"gh pr diff 1.*exit 4.*auth required"),
+    ):
+        _fetch_pr_diff(1)
+
+
 def test_fetch_git_diff_raises_when_git_not_found():
     def raise_fnf(*a, **kw):
         raise FileNotFoundError("git")

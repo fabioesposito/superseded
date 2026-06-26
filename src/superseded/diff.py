@@ -43,6 +43,12 @@ def _fetch_pr_diff(pr: int) -> str:
         raise RuntimeError(
             "'gh' CLI not found on PATH. Install it: https://cli.github.com/"
         ) from err
+    except subprocess.CalledProcessError as err:
+        detail = (err.stderr or "").strip()
+        msg = f"'gh pr diff {pr}' failed (exit {err.returncode})"
+        if detail:
+            msg += f": {detail}"
+        raise RuntimeError(msg) from err
     return result.stdout
 
 

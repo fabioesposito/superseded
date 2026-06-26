@@ -273,7 +273,11 @@ def _run_review(
         sys.exit(2)
 
     _status("Fetching diff...")
-    diff = fetch_diff(pr=pr, diff_range=diff_range, files=files)
+    try:
+        diff = fetch_diff(pr=pr, diff_range=diff_range, files=files)
+    except RuntimeError as err:
+        click.echo(f"Error: {err}", err=True)
+        sys.exit(1)
 
     _status("Gathering context...")
     root = repo_root()
