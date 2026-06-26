@@ -84,6 +84,9 @@ def test_init_no_agents_exit_1(tmp_path, monkeypatch):
     result = runner.invoke(cli, ["init", "--config", str(target)])
     assert result.exit_code == 1
     assert not target.exists()
+    stderr = result.stderr_bytes.decode() if result.stderr_bytes else result.output
+    assert "Install one of" in stderr
+    assert "claude-code" in stderr
 
 
 def test_init_agent_override_unknown(tmp_path, monkeypatch):

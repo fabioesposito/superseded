@@ -35,7 +35,6 @@ def test_agent_status_is_frozen_dataclass():
 
 
 def test_detect_agents_returns_all_three(monkeypatch):
-    # Make every binary resolve to a fake path.
     monkeypatch.setattr("superseded.detection.shutil.which", lambda b: f"/usr/bin/{b}")
     statuses = detect_agents()
     names = {s.name for s in statuses}

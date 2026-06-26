@@ -434,7 +434,8 @@ def _run_init(force: bool, agent_override: str | None, config_path: Path | None)
         chosen = pick_agent(available)
         if chosen is None:
             _status(
-                "Error: no supported AI CLI found on PATH. Install one of: claude, opencode, codex."
+                "Error: no supported AI CLI found on PATH. "
+                f"Install one of: {', '.join(AGENT_MAP)}."
             )
             sys.exit(1)
 
