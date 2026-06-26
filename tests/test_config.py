@@ -60,3 +60,48 @@ def test_conventions_can_be_disabled():
     cfg = Config(conventions=False, spec_retrieval=False)
     assert cfg.conventions is False
     assert cfg.spec_retrieval is False
+
+
+def test_write_config_round_trip(tmp_path):
+    from superseded.config import Config, load_config, write_config
+
+    cfg = Config(agent="claude-code", model="claude-sonnet-4-6")
+    target = tmp_path / ".superseded.yaml"
+    write_config(cfg, target)
+
+    loaded = load_config(target)
+    assert loaded.agent == "claude-code"
+    assert loaded.model == "claude-sonnet-4-6"
+    assert loaded.passes.security is True
+    assert loaded.passes.architecture is True
+    assert loaded.format == "table"
+    assert loaded.memory is True
+
+
+def test_write_config_no_temp_lingering(tmp_path):
+    from superseded.config import write_config
+
+    target = tmp_path / ".superseded.yaml"
+    write_config(Config(), target)
+    temps = list(tmp_path.glob("*.tmp"))
+    assert temps == []
+
+
+def test_write_config_contains_nested_passes_block(tmp_path):
+    from superseded.config import write_config
+
+    target = tmp_path / ".superseded.yaml"
+    write_config(Config(), target)
+    text = target.read_text()
+    assert "\npasses:" in text or text.startswith("passes:")
+    assert "security:" in text
+
+
+def test_write_config_default_path(tmp_path, monkeypatch):
+    from superseded.config import Config, load_config, write_config
+
+    monkeypatch.chdir(tmp_path)
+    write_config(Config(agent="codex"))
+    assert (tmp_path / ".superseded.yaml").exists()
+    loaded = load_config(None)
+    assert loaded.agent == "codex"

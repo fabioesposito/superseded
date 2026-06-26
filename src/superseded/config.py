@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import yaml
@@ -37,3 +38,19 @@ def load_config(path: Path | None = None) -> Config:
         return Config()
     data = yaml.safe_load(path.read_text()) or {}
     return Config(**data)
+
+
+def write_config(config: Config, path: Path | None = None) -> None:
+    """Atomically write `config` to `path` as YAML.
+
+    `path` defaults to `.superseded.yaml` in the current working directory.
+    Writes to a sibling temp file and replaces the target on success so a
+    crash mid-write never leaves a half-written config.
+    """
+    if path is None:
+        path = Path(".superseded.yaml")
+    data = config.model_dump(mode="json")
+    text = yaml.safe_dump(data, sort_keys=False)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
