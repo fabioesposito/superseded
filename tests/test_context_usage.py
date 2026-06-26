@@ -86,6 +86,15 @@ def test_extract_symbols_python_annotated_module_var():
     assert "MAX_RETRIES" in syms
 
 
+def test_extract_symbols_generic_for_unknown_lang():
+    """lang=None (or any unrecognised value) must route to the generic regex,
+    returning identifiers of 4+ chars while filtering keywords."""
+    diff = "@@ -1,1 +1,3 @@\n+fn process_request() {\n+    self\n+}\n"
+    syms = extract_symbols(diff, None)
+    assert "process_request" in syms
+    assert "self" not in syms  # filtered as a keyword
+
+
 def test_generic_fallback_boosts_known_language_symbols():
     diff = "@@ -1 +1 @@\n+result = compute_things()\n"
     syms = extract_symbols(diff, "python")
@@ -187,6 +196,36 @@ def test_multi_file_diff_extracts_symbols_from_all_files(monkeypatch):
     all_args = [arg for cmd in calls for arg in cmd]
     assert "!foo.py" in all_args
     assert "!bar.go" in all_args
+
+
+def test_unknown_language_uses_generic_symbol_extraction(monkeypatch):
+    """A diff with only unknown-language files (e.g. .rs) must still extract
+    symbols via the generic regex and reach ripgrep, rather than being skipped."""
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        if "rg" in cmd[0]:
+            calls.append(cmd)
+            return MagicMock(returncode=0, stdout="lib.rs:10: process_request()\n", stderr="")
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    diff = (
+        "diff --git a/src/lib.rs b/src/lib.rs\n"
+        "@@ -1,1 +1,3 @@\n"
+        "+fn process_request(input) {\n"
+        "+    handle_response()\n"
+        "+}\n"
+    )
+    result = retrieve_usages(diff, Path("/repo"))
+
+    assert calls, "ripgrep was never invoked for unknown-language diff"
+    searched_patterns = [cmd[4] for cmd in calls]
+    assert any("process_request" in p for p in searched_patterns), (
+        "generic symbol was not extracted from the .rs file"
+    )
+    assert result is not None
+    assert "process_request" in result
 
 
 def test_timeout_on_batched_rg_returns_none(monkeypatch):

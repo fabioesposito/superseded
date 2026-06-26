@@ -124,8 +124,6 @@ def retrieve_usages(diff: str, root: Path) -> str | None:
         changed_files = [e["file"] for e in entries]
         for entry in entries:
             lang = _LANG_MAP.get(Path(entry["file"]).suffix)
-            if not lang:
-                continue
             for sym in extract_symbols(entry["diff"], lang):
                 if sym not in seen:
                     seen.add(sym)
