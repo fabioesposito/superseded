@@ -34,7 +34,6 @@
             --font-game: 'Press Start 2P', monospace;
             --font-term: 'VT323', monospace;
             --font-code: 'Fira Code', monospace;
-            --px: 4px;
         }
 
         *, *::before, *::after {
@@ -56,23 +55,6 @@
             position: relative;
         }
 
-        /* ── CRT Scanline Overlay ── */
-        body::after {
-            content: '';
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 9999;
-            background: repeating-linear-gradient(
-                0deg,
-                rgba(0,0,0,0.06) 0px,
-                rgba(0,0,0,0.06) 1px,
-                transparent 1px,
-                transparent 4px
-            );
-            opacity: 0.4;
-        }
-
         /* ── Background Grid ── */
         .bg-grid {
             position: fixed;
@@ -80,113 +62,9 @@
             pointer-events: none;
             z-index: 0;
             background-image:
-                radial-gradient(circle, var(--border) 1px, transparent 1px);
-            background-size: 24px 24px;
-            opacity: 0.3;
-        }
-
-        /* ── Pixel Stars ── */
-        .bg-stars {
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            z-index: 0;
-        }
-        .bg-stars::before {
-            content: '';
-            position: absolute;
-            width: 2px; height: 2px;
-            box-shadow:
-                120px 80px 0 var(--cyan-dim),
-                450px 140px 0 var(--cyan),
-                800px 60px 0 var(--magenta-dim),
-                1100px 200px 0 var(--yellow),
-                200px 400px 0 var(--cyan-dim),
-                600px 380px 0 var(--magenta),
-                950px 500px 0 var(--cyan),
-                300px 700px 0 var(--yellow-dim),
-                750px 650px 0 var(--cyan-dim),
-                1050px 800px 0 var(--magenta-dim),
-                150px 950px 0 var(--yellow),
-                500px 900px 0 var(--cyan),
-                900px 1000px 0 var(--magenta),
-                1150px 350px 0 var(--cyan-dim),
-                80px 1100px 0 var(--magenta-dim),
-                400px 1200px 0 var(--yellow-dim),
-                650px 1150px 0 var(--cyan),
-                1000px 1250px 0 var(--magenta),
-                180px 1400px 0 var(--cyan-dim),
-                550px 1350px 0 var(--yellow),
-                850px 1500px 0 var(--magenta),
-                1100px 1450px 0 var(--cyan),
-                100px 1700px 0 var(--magenta-dim),
-                700px 1650px 0 var(--yellow-dim),
-                300px 1900px 0 var(--cyan-dim),
-                600px 2000px 0 var(--magenta),
-                900px 1950px 0 var(--yellow),
-                1050px 2200px 0 var(--cyan-dim),
-                120px 2300px 0 var(--magenta-dim),
-                500px 2400px 0 var(--cyan),
-                800px 2500px 0 var(--yellow),
-                1000px 2600px 0 var(--magenta),
-                200px 2700px 0 var(--cyan-dim),
-                450px 2850px 0 var(--magenta-dim),
-                650px 2750px 0 var(--yellow);
-            animation: twinkle 3s steps(1) infinite;
-        }
-        .bg-stars::after {
-            content: '';
-            position: absolute;
-            width: 2px; height: 2px;
-            box-shadow:
-                350px 60px 0 var(--yellow-dim),
-                700px 100px 0 var(--cyan-dim),
-                1000px 180px 0 var(--magenta),
-                250px 350px 0 var(--yellow),
-                550px 250px 0 var(--cyan),
-                850px 320px 0 var(--magenta-dim),
-                1150px 280px 0 var(--magenta),
-                100px 550px 0 var(--cyan),
-                450px 480px 0 var(--yellow),
-                750px 550px 0 var(--cyan),
-                1050px 600px 0 var(--magenta),
-                180px 750px 0 var(--yellow-dim),
-                500px 850px 0 var(--cyan-dim),
-                800px 780px 0 var(--magenta),
-                1150px 900px 0 var(--yellow),
-                80px 1050px 0 var(--cyan),
-                550px 1000px 0 var(--magenta-dim),
-                900px 1100px 0 var(--cyan-dim),
-                220px 1250px 0 var(--magenta),
-                650px 1200px 0 var(--yellow),
-                1000px 1300px 0 var(--cyan),
-                120px 1450px 0 var(--magenta-dim),
-                750px 1400px 0 var(--cyan),
-                300px 1600px 0 var(--yellow-dim),
-                600px 1550px 0 var(--magenta),
-                950px 1650px 0 var(--cyan),
-                150px 1800px 0 var(--magenta-dim),
-                500px 1750px 0 var(--yellow),
-                850px 1850px 0 var(--cyan-dim),
-                1100px 1900px 0 var(--magenta),
-                100px 2050px 0 var(--cyan),
-                400px 2100px 0 var(--magenta),
-                700px 2150px 0 var(--yellow-dim),
-                1050px 2100px 0 var(--cyan-dim),
-                250px 2350px 0 var(--magenta),
-                600px 2300px 0 var(--cyan),
-                950px 2400px 0 var(--yellow),
-                150px 2550px 0 var(--magenta-dim),
-                450px 2600px 0 var(--cyan-dim),
-                800px 2550px 0 var(--magenta),
-                1150px 2700px 0 var(--cyan),
-                350px 2800px 0 var(--yellow);
-            animation: twinkle 3s steps(1) infinite 1.5s;
-        }
-        @keyframes twinkle {
-            0%, 100% { opacity: 0.3; }
-            30% { opacity: 1; }
-            60% { opacity: 0.1; }
+                radial-gradient(circle, var(--border) 0.5px, transparent 0.5px);
+            background-size: 32px 32px;
+            opacity: 0.15;
         }
 
         /* ── Container ── */
@@ -212,54 +90,57 @@
         /* ── Navigation ── */
         nav {
             position: fixed;
-            top: 8px;
-            left: 50%;
-            transform: translateX(-50%);
+            top: 0;
+            left: 0;
+            right: 0;
             z-index: 100;
-            background: var(--bg-card);
-            border: 3px solid var(--border);
-            box-shadow:
-                0 0 0 1px var(--border-bright),
-                inset 0 0 0 1px rgba(255,255,255,0.03),
-                4px 4px 0 #000;
-            padding: 8px 24px;
-            width: calc(100% - 32px);
-            max-width: 1000px;
+            background: rgba(8, 8, 16, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 0;
         }
         nav .container {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0;
+            padding: 0 24px;
         }
-        .logo {
+        .nav-brand {
             display: inline-flex;
             align-items: center;
+            gap: 10px;
             text-decoration: none;
+            color: var(--text);
+            font-family: var(--font-code);
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 1px;
         }
-        .logo svg {
-            filter: drop-shadow(0 0 4px rgba(0,240,255,0.3));
+        .nav-brand svg {
+            width: 28px;
+            height: 21px;
         }
-        nav ul {
+        .nav-links {
             display: flex;
             list-style: none;
-            gap: 28px;
+            gap: 32px;
+            align-items: center;
         }
-        nav a {
+        .nav-links a {
             color: var(--text-muted);
             text-decoration: none;
-            font-family: var(--font-game);
-            font-size: 8px;
-            transition: color 0.15s, text-shadow 0.15s;
-            letter-spacing: 0.5px;
+            font-family: var(--font-code);
+            font-size: 13px;
+            font-weight: 500;
+            transition: color 0.15s;
+            letter-spacing: 0.3px;
         }
-        nav a:hover {
+        .nav-links a:hover {
             color: var(--cyan);
-            text-shadow: 0 0 6px var(--cyan);
         }
         .nav-cta {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             align-items: center;
         }
 
@@ -267,11 +148,11 @@
         .nav-toggle {
             display: none;
             background: none;
-            border: 2px solid var(--border);
+            border: 1px solid var(--border);
             color: var(--text-muted);
-            font-family: var(--font-game);
-            font-size: 8px;
-            padding: 6px 10px;
+            font-family: var(--font-code);
+            font-size: 12px;
+            padding: 6px 12px;
             cursor: pointer;
             transition: color 0.15s, border-color 0.15s;
         }
@@ -288,74 +169,68 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 10px 18px;
-            font-family: var(--font-game);
-            font-size: 9px;
+            padding: 10px 20px;
+            font-family: var(--font-code);
+            font-size: 13px;
+            font-weight: 600;
             text-decoration: none;
             cursor: pointer;
             border: none;
-            position: relative;
             transition: all 0.15s ease;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
         }
         .btn-primary {
             background: var(--cyan);
             color: #000;
-            border: 3px solid #00c0d0;
-            box-shadow:
-                0 0 0 1px #0088aa,
-                inset 0 2px 0 rgba(255,255,255,0.3),
-                inset 0 -2px 0 rgba(0,0,0,0.2),
-                4px 4px 0 #000;
+            border: 1px solid #00c0d0;
         }
         .btn-primary:hover {
             background: #00ffff;
-            transform: translate(-1px, -1px);
-            box-shadow:
-                0 0 0 1px #00aacc,
-                0 0 16px var(--cyan),
-                inset 0 2px 0 rgba(255,255,255,0.3),
-                inset 0 -2px 0 rgba(0,0,0,0.2),
-                6px 6px 0 #000;
-            animation: btn-glow 0.8s ease infinite alternate;
-        }
-        @keyframes btn-glow {
-            from { box-shadow: 0 0 0 1px #00aacc, 0 0 12px var(--cyan), inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.2), 6px 6px 0 #000; }
-            to   { box-shadow: 0 0 0 1px #00aacc, 0 0 24px var(--cyan), inset 0 2px 0 rgba(255,255,255,0.3), inset 0 -2px 0 rgba(0,0,0,0.2), 6px 6px 0 #000; }
-        }
-        .btn-primary:active {
-            transform: translate(2px, 2px);
-            animation: none;
-            box-shadow:
-                0 0 0 1px #0088aa,
-                inset 0 2px 0 rgba(255,255,255,0.3),
-                inset 0 -2px 0 rgba(0,0,0,0.2),
-                2px 2px 0 #000;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
         }
         .btn-ghost {
             background: transparent;
             color: var(--text-muted);
-            border: 3px solid var(--border);
-            box-shadow: 4px 4px 0 #000;
+            border: 1px solid var(--border);
         }
         .btn-ghost:hover {
             color: var(--cyan);
             border-color: var(--cyan);
-            box-shadow: 4px 4px 0 #001122, 0 0 12px var(--cyan-dim);
-            text-shadow: 0 0 6px var(--cyan);
-        }
-        .btn-ghost:active {
-            transform: translate(2px, 2px);
-            box-shadow: 2px 2px 0 #000;
         }
         .btn-sm {
-            padding: 6px 12px;
-            font-size: 7px;
+            padding: 7px 14px;
+            font-size: 12px;
         }
 
-        /* ── Hero / Title Screen ── */
+        /* ── Section Headers ── */
+        .section-label {
+            font-family: var(--font-code);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--cyan);
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+        h2 {
+            font-family: var(--font-game);
+            font-size: clamp(16px, 3vw, 24px);
+            font-weight: 400;
+            letter-spacing: -0.5px;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        .section-sub {
+            color: var(--text-muted);
+            font-family: var(--font-code);
+            font-size: 15px;
+            max-width: 520px;
+            margin-bottom: 40px;
+            line-height: 1.7;
+        }
+
+        /* ── Hero ── */
         .hero {
-            padding: 160px 0 100px;
+            padding: 180px 0 120px;
             text-align: center;
             position: relative;
         }
@@ -364,84 +239,54 @@
             align-items: center;
             gap: 8px;
             padding: 6px 16px;
-            margin-bottom: 32px;
+            margin-bottom: 28px;
             background: var(--bg-card);
-            border: 3px solid var(--border);
-            font-family: var(--font-game);
-            font-size: 8px;
+            border: 1px solid var(--border);
+            font-family: var(--font-code);
+            font-size: 12px;
             color: var(--text-muted);
-            box-shadow: 4px 4px 0 #000;
-        }
-        .hero-badge .dot {
-            width: 8px;
-            height: 8px;
-            background: var(--green);
-            box-shadow: 0 0 8px var(--green);
-            animation: pulse 1.5s steps(2) infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-        .hero-logo {
-            display: inline-block;
-            margin-bottom: 32px;
-        }
-        .hero-logo svg {
-            filter: drop-shadow(0 0 20px rgba(0,240,255,0.2));
-            animation: shield-pulse 3s ease-in-out infinite;
-        }
-        @keyframes shield-pulse {
-            0%, 100% { filter: drop-shadow(0 0 16px rgba(0,240,255,0.15)); }
-            50% { filter: drop-shadow(0 0 28px rgba(0,240,255,0.35)); }
         }
         h1 {
             font-family: var(--font-game);
-            font-size: clamp(18px, 4vw, 32px);
+            font-size: clamp(18px, 4vw, 30px);
             font-weight: 400;
-            line-height: 1.6;
-            letter-spacing: -1px;
+            line-height: 1.5;
+            letter-spacing: -0.5px;
             margin-bottom: 20px;
-            text-shadow:
-                0 0 20px var(--cyan),
-                0 0 40px var(--cyan-dim);
         }
         h1 .hl-cyan { color: var(--cyan); }
-        h1 .hl-magenta { color: var(--magenta); text-shadow: 0 0 20px var(--magenta), 0 0 40px var(--magenta-dim); }
-        h1 .hl-yellow { color: var(--yellow); text-shadow: 0 0 20px var(--yellow), 0 0 40px var(--yellow-dim); }
-        h1 .hl-green { color: var(--green); text-shadow: 0 0 20px var(--green), 0 0 40px var(--green-dim); }
+        h1 .hl-magenta { color: var(--magenta); }
         .hero-sub {
-            font-family: var(--font-term);
-            font-size: 22px;
+            font-family: var(--font-code);
+            font-size: 15px;
             color: var(--text-muted);
-            max-width: 620px;
-            margin: 0 auto 36px;
-            line-height: 1.6;
+            max-width: 520px;
+            margin: 0 auto 32px;
+            line-height: 1.8;
         }
         .hero-actions {
             display: flex;
             gap: 12px;
             justify-content: center;
             flex-wrap: wrap;
-            margin-bottom: 32px;
+            margin-bottom: 28px;
         }
         .hero-actions .btn {
-            padding: 14px 28px;
-            font-size: 10px;
+            padding: 12px 28px;
+            font-size: 14px;
         }
         .install-cmd {
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            padding: 14px 20px;
+            padding: 12px 18px;
             background: #000;
-            border: 3px solid var(--border);
+            border: 1px solid var(--border);
             color: var(--green);
             font-family: var(--font-term);
             font-size: 18px;
             max-width: 100%;
             overflow-x: auto;
-            box-shadow: inset 0 0 20px rgba(0,255,65,0.05);
         }
         .install-cmd .prompt {
             color: var(--green);
@@ -456,387 +301,148 @@
         .install-cmd .copy {
             cursor: pointer;
             background: none;
-            border: 2px solid var(--border);
+            border: 1px solid var(--border);
             color: var(--text-muted);
-            font-family: var(--font-game);
-            font-size: 7px;
-            padding: 4px 8px;
+            font-family: var(--font-code);
+            font-size: 11px;
+            padding: 4px 10px;
             flex-shrink: 0;
             transition: all 0.15s;
         }
         .install-cmd .copy:hover {
             color: var(--cyan);
             border-color: var(--cyan);
-            text-shadow: 0 0 6px var(--cyan);
         }
 
-        /* ── Section Header ── */
-        .section-label {
-            font-family: var(--font-game);
-            font-size: 9px;
-            color: var(--cyan);
-            letter-spacing: 1px;
-            margin-bottom: 14px;
-            text-shadow: 0 0 10px var(--cyan-dim);
-        }
-        h2 {
-            font-family: var(--font-game);
-            font-size: clamp(16px, 3vw, 26px);
-            font-weight: 400;
-            letter-spacing: -1px;
-            margin-bottom: 14px;
-            line-height: 1.5;
-        }
-        .section-sub {
-            color: var(--text-muted);
-            font-family: var(--font-term);
-            font-size: 20px;
-            max-width: 560px;
-            margin-bottom: 40px;
-        }
-
-        /* ── Horizontal Rule (pixel) ── */
-        .pixel-hr {
-            border: none;
-            height: 7px;
-            background:
-                repeating-linear-gradient(90deg,
-                    var(--border) 0px, var(--border) 6px,
-                    var(--bg) 6px, var(--bg) 7px);
-            margin: 0;
-        }
-
-        /* ── Terminal CRT Demo ── */
-        .demo-section {
-            padding: 60px 0;
-            position: relative;
-        }
-        .crt {
-            max-width: 780px;
-            margin: 0 auto;
-            background: #000a00;
-            border: 6px solid #1a1a2a;
-            box-shadow:
-                0 0 0 2px #333,
-                0 0 0 4px #111,
-                0 0 40px rgba(0,255,65,0.08),
-                inset 0 0 60px rgba(0,255,65,0.03);
-            position: relative;
-            overflow: hidden;
-        }
-        .crt::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 2px,
-                rgba(0,0,0,0.12) 2px,
-                rgba(0,0,0,0.12) 4px
-            );
-            z-index: 2;
-            pointer-events: none;
-        }
-        .crt::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.3) 100%);
-            z-index: 3;
-            pointer-events: none;
-        }
-        .crt-topbar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 14px;
-            background: #0a0a14;
-            border-bottom: 2px solid #1a1a2a;
-            position: relative;
-            z-index: 1;
-        }
-        .crt-dot {
-            width: 12px;
-            height: 12px;
-            background: #333;
-            border: 2px solid #222;
-        }
-        .crt-dot.r { background: #ff4466; }
-        .crt-dot.y { background: #ffd700; }
-        .crt-dot.g { background: #00ff41; }
-        .crt-title {
-            flex: 1;
-            text-align: center;
-            font-family: var(--font-game);
-            font-size: 7px;
-            color: var(--text-dim);
-            letter-spacing: 1px;
-        }
-        .crt-body {
-            padding: 20px 22px;
-            font-family: var(--font-term);
-            font-size: 20px;
-            line-height: 1.7;
-            position: relative;
-            z-index: 1;
-            min-height: 290px;
-            color: var(--green);
-            text-shadow: 0 0 4px rgba(0,255,65,0.4);
-            overflow-x: auto;
-        }
-        .crt-body .line { margin-bottom: 2px; }
-        .crt-body .prompt { color: var(--green); }
-        .crt-body .cmd { color: var(--white); }
-        .crt-body .comment { color: var(--text-dim); }
-        .crt-body .critical { color: var(--red); text-shadow: 0 0 6px rgba(255,68,102,0.4); }
-        .crt-body .suggestion { color: var(--yellow); text-shadow: 0 0 6px rgba(255,215,0,0.3); }
-        .crt-body .file { color: var(--orange); }
-        .crt-body .success { color: var(--green); }
-        .crt-cursor {
-            display: inline-block;
-            width: 10px;
-            height: 20px;
-            background: var(--green);
-            animation: crt-blink 0.8s steps(2) infinite;
-            vertical-align: middle;
-            margin-left: 2px;
-        }
-        @keyframes crt-blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-        }
-
-        /* ── Stage Select (How It Works) ── */
-        .how-section {
+        /* ── Steps (How It Works) ── */
+        .steps-section {
             padding: 100px 0;
-            position: relative;
         }
-        .stages {
-            display: flex;
-            flex-direction: column;
-            gap: 28px;
-            position: relative;
-            max-width: 680px;
-            margin: 0;
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
         }
-        .stages::before {
-            content: '';
-            position: absolute;
-            left: 20px;
-            top: 44px;
-            bottom: 44px;
-            width: 4px;
-            background: repeating-linear-gradient(
-                0deg,
-                var(--border) 0px,
-                var(--border) 6px,
-                transparent 6px,
-                transparent 12px
-            );
+        .step {
+            padding: 24px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            text-align: center;
+            transition: border-color 0.2s;
         }
-        .stage {
-            display: flex;
-            gap: 20px;
-            padding: 8px 0;
+        .step:hover {
+            border-color: var(--cyan);
         }
-        .stage-num {
-            min-width: 44px;
-            height: 44px;
+        .step-num {
+            width: 36px;
+            height: 36px;
+            background: var(--bg);
+            border: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: center;
+            margin: 0 auto 14px;
             font-family: var(--font-game);
             font-size: 12px;
             color: var(--cyan);
-            background: var(--bg-card);
-            border: 3px solid var(--border);
-            flex-shrink: 0;
-            position: relative;
-            z-index: 1;
-            text-shadow: 0 0 8px var(--cyan);
-            box-shadow: 3px 3px 0 #000;
-            transition: box-shadow 0.2s, text-shadow 0.2s;
         }
-        .stage:hover .stage-num {
-            box-shadow: 3px 3px 0 #000, 0 0 12px var(--cyan-dim);
-            text-shadow: 0 0 14px var(--cyan);
+        .step h3 {
+            font-family: var(--font-code);
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: 0.3px;
         }
-        .stage-content h3 {
-            font-family: var(--font-game);
-            font-size: 11px;
-            font-weight: 400;
-            margin-bottom: 6px;
-            letter-spacing: 0.5px;
-        }
-        .stage-content p {
+        .step p {
             color: var(--text-muted);
-            font-family: var(--font-term);
-            font-size: 18px;
-            line-height: 1.5;
+            font-family: var(--font-code);
+            font-size: 13px;
+            line-height: 1.6;
         }
-        .passes {
+        .step .passes {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 10px;
+            gap: 4px;
+            justify-content: center;
+            margin-top: 12px;
         }
         .pass-tag {
-            padding: 4px 10px;
-            font-family: var(--font-game);
-            font-size: 7px;
-            background: var(--bg-card);
-            border: 2px solid var(--border);
-            color: var(--text-muted);
-            box-shadow: 2px 2px 0 #000;
-            transition: transform 0.15s, box-shadow 0.15s;
+            padding: 3px 8px;
+            font-family: var(--font-code);
+            font-size: 10px;
+            font-weight: 600;
+            border: 1px solid;
+            letter-spacing: 0.3px;
         }
-        .pass-tag:hover {
-            transform: scale(1.08);
-        }
-        .pass-tag.s { border-color: var(--red); color: var(--red); text-shadow: 0 0 6px var(--red); }
-        .pass-tag.s:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--red-dim); }
-        .pass-tag.c { border-color: var(--orange); color: var(--orange); text-shadow: 0 0 6px var(--orange); }
-        .pass-tag.c:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--orange-dim); }
-        .pass-tag.p { border-color: var(--yellow); color: var(--yellow); text-shadow: 0 0 6px var(--yellow); }
-        .pass-tag.p:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--yellow-dim); }
-        .pass-tag.st { border-color: var(--green); color: var(--green); text-shadow: 0 0 6px var(--green); }
-        .pass-tag.st:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--green-dim); }
-        .pass-tag.a { border-color: var(--cyan); color: var(--cyan); text-shadow: 0 0 6px var(--cyan); }
-        .pass-tag.a:hover { box-shadow: 2px 2px 0 #000, 0 0 8px var(--cyan-dim); }
+        .pass-tag.s { border-color: var(--red); color: var(--red); }
+        .pass-tag.c { border-color: var(--orange); color: var(--orange); }
+        .pass-tag.p { border-color: var(--yellow); color: var(--yellow); }
+        .pass-tag.st { border-color: var(--green); color: var(--green); }
+        .pass-tag.a { border-color: var(--cyan); color: var(--cyan); }
 
-        /* ── Power-ups (Features) ── */
+        /* ── Features ── */
         .features-section {
             padding: 100px 0;
         }
-        .powerups-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 2px;
-            background: var(--border);
-            border: 3px solid var(--border);
-            box-shadow: 6px 6px 0 #000;
-        }
-        .powerup {
-            padding: 28px;
-            background: var(--bg-card);
-            transition: background 0.15s, border-color 0.15s;
-            border-top: 3px solid transparent;
-        }
-        .powerup:hover {
-            background: var(--bg-elevated);
-            border-top-color: var(--cyan);
-        }
-        .powerup-icon {
-            font-family: var(--font-game);
-            font-size: 18px;
-            margin-bottom: 14px;
-            display: block;
-        }
-        .powerup h3 {
-            font-family: var(--font-game);
-            font-size: 10px;
-            font-weight: 400;
-            margin-bottom: 8px;
-            letter-spacing: 0.5px;
-        }
-        .powerup p {
-            color: var(--text-muted);
-            font-family: var(--font-term);
-            font-size: 17px;
-            line-height: 1.5;
-        }
-
-        /* ── Character Select (Agents) ── */
-        .agents-section {
-            padding: 100px 0;
-        }
-        .char-grid {
+        .features-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 12px;
         }
-        .char-card {
+        .feature-card {
             padding: 24px;
             background: var(--bg-card);
-            border: 3px solid var(--border);
-            transition: border-color 0.2s, box-shadow 0.2s;
-            box-shadow: 4px 4px 0 #000;
-            text-align: center;
+            border: 1px solid var(--border);
+            transition: border-color 0.2s;
         }
-        .char-card:hover {
+        .feature-card:hover {
             border-color: var(--cyan);
-            box-shadow: 4px 4px 0 #002233, 0 0 16px var(--cyan-dim);
         }
-        .char-avatar {
-            width: 48px;
-            height: 48px;
-            margin: 0 auto 14px;
-            background: var(--bg-elevated);
-            border: 2px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: var(--font-game);
-            font-size: 8px;
-            color: var(--text-dim);
-        }
-        .char-name {
-            font-family: var(--font-game);
-            font-size: 11px;
-            font-weight: 400;
-            margin-bottom: 8px;
-            letter-spacing: 0.5px;
-        }
-        .char-cmd {
-            font-family: var(--font-term);
-            font-size: 16px;
-            color: var(--text-dim);
-            background: #000;
-            padding: 6px 10px;
-            margin-bottom: 10px;
-            word-break: break-all;
-        }
-        .char-auth {
-            font-family: var(--font-term);
-            font-size: 16px;
+        .feature-icon {
+            font-size: 20px;
+            margin-bottom: 12px;
+            display: block;
             color: var(--text-muted);
         }
-        .char-auth code {
-            font-family: var(--font-term);
-            color: var(--cyan);
-            font-size: 16px;
+        .feature-card h3 {
+            font-family: var(--font-code);
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: 0.3px;
+        }
+        .feature-card p {
+            color: var(--text-muted);
+            font-family: var(--font-code);
+            font-size: 13px;
+            line-height: 1.6;
         }
 
-        /* ── Continue Screen (CTA) ── */
+        /* ── CTA ── */
         .cta-section {
             padding: 100px 0;
             text-align: center;
-            position: relative;
         }
         .cta-box {
             display: inline-block;
-            padding: 56px 48px;
+            padding: 48px 40px;
             background: var(--bg-card);
-            border: 3px solid var(--border);
-            box-shadow:
-                0 0 0 1px var(--border-bright),
-                8px 8px 0 #000;
-            max-width: 620px;
+            border: 1px solid var(--border);
+            max-width: 580px;
             width: 100%;
         }
         .cta-box h2 {
-            font-size: 22px;
-            margin-bottom: 14px;
+            font-size: 20px;
+            margin-bottom: 10px;
         }
         .cta-box p {
             color: var(--text-muted);
-            font-family: var(--font-term);
-            font-size: 20px;
-            margin-bottom: 28px;
+            font-family: var(--font-code);
+            font-size: 14px;
+            margin-bottom: 24px;
         }
         .cta-box .install-cmd {
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             display: flex;
         }
         .cta-actions {
@@ -847,29 +453,10 @@
             margin-top: 24px;
         }
 
-        /* ── Server Section ── */
-        .server-section {
-            padding: 100px 0;
-            border-top: 2px solid var(--border);
-        }
-        .server-term {
-            margin-top: 36px;
-            padding: 20px 24px;
-            background: #000;
-            border: 3px solid var(--border);
-            font-family: var(--font-term);
-            font-size: 20px;
-            color: var(--green);
-            text-shadow: 0 0 4px rgba(0,255,65,0.3);
-            box-shadow: inset 0 0 30px rgba(0,255,65,0.03);
-            overflow-x: auto;
-        }
-        .server-term .prompt { color: var(--cyan); }
-
         /* ── Footer ── */
         footer {
-            padding: 32px 0;
-            border-top: 2px solid var(--border);
+            padding: 24px 0;
+            border-top: 1px solid var(--border);
             background: var(--bg-card);
         }
         footer .container {
@@ -877,30 +464,24 @@
             justify-content: space-between;
             align-items: center;
         }
-        .footer-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .footer-brand p {
+        .footer-copy {
             color: var(--text-dim);
-            font-family: var(--font-term);
-            font-size: 18px;
-        }
-        footer a {
-            color: var(--text-muted);
-            text-decoration: none;
-            font-family: var(--font-game);
-            font-size: 8px;
-            transition: color 0.15s;
-        }
-        footer a:hover {
-            color: var(--cyan);
-            text-shadow: 0 0 6px var(--cyan);
+            font-family: var(--font-code);
+            font-size: 12px;
         }
         .footer-links {
             display: flex;
             gap: 24px;
+        }
+        .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-family: var(--font-code);
+            font-size: 12px;
+            transition: color 0.15s;
+        }
+        .footer-links a:hover {
+            color: var(--cyan);
         }
 
         /* ══════════════════════════════════
@@ -909,43 +490,35 @@
 
         /* ── Tablet (≤900px) ── */
         @media (max-width: 900px) {
-            .char-grid {
+            .features-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
-            .stages::before {
-                left: 16px;
-            }
-            .stage-num {
-                min-width: 36px;
-                height: 36px;
-                font-size: 10px;
+            .steps-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
 
         /* ── Mobile (≤768px) ── */
         @media (max-width: 768px) {
-            /* Nav: hide links, show hamburger */
-            nav ul {
+            .nav-links {
                 display: none;
             }
-            nav .nav-cta {
+            .nav-cta {
                 display: none;
             }
             .nav-toggle {
                 display: block;
             }
-            /* Mobile menu panel */
             .nav-mobile {
                 display: none;
                 position: absolute;
                 top: 100%;
                 left: 0;
                 right: 0;
-                background: var(--bg-card);
-                border: 3px solid var(--border);
-                border-top: none;
+                background: rgba(8, 8, 16, 0.95);
+                backdrop-filter: blur(12px);
+                border-bottom: 1px solid var(--border);
                 padding: 16px 24px;
-                box-shadow: 4px 4px 0 #000;
             }
             .nav-mobile.open {
                 display: flex;
@@ -957,9 +530,8 @@
                 padding: 8px 0;
                 color: var(--text-muted);
                 text-decoration: none;
-                font-family: var(--font-game);
-                font-size: 9px;
-                letter-spacing: 0.5px;
+                font-family: var(--font-code);
+                font-size: 14px;
                 transition: color 0.15s;
             }
             .nav-mobile a:hover {
@@ -973,27 +545,19 @@
                 margin-top: 4px;
             }
 
-            nav {
-                padding: 8px 16px;
-            }
-
-            /* Hero */
             .hero {
-                padding: 120px 0 60px;
+                padding: 140px 0 80px;
             }
             h1 {
-                letter-spacing: -1px;
                 font-size: clamp(16px, 5vw, 24px);
             }
             .hero-sub {
-                font-size: 19px;
+                font-size: 14px;
             }
             .hero-actions .btn {
-                padding: 12px 22px;
-                font-size: 9px;
+                padding: 10px 22px;
+                font-size: 13px;
             }
-
-            /* Install command */
             .install-cmd {
                 font-size: 15px;
                 padding: 10px 14px;
@@ -1003,51 +567,20 @@
                 font-size: 14px;
             }
 
-            /* Sections */
-            .how-section,
+            .steps-section,
             .features-section,
-            .agents-section,
-            .server-section {
-                padding: 60px 0;
-            }
             .cta-section {
                 padding: 60px 0;
             }
 
-            /* Stages */
-            .stages {
-                gap: 20px;
-            }
-            .stages::before {
-                display: none;
-            }
-            .stage {
-                gap: 14px;
-            }
-
-            /* CTA */
             .cta-box {
                 padding: 32px 20px;
             }
 
-            /* Footer */
             footer .container {
                 flex-direction: column;
-                gap: 14px;
+                gap: 12px;
                 text-align: center;
-            }
-            .footer-brand {
-                justify-content: center;
-            }
-
-            /* CRT terminal */
-            .crt-body {
-                font-size: 16px;
-                padding: 14px 16px;
-                min-height: auto;
-            }
-            .crt-body .line {
-                white-space: nowrap;
             }
         }
 
@@ -1057,14 +590,13 @@
                 padding: 0 16px;
             }
             .hero {
-                padding: 100px 0 40px;
+                padding: 120px 0 60px;
             }
             h1 {
                 font-size: 15px;
-                letter-spacing: 0;
             }
             .hero-sub {
-                font-size: 17px;
+                font-size: 13px;
             }
             .hero-actions {
                 flex-direction: column;
@@ -1084,74 +616,20 @@
                 word-break: break-all;
                 white-space: normal;
             }
-            .section-label {
-                font-size: 7px;
-            }
             h2 {
                 font-size: 15px;
             }
             .section-sub {
-                font-size: 17px;
+                font-size: 13px;
             }
 
-            /* Power-ups: single column */
-            .powerups-grid {
+            .features-grid {
                 grid-template-columns: 1fr;
             }
-            .powerup {
-                padding: 20px;
-            }
-
-            /* Agents: single column */
-            .char-grid {
+            .steps-grid {
                 grid-template-columns: 1fr;
             }
 
-            /* Stages */
-            .stage-num {
-                min-width: 32px;
-                height: 32px;
-                font-size: 9px;
-            }
-            .stage-content h3 {
-                font-size: 9px;
-            }
-            .stage-content p {
-                font-size: 16px;
-            }
-
-            /* Pass tags */
-            .pass-tag {
-                font-size: 6px;
-                padding: 3px 7px;
-            }
-
-            /* CRT */
-            .crt {
-                border-width: 4px;
-            }
-            .crt-body {
-                font-size: 14px;
-                padding: 12px;
-            }
-            .crt-dot {
-                width: 10px;
-                height: 10px;
-            }
-
-            /* Server */
-            .server-term {
-                font-size: 16px;
-                padding: 14px 16px;
-            }
-
-            /* CTA */
-            .cta-box h2 {
-                font-size: 17px;
-            }
-            .cta-box p {
-                font-size: 17px;
-            }
             .cta-actions {
                 flex-direction: column;
                 align-items: center;
@@ -1161,25 +639,18 @@
                 max-width: 260px;
                 justify-content: center;
             }
-
-            /* Hero logo scale */
-            .hero-logo svg {
-                width: 180px;
-                height: auto;
-            }
         }
     </style>
 </head>
 <body>
 
     <div class="bg-grid"></div>
-    <div class="bg-stars"></div>
 
     <!-- ── Navigation ── -->
     <nav>
         <div class="container">
-            <a href="#" class="logo">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="90" height="34" style="vertical-align: middle;">
+            <a href="#" class="nav-brand">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" style="vertical-align: middle;">
                     <clipPath id="shieldClipNav"><polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10"/></clipPath>
                     <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="#0a0a18"/>
                     <g clip-path="url(#shieldClipNav)">
@@ -1200,446 +671,153 @@
                         <rect x="-12" y="4" width="4" height="4" fill="#fff"/><rect x="-8" y="4" width="4" height="4" fill="#fff"/><rect x="-4" y="4" width="4" height="4" fill="#fff"/><rect x="0" y="4" width="4" height="4" fill="#fff"/><rect x="4" y="4" width="4" height="4" fill="#fff"/><rect x="8" y="4" width="4" height="4" fill="#fff"/>
                     </g>
                 </svg>
+                SUPERSEDED
             </a>
-            <ul>
-                <li><a href="#how">STAGES</a></li>
-                <li><a href="#features">POWER-UPS</a></li>
-                <li><a href="#agents">AGENTS</a></li>
-                <li><a href="#server">SERVER</a></li>
+            <ul class="nav-links">
+                <li><a href="#how">How it works</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="https://github.com/fabioesposito/superseded#readme">Docs</a></li>
             </ul>
             <div class="nav-cta">
-                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost btn-sm">GITHUB</a>
-                <a href="#get-started" class="btn btn-primary btn-sm">START</a>
+                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost btn-sm">GitHub</a>
             </div>
-            <button class="nav-toggle" onclick="document.querySelector('.nav-mobile').classList.toggle('open')" aria-label="Menu">MENU</button>
+            <button class="nav-toggle" onclick="document.querySelector('.nav-mobile').classList.toggle('open')" aria-label="Menu">Menu</button>
         </div>
         <div class="nav-mobile">
-            <a href="#how" onclick="this.parentElement.classList.remove('open')">STAGES</a>
-            <a href="#features" onclick="this.parentElement.classList.remove('open')">POWER-UPS</a>
-            <a href="#agents" onclick="this.parentElement.classList.remove('open')">AGENTS</a>
-            <a href="#server" onclick="this.parentElement.classList.remove('open')">SERVER</a>
+            <a href="#how" onclick="this.parentElement.classList.remove('open')">How it works</a>
+            <a href="#features" onclick="this.parentElement.classList.remove('open')">Features</a>
+            <a href="https://github.com/fabioesposito/superseded#readme">Docs</a>
             <div class="nav-mobile-cta">
-                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost btn-sm">GITHUB</a>
-                <a href="#get-started" class="btn btn-primary btn-sm" onclick="this.closest('.nav-mobile').classList.remove('open')">START</a>
+                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost btn-sm">GitHub</a>
             </div>
         </div>
     </nav>
 
-    <!-- ── Title Screen ── -->
+    <!-- ── Hero ── -->
     <section class="hero">
         <div class="container">
-            <div class="hero-badge reveal">
-                <span class="dot"></span>
-                OPEN SOURCE — v1.0
-            </div>
-            <div class="hero-logo reveal">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="280" height="210">
-                    <defs>
-                        <filter id="heroShieldShadow" x="-10%" y="-10%" width="130%" height="130%">
-                            <feDropShadow dx="3" dy="3" stdDeviation="0" flood-color="#000" flood-opacity="0.6"/>
-                        </filter>
-                        <filter id="heroGlow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feGaussianBlur stdDeviation="2" result="blur"/>
-                            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                        </filter>
-                        <filter id="heroNeonGlow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feGaussianBlur stdDeviation="3" result="blur1"/>
-                            <feGaussianBlur stdDeviation="6" result="blur2"/>
-                            <feMerge><feMergeNode in="blur2"/><feMergeNode in="blur1"/><feMergeNode in="SourceGraphic"/></feMerge>
-                        </filter>
-                        <clipPath id="heroShieldClip"><polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10"/></clipPath>
-                    </defs>
-                    <g filter="url(#heroShieldShadow)">
-                        <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="#0a0a18"/>
-                        <g clip-path="url(#heroShieldClip)">
-                            <rect x="82" y="0" width="14" height="120" fill="#ff4466" opacity="0.9"/>
-                            <rect x="96" y="0" width="14" height="120" fill="#ff8833" opacity="0.9"/>
-                            <rect x="110" y="0" width="14" height="120" fill="#ffd700" opacity="0.9"/>
-                            <rect x="124" y="0" width="14" height="120" fill="#00ff41" opacity="0.9"/>
-                            <rect x="138" y="0" width="14" height="120" fill="#00f0ff" opacity="0.9"/>
-                            <g opacity="0.15">
-                                <line x1="70" y1="40" x2="170" y2="40" stroke="#fff" stroke-width="2"/>
-                                <line x1="70" y1="46" x2="170" y2="46" stroke="#fff" stroke-width="2"/>
-                                <line x1="70" y1="52" x2="170" y2="52" stroke="#fff" stroke-width="2"/>
-                                <line x1="70" y1="58" x2="170" y2="58" stroke="#fff" stroke-width="2"/>
-                                <line x1="70" y1="64" x2="170" y2="64" stroke="#fff" stroke-width="2"/>
-                                <line x1="70" y1="70" x2="170" y2="70" stroke="#fff" stroke-width="2"/>
-                                <line x1="70" y1="76" x2="170" y2="76" stroke="#fff" stroke-width="2"/>
-                            </g>
-                        </g>
-                        <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="none" stroke="#e8e8f0" stroke-width="2.5" stroke-linejoin="miter" filter="url(#heroNeonGlow)"/>
-                        <rect x="77" y="16" width="6" height="6" fill="#e8e8f0"/>
-                        <rect x="83" y="10" width="6" height="6" fill="#e8e8f0"/>
-                        <rect x="157" y="16" width="6" height="6" fill="#e8e8f0"/>
-                        <rect x="151" y="10" width="6" height="6" fill="#e8e8f0"/>
-                        <rect x="77" y="98" width="6" height="6" fill="#e8e8f0"/>
-                        <rect x="83" y="104" width="6" height="6" fill="#e8e8f0"/>
-                        <rect x="157" y="98" width="6" height="6" fill="#e8e8f0"/>
-                        <rect x="151" y="104" width="6" height="6" fill="#e8e8f0"/>
-                        <g transform="translate(120, 56)" opacity="0.85" filter="url(#heroGlow)">
-                            <rect x="-12" y="-20" width="4" height="4" fill="#fff"/><rect x="-8" y="-20" width="4" height="4" fill="#fff"/><rect x="-4" y="-20" width="4" height="4" fill="#fff"/><rect x="0" y="-20" width="4" height="4" fill="#fff"/><rect x="4" y="-20" width="4" height="4" fill="#fff"/><rect x="8" y="-20" width="4" height="4" fill="#fff"/>
-                            <rect x="-12" y="-16" width="4" height="4" fill="#fff"/>
-                            <rect x="-12" y="-12" width="4" height="4" fill="#fff"/>
-                            <rect x="-12" y="-8" width="4" height="4" fill="#fff"/><rect x="-8" y="-8" width="4" height="4" fill="#fff"/><rect x="-4" y="-8" width="4" height="4" fill="#fff"/><rect x="0" y="-8" width="4" height="4" fill="#fff"/><rect x="4" y="-8" width="4" height="4" fill="#fff"/><rect x="8" y="-8" width="4" height="4" fill="#fff"/>
-                            <rect x="8" y="-4" width="4" height="4" fill="#fff"/>
-                            <rect x="8" y="0" width="4" height="4" fill="#fff"/>
-                            <rect x="-12" y="4" width="4" height="4" fill="#fff"/><rect x="-8" y="4" width="4" height="4" fill="#fff"/><rect x="-4" y="4" width="4" height="4" fill="#fff"/><rect x="0" y="4" width="4" height="4" fill="#fff"/><rect x="4" y="4" width="4" height="4" fill="#fff"/><rect x="8" y="4" width="4" height="4" fill="#fff"/>
-                        </g>
-                    </g>
-                    <!-- Wordmark -->
-                    <g fill="#e8e8f0" filter="url(#heroShieldShadow)">
-                        <rect x="44" y="130" width="4" height="4"/><rect x="48" y="130" width="4" height="4"/><rect x="52" y="130" width="4" height="4"/>
-                        <rect x="40" y="134" width="4" height="4"/>
-                        <rect x="44" y="138" width="4" height="4"/><rect x="48" y="138" width="4" height="4"/><rect x="52" y="138" width="4" height="4"/>
-                        <rect x="56" y="142" width="4" height="4"/>
-                        <rect x="40" y="146" width="4" height="4"/><rect x="44" y="146" width="4" height="4"/><rect x="48" y="146" width="4" height="4"/><rect x="52" y="146" width="4" height="4"/>
-                        <rect x="64" y="130" width="4" height="4"/><rect x="72" y="130" width="4" height="4"/>
-                        <rect x="64" y="134" width="4" height="4"/><rect x="72" y="134" width="4" height="4"/>
-                        <rect x="64" y="138" width="4" height="4"/><rect x="72" y="138" width="4" height="4"/>
-                        <rect x="64" y="142" width="4" height="4"/><rect x="72" y="142" width="4" height="4"/>
-                        <rect x="68" y="146" width="4" height="4"/>
-                        <rect x="80" y="130" width="4" height="4"/><rect x="84" y="130" width="4" height="4"/><rect x="88" y="130" width="4" height="4"/>
-                        <rect x="80" y="134" width="4" height="4"/><rect x="88" y="134" width="4" height="4"/>
-                        <rect x="80" y="138" width="4" height="4"/><rect x="84" y="138" width="4" height="4"/><rect x="88" y="138" width="4" height="4"/>
-                        <rect x="80" y="142" width="4" height="4"/>
-                        <rect x="80" y="146" width="4" height="4"/>
-                        <rect x="96" y="130" width="4" height="4"/><rect x="100" y="130" width="4" height="4"/><rect x="104" y="130" width="4" height="4"/>
-                        <rect x="96" y="134" width="4" height="4"/>
-                        <rect x="96" y="138" width="4" height="4"/><rect x="100" y="138" width="4" height="4"/><rect x="104" y="138" width="4" height="4"/>
-                        <rect x="96" y="142" width="4" height="4"/>
-                        <rect x="96" y="146" width="4" height="4"/><rect x="100" y="146" width="4" height="4"/><rect x="104" y="146" width="4" height="4"/>
-                        <rect x="112" y="130" width="4" height="4"/><rect x="116" y="130" width="4" height="4"/><rect x="120" y="130" width="4" height="4"/>
-                        <rect x="112" y="134" width="4" height="4"/><rect x="120" y="134" width="4" height="4"/>
-                        <rect x="112" y="138" width="4" height="4"/><rect x="116" y="138" width="4" height="4"/><rect x="120" y="138" width="4" height="4"/>
-                        <rect x="112" y="142" width="4" height="4"/><rect x="116" y="142" width="4" height="4"/>
-                        <rect x="112" y="146" width="4" height="4"/><rect x="120" y="146" width="4" height="4"/>
-                        <rect x="128" y="130" width="4" height="4"/><rect x="132" y="130" width="4" height="4"/><rect x="136" y="130" width="4" height="4"/>
-                        <rect x="128" y="134" width="4" height="4"/>
-                        <rect x="128" y="138" width="4" height="4"/><rect x="132" y="138" width="4" height="4"/><rect x="136" y="138" width="4" height="4"/>
-                        <rect x="140" y="142" width="4" height="4"/>
-                        <rect x="128" y="146" width="4" height="4"/><rect x="132" y="146" width="4" height="4"/><rect x="136" y="146" width="4" height="4"/>
-                        <rect x="148" y="130" width="4" height="4"/><rect x="152" y="130" width="4" height="4"/><rect x="156" y="130" width="4" height="4"/>
-                        <rect x="148" y="134" width="4" height="4"/>
-                        <rect x="148" y="138" width="4" height="4"/><rect x="152" y="138" width="4" height="4"/><rect x="156" y="138" width="4" height="4"/>
-                        <rect x="148" y="142" width="4" height="4"/>
-                        <rect x="148" y="146" width="4" height="4"/><rect x="152" y="146" width="4" height="4"/><rect x="156" y="146" width="4" height="4"/>
-                        <rect x="164" y="130" width="4" height="4"/><rect x="168" y="130" width="4" height="4"/>
-                        <rect x="164" y="134" width="4" height="4"/><rect x="172" y="134" width="4" height="4"/>
-                        <rect x="164" y="138" width="4" height="4"/><rect x="172" y="138" width="4" height="4"/>
-                        <rect x="164" y="142" width="4" height="4"/><rect x="172" y="142" width="4" height="4"/>
-                        <rect x="164" y="146" width="4" height="4"/><rect x="168" y="146" width="4" height="4"/>
-                        <rect x="180" y="130" width="4" height="4"/><rect x="184" y="130" width="4" height="4"/><rect x="188" y="130" width="4" height="4"/>
-                        <rect x="180" y="134" width="4" height="4"/>
-                        <rect x="180" y="138" width="4" height="4"/><rect x="184" y="138" width="4" height="4"/><rect x="188" y="138" width="4" height="4"/>
-                        <rect x="180" y="142" width="4" height="4"/>
-                        <rect x="180" y="146" width="4" height="4"/><rect x="184" y="146" width="4" height="4"/><rect x="188" y="146" width="4" height="4"/>
-                        <rect x="196" y="130" width="4" height="4"/><rect x="200" y="130" width="4" height="4"/>
-                        <rect x="196" y="134" width="4" height="4"/><rect x="204" y="134" width="4" height="4"/>
-                        <rect x="196" y="138" width="4" height="4"/><rect x="204" y="138" width="4" height="4"/>
-                        <rect x="196" y="142" width="4" height="4"/><rect x="204" y="142" width="4" height="4"/>
-                        <rect x="196" y="146" width="4" height="4"/><rect x="200" y="146" width="4" height="4"/>
-                        <g opacity="0.6">
-                            <circle cx="48" cy="158" r="1.5" fill="#ff4466"/>
-                            <circle cx="60" cy="158" r="1.5" fill="#ff8833"/>
-                            <circle cx="72" cy="158" r="1.5" fill="#ffd700"/>
-                            <circle cx="84" cy="158" r="1.5" fill="#00ff41"/>
-                            <circle cx="96" cy="158" r="1.5" fill="#00f0ff"/>
-                        </g>
-                    </g>
-                    <text x="120" y="174" text-anchor="middle" font-family="monospace" font-size="7" fill="#555580" letter-spacing="3">AI CODE REVIEW</text>
-                </svg>
-            </div>
+            <div class="hero-badge reveal">Open source &middot; MIT licensed</div>
             <h1 class="reveal">
-                <span class="hl-cyan">AI</span>
-                <span> code review </span><br>
-                <span>that </span>
-                <span class="hl-magenta">learns</span>
+                <span class="hl-cyan">AI</span> code review<br>
+                that <span class="hl-magenta">learns</span>
             </h1>
             <p class="hero-sub reveal">
                 5 parallel review passes &mdash; security, correctness, performance, style, architecture
                 &mdash; powered by Claude, Codex, or OpenCode. Gets smarter every time you dismiss a finding.
             </p>
             <div class="hero-actions reveal">
-                <a href="#get-started" class="btn btn-primary">&#9654; START</a>
-                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost">GITHUB</a>
+                <a href="#how" class="btn btn-primary">Get Started</a>
+                <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost">View on GitHub</a>
             </div>
             <div class="install-cmd reveal">
                 <span class="prompt">$</span>
-                <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
-                <button class="copy" onclick="navigator.clipboard.writeText('git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .')" title="Copy">COPY</button>
+                <code>pip install superseded</code>
+                <button class="copy" onclick="navigator.clipboard.writeText('pip install superseded')" title="Copy">Copy</button>
             </div>
         </div>
     </section>
 
-    <hr class="pixel-hr">
-
-    <!-- ── CRT Terminal ── -->
-    <section class="demo-section">
+    <!-- ── How It Works ── -->
+    <section class="steps-section" id="how">
         <div class="container">
-            <div class="crt reveal">
-                <div class="crt-topbar">
-                    <span class="crt-dot r"></span>
-                    <span class="crt-dot y"></span>
-                    <span class="crt-dot g"></span>
-                    <span class="crt-title">TERMINAL</span>
-                </div>
-                <div class="crt-body">
-                    <div class="line"><span class="prompt">$ </span><span class="cmd">superseded review --pr 42 --agent claude-code</span></div>
-                    <div class="line"><span class="prompt">$ </span><span class="cmd">superseded review --diff main..feature-branch</span></div>
-                    <div class="line">&nbsp;</div>
-                    <div class="line comment">// fetching diff...</div>
-                    <div class="line comment">// gathering context...</div>
-                    <div class="line comment">// running 5 parallel review passes...</div>
-                    <div class="line">&nbsp;</div>
-                    <div class="line comment">// ── RESULTS ──</div>
-                    <div class="line">&nbsp;</div>
-                    <div class="line"><span class="critical">&#9632; CRITICAL  </span><span class="comment">security      </span><span class="file">src/auth.py            </span><span class="comment">:42   </span><span class="critical">SQL injection in query</span></div>
-                    <div class="line"><span class="suggestion">&#9632; SUGGEST   </span><span class="comment">style         </span><span class="file">src/utils.py           </span><span class="comment">:15   </span><span class="suggestion">Unclear variable naming</span></div>
-                    <div class="line">&nbsp;</div>
-                    <div class="line"><span class="success">2 findings &mdash; 1 critical, 1 suggestion</span></div>
-                    <div class="line"><span class="prompt">_</span><span class="crt-cursor"></span></div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <hr class="pixel-hr">
-
-    <!-- ── Stage Select ── -->
-    <section class="how-section" id="how">
-        <div class="container">
-            <div class="section-label reveal">&gt; STAGE SELECT</div>
-            <h2 class="reveal">7 stages to review</h2>
+            <div class="section-label reveal">How it works</div>
+            <h2 class="reveal">From diff to findings in seconds</h2>
             <p class="section-sub reveal">
-                Each stage feeds the next. Five AI passes run in parallel. Findings merged, deduplicated, ranked.
+                Fetch the diff, gather context, run 5 AI passes in parallel, then merge and output results.
             </p>
-            <div class="stages reveal">
-                <div class="stage">
-                    <div class="stage-num">01</div>
-                    <div class="stage-content">
-                        <h3>FETCH THE DIFF</h3>
-                        <p>Pull from a GitHub PR via <code style="font-family:var(--font-term); color:var(--cyan)">gh</code> or a local <code style="font-family:var(--font-term); color:var(--cyan)">git diff</code> range.</p>
+            <div class="steps-grid reveal">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <h3>Fetch</h3>
+                    <p>Pull diff from a GitHub PR or local git range.</p>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <h3>Context</h3>
+                    <p>Load feedback memory, run static analysis, gather cross-file usages.</p>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <h3>Review</h3>
+                    <p>5 AI passes run in parallel with domain-specific prompts.</p>
+                    <div class="passes">
+                        <span class="pass-tag s">SECURITY</span>
+                        <span class="pass-tag c">CORRECTNESS</span>
+                        <span class="pass-tag p">PERFORMANCE</span>
+                        <span class="pass-tag st">STYLE</span>
+                        <span class="pass-tag a">ARCHITECTURE</span>
                     </div>
                 </div>
-                <div class="stage">
-                    <div class="stage-num">02</div>
-                    <div class="stage-content">
-                        <h3>LOAD FEEDBACK MEMORY</h3>
-                        <p>Query SQLite store for previously dismissed findings. Inject as negative context so the agent avoids repeating patterns you've already rejected.</p>
-                    </div>
-                </div>
-                <div class="stage">
-                    <div class="stage-num">03</div>
-                    <div class="stage-content">
-                        <h3>RUN STATIC ANALYSIS</h3>
-                        <p>Auto-detect linters &amp; scanners (ruff, mypy, eslint, bandit, gitleaks, go vet, &hellip;) and run them over changed files. Deterministic signals injected as context.</p>
-                    </div>
-                </div>
-                <div class="stage">
-                    <div class="stage-num">04</div>
-                    <div class="stage-content">
-                        <h3>RETRIEVE CROSS-FILE USAGES</h3>
-                        <p>Extract symbols from changed code, then ripgrep to find callers across the repo. Surfaces breakage risk a human reviewer might miss.</p>
-                    </div>
-                </div>
-                <div class="stage">
-                    <div class="stage-num">05</div>
-                    <div class="stage-content">
-                        <h3>RUN 5 PASSES IN PARALLEL</h3>
-                        <p>Each pass focuses on one concern with a domain-specific prompt. All five run concurrently via ThreadPool.</p>
-                        <div class="passes">
-                            <span class="pass-tag s">SECURITY</span>
-                            <span class="pass-tag c">CORRECTNESS</span>
-                            <span class="pass-tag p">PERFORMANCE</span>
-                            <span class="pass-tag st">STYLE</span>
-                            <span class="pass-tag a">ARCHITECTURE</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="stage">
-                    <div class="stage-num">06</div>
-                    <div class="stage-content">
-                        <h3>MERGE &amp; DEDUPLICATE</h3>
-                        <p>Combine findings across all passes. Sort by severity. Drop duplicates found by multiple passes.</p>
-                    </div>
-                </div>
-                <div class="stage">
-                    <div class="stage-num">07</div>
-                    <div class="stage-content">
-                        <h3>OUTPUT RESULTS</h3>
-                        <p>Terminal table for quick scanning, JSON for piping, or markdown for docs. Optionally post inline review comments to the GitHub PR.</p>
-                    </div>
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <h3>Output</h3>
+                    <p>Terminal table, JSON, markdown, or inline PR comments.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <hr class="pixel-hr">
-
-    <!-- ── Power-ups ── -->
+    <!-- ── Features ── -->
     <section class="features-section" id="features">
         <div class="container">
-            <div class="section-label reveal">&gt; POWER-UPS</div>
+            <div class="section-label reveal">Features</div>
             <h2 class="reveal">Built for real workflows</h2>
             <p class="section-sub reveal">
-                CLI for local dev. GitHub Actions for CI. Self-hosted server for teams. Memory that improves over time.
+                CLI for local dev. GitHub Actions for CI. Memory that improves over time.
             </p>
-            <div class="powerups-grid reveal">
-                <div class="powerup">
-                    <span class="powerup-icon">&#x2666;</span>
-                    <h3>MULTI-PASS REVIEW</h3>
-                    <p>Five specialized passes with focused prompts. Security, correctness, performance, style, architecture — each with domain-specific instructions.</p>
+            <div class="features-grid reveal">
+                <div class="feature-card">
+                    <span class="feature-icon">&#x2666;</span>
+                    <h3>Multi-pass review</h3>
+                    <p>5 specialized passes with domain-specific prompts running in parallel via ThreadPool.</p>
                 </div>
-                <div class="powerup">
-                    <span class="powerup-icon">&#x2663;</span>
-                    <h3>FEEDBACK MEMORY</h3>
-                    <p>Dismiss a finding once and it won't appear again. SQLite store tracks which findings humans reject — future reviews learn from your team.</p>
+                <div class="feature-card">
+                    <span class="feature-icon">&#x2663;</span>
+                    <h3>Feedback memory</h3>
+                    <p>Dismiss a finding once and it won't appear again. SQLite store learns from your team.</p>
                 </div>
-                <div class="powerup">
-                    <span class="powerup-icon">&#x2665;</span>
-                    <h3>GITHUB INTEGRATION</h3>
-                    <p>Post findings as inline PR review comments. Critical issues request changes. Uses <code style="font-family:var(--font-term); color:var(--cyan)">gh</code> CLI — no API keys to manage.</p>
+                <div class="feature-card">
+                    <span class="feature-icon">&#x2665;</span>
+                    <h3>GitHub integration</h3>
+                    <p>Post inline PR review comments. Critical issues request changes. Uses <code style="font-family:var(--font-term); color:var(--cyan);">gh</code> CLI.</p>
                 </div>
-                <div class="powerup">
-                    <span class="powerup-icon">&#x2660;</span>
-                    <h3>PLUGGABLE AGENTS</h3>
-                    <p>Use Claude Code, OpenCode, or Codex. Each has its own adapter. Choose per-review or configure as default.</p>
+                <div class="feature-card">
+                    <span class="feature-icon">&#x2660;</span>
+                    <h3>Pluggable agents</h3>
+                    <p>Use Claude Code, OpenCode, or Codex. Choose per-review or configure a default.</p>
                 </div>
-                <div class="powerup">
-                    <span class="powerup-icon">&#x25CB;</span>
-                    <h3>STRUCTURED OUTPUT</h3>
-                    <p>JSON for piping to other tools. Markdown for docs. Terminal table for quick scanning. Every finding has severity, file, line, and suggestion.</p>
+                <div class="feature-card">
+                    <span class="feature-icon">&#x25CB;</span>
+                    <h3>Structured output</h3>
+                    <p>JSON for piping, markdown for docs, terminal table for quick scanning.</p>
                 </div>
-                <div class="powerup">
-                    <span class="powerup-icon">&#x25A3;</span>
-                    <h3>CI-NATIVE</h3>
-                    <p>Docker-based GitHub Action. Runs on every PR. Configurable passes and agents. Results posted directly to the PR.</p>
-                </div>
-                <div class="powerup">
-                    <span class="powerup-icon">&#x25C9;</span>
-                    <h3>SERVER MODE</h3>
-                    <p>Run as a persistent GitHub App. Multiple repos install your app and get automatic reviews on every PR. Webhook-driven.</p>
-                </div>
-                <div class="powerup">
-                    <span class="powerup-icon">&#x25B3;</span>
-                    <h3>STATIC ANALYSIS PRE-PASS</h3>
-                    <p>Auto-detects linters and security scanners from your repo config. Runs them over changed files before the AI sees the diff.</p>
-                </div>
-                <div class="powerup">
-                    <span class="powerup-icon">&#x25A1;</span>
-                    <h3>CROSS-FILE USAGE RETRIEVAL</h3>
-                    <p>Extracts symbols from changed code, then ripgrep to find callers across the repository. Surfaces breakage risk.</p>
-                </div>
-                <div class="powerup">
-                    <span class="powerup-icon">&#x25BD;</span>
-                    <h3>REASONING TRAIL</h3>
-                    <p>Each finding includes the agent's rationale. When humans dismiss a finding, the reasoning is persisted and fed back as context.</p>
+                <div class="feature-card">
+                    <span class="feature-icon">&#x25A3;</span>
+                    <h3>CI-native</h3>
+                    <p>Docker-based GitHub Action. Runs on every PR. Configurable passes and agents.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <hr class="pixel-hr">
-
-    <!-- ── Character Select ── -->
-    <section class="agents-section" id="agents">
-        <div class="container">
-            <div class="section-label reveal">&gt; CHARACTER SELECT</div>
-            <h2 class="reveal">Choose your agent</h2>
-            <p class="section-sub reveal">
-                Superseded delegates to existing AI CLIs. No API key management — use what you already have configured.
-            </p>
-            <div class="char-grid reveal">
-                <div class="char-card">
-                    <div class="char-avatar">[C]</div>
-                    <div class="char-name">CLAUDE CODE</div>
-                    <div class="char-cmd">claude -p --bare --model</div>
-                    <div class="char-auth">AUTH: <code>ANTHROPIC_API_KEY</code></div>
-                </div>
-                <div class="char-card">
-                    <div class="char-avatar">[O]</div>
-                    <div class="char-name">OPENCODE</div>
-                    <div class="char-cmd">opencode run</div>
-                    <div class="char-auth">AUTH: Provider-specific</div>
-                </div>
-                <div class="char-card">
-                    <div class="char-avatar">[X]</div>
-                    <div class="char-name">CODEX</div>
-                    <div class="char-cmd">codex exec --json --model</div>
-                    <div class="char-auth">AUTH: <code>CODEX_API_KEY</code></div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <hr class="pixel-hr">
-
-    <!-- ── Continue Screen ── -->
-    <section class="cta-section" id="get-started">
+    <!-- ── CTA ── -->
+    <section class="cta-section">
         <div class="container">
             <div class="cta-box reveal">
-                <div class="section-label">&gt; CONTINUE?</div>
-                <h2>INSERT COIN<br>TO START</h2>
-                <p>Clone, install, and run your first review in 30 seconds.</p>
+                <h2>Get started in 30 seconds</h2>
+                <p>Install and run your first review.</p>
                 <div class="install-cmd">
                     <span class="prompt">$</span>
-                    <code>git clone https://github.com/fabioesposito/superseded && cd superseded && uv sync && uv tool install .</code>
+                    <code>pip install superseded</code>
                 </div>
                 <div class="install-cmd">
                     <span class="prompt">$</span>
                     <code>superseded review --diff HEAD~1..HEAD</code>
                 </div>
                 <div class="cta-actions">
-                    <a href="https://github.com/fabioesposito/superseded" class="btn btn-primary">&#9654; READ THE DOCS</a>
-                    <a href="#server" class="btn btn-ghost">SERVER MODE</a>
+                    <a href="https://github.com/fabioesposito/superseded#readme" class="btn btn-primary">Read the Docs</a>
+                    <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost">Star on GitHub</a>
                 </div>
-            </div>
-        </div>
-    </section>
-
-    <hr class="pixel-hr">
-
-    <!-- ── Server Section ── -->
-    <section class="server-section" id="server">
-        <div class="container">
-            <div class="section-label reveal">&gt; BONUS STAGE</div>
-            <h2 class="reveal">Self-hosted for teams</h2>
-            <p class="section-sub reveal">
-                Run Superseded as a GitHub App on your own server. Multiple repos install it and get automatic reviews on every PR.
-            </p>
-            <div class="stages reveal">
-                <div class="stage">
-                    <div class="stage-num">01</div>
-                    <div class="stage-content">
-                        <h3>CREATE A GITHUB APP</h3>
-                        <p>Set up a GitHub App with webhook URL pointing to your server. Subscribe to PR and installation events.</p>
-                    </div>
-                </div>
-                <div class="stage">
-                    <div class="stage-num">02</div>
-                    <div class="stage-content">
-                        <h3>INSTALL ON REPOS</h3>
-                        <p>Other repos install your app with one click. The server tracks installations automatically.</p>
-                    </div>
-                </div>
-                <div class="stage">
-                    <div class="stage-num">03</div>
-                    <div class="stage-content">
-                        <h3>WEBHOOK TRIGGERS REVIEW</h3>
-                        <p>PR opened or updated — webhook arrives, job queued, review runs in background. Results posted as PR comments and status checks.</p>
-                    </div>
-                </div>
-                <div class="stage">
-                    <div class="stage-num">04</div>
-                    <div class="stage-content">
-                        <h3>CONFIGURABLE CONCURRENCY</h3>
-                        <p>Control how many reviews run in parallel. Jobs queue when at capacity. Each review gets its own shallow clone and agent subprocess.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="server-term">
-                <div><span class="prompt">$</span> superseded serve --port 8000</div>
-                <div style="color: var(--text-dim);">Starting Superseded server on 0.0.0.0:8000</div>
             </div>
         </div>
     </section>
@@ -1647,33 +825,11 @@
     <!-- ── Footer ── -->
     <footer>
         <div class="container">
-            <div class="footer-brand">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="48" height="36">
-                    <clipPath id="shieldClipFooter"><polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10"/></clipPath>
-                    <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="#0a0a18"/>
-                    <g clip-path="url(#shieldClipFooter)">
-                        <rect x="82" y="0" width="14" height="120" fill="#ff4466" opacity="0.9"/>
-                        <rect x="96" y="0" width="14" height="120" fill="#ff8833" opacity="0.9"/>
-                        <rect x="110" y="0" width="14" height="120" fill="#ffd700" opacity="0.9"/>
-                        <rect x="124" y="0" width="14" height="120" fill="#00ff41" opacity="0.9"/>
-                        <rect x="138" y="0" width="14" height="120" fill="#00f0ff" opacity="0.9"/>
-                    </g>
-                    <polygon points="120,2 110,10 100,18 90,26 80,36 80,78 90,86 100,94 110,102 120,110 130,102 140,94 150,86 160,78 160,36 150,26 140,18 130,10" fill="none" stroke="#555580" stroke-width="2"/>
-                    <g transform="translate(120, 56)" opacity="0.7">
-                        <rect x="-12" y="-20" width="4" height="4" fill="#fff"/><rect x="-8" y="-20" width="4" height="4" fill="#fff"/><rect x="-4" y="-20" width="4" height="4" fill="#fff"/><rect x="0" y="-20" width="4" height="4" fill="#fff"/><rect x="4" y="-20" width="4" height="4" fill="#fff"/><rect x="8" y="-20" width="4" height="4" fill="#fff"/>
-                        <rect x="-12" y="-16" width="4" height="4" fill="#fff"/>
-                        <rect x="-12" y="-12" width="4" height="4" fill="#fff"/>
-                        <rect x="-12" y="-8" width="4" height="4" fill="#fff"/><rect x="-8" y="-8" width="4" height="4" fill="#fff"/><rect x="-4" y="-8" width="4" height="4" fill="#fff"/><rect x="0" y="-8" width="4" height="4" fill="#fff"/><rect x="4" y="-8" width="4" height="4" fill="#fff"/><rect x="8" y="-8" width="4" height="4" fill="#fff"/>
-                        <rect x="8" y="-4" width="4" height="4" fill="#fff"/>
-                        <rect x="8" y="0" width="4" height="4" fill="#fff"/>
-                        <rect x="-12" y="4" width="4" height="4" fill="#fff"/><rect x="-8" y="4" width="4" height="4" fill="#fff"/><rect x="-4" y="4" width="4" height="4" fill="#fff"/><rect x="0" y="4" width="4" height="4" fill="#fff"/><rect x="4" y="4" width="4" height="4" fill="#fff"/><rect x="8" y="4" width="4" height="4" fill="#fff"/>
-                    </g>
-                </svg>
-                <p>&copy; 2026 SUPERSEDED &mdash; MIT LICENSE</p>
-            </div>
+            <div class="footer-copy">&copy; 2026 Superseded &mdash; MIT License</div>
             <div class="footer-links">
-                <a href="https://github.com/fabioesposito/superseded">GITHUB</a>
-                <a href="https://github.com/fabioesposito/superseded/issues">ISSUES</a>
+                <a href="https://github.com/fabioesposito/superseded">GitHub</a>
+                <a href="https://github.com/fabioesposito/superseded#readme">Docs</a>
+                <a href="https://github.com/fabioesposito/superseded/issues">Issues</a>
             </div>
         </div>
     </footer>
@@ -1695,7 +851,6 @@
                 }
             });
         });
-        // Scroll reveal
         const revealObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
