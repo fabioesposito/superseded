@@ -9,6 +9,7 @@ AGENT_PREFERENCE: tuple[str, ...] = ("claude-code", "opencode", "codex")
 
 DEFAULT_MODELS: dict[str, str] = {
     "claude-code": "claude-sonnet-4-6",
+    "opencode": "opencode/big-pickle",
     "codex": "gpt-5.4-mini",
 }
 

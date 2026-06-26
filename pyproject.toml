@@ -8,6 +8,8 @@ dependencies = [
     "pydantic>=2.10.0",
     "pyyaml>=6.0.0",
     "aiosqlite>=0.21.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
 ]
 
 [dependency-groups]
@@ -17,14 +19,6 @@ dev = [
     "httpx>=0.28.0",
     "pyjwt[crypto]>=2.10.0",
     "ruff>=0.9.0",
-]
-
-[project.optional-dependencies]
-server = [
-    "fastapi>=0.115.0",
-    "httpx>=0.28.0",
-    "uvicorn>=0.34.0",
-    "pyjwt>=2.10.0",
 ]
 
 [project.scripts]

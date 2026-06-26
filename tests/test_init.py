@@ -150,7 +150,7 @@ def test_init_gh_missing_still_succeeds(tmp_path, monkeypatch):
     assert target.exists()
     cfg = load_config(target)
     assert cfg.agent == "opencode"
-    assert cfg.model is None
+    assert cfg.model == "opencode/big-pickle"
 
 
 def test_init_default_target_when_no_config_flag(tmp_path, monkeypatch):

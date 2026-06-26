@@ -18,7 +18,7 @@ def test_agent_preference_order():
 def test_default_models_contains_known_agents():
     assert DEFAULT_MODELS["claude-code"] == "claude-sonnet-4-6"
     assert DEFAULT_MODELS["codex"] == "gpt-5.4-mini"
-    assert "opencode" not in DEFAULT_MODELS
+    assert DEFAULT_MODELS["opencode"] == "opencode/big-pickle"
 
 
 def test_agent_status_is_frozen_dataclass():
@@ -79,8 +79,8 @@ def test_default_model_for_known_agents():
     assert default_model_for("codex") == "gpt-5.4-mini"
 
 
-def test_default_model_for_opencode_is_none():
-    assert default_model_for("opencode") is None
+def test_default_model_for_opencode():
+    assert default_model_for("opencode") == "opencode/big-pickle"
 
 
 def test_default_model_for_unknown_is_none():
