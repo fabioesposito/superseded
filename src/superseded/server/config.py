@@ -12,7 +12,7 @@ class ServerConfig(BaseModel):
     webhook_secret: str = ""
     private_key_path: Path = Path("/dev/null")
     port: int = 8000
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     max_concurrent_reviews: int = 3
     temp_dir: Path = Path("/tmp/superseded")
     log_level: str = "info"
@@ -36,6 +36,13 @@ class ServerConfig(BaseModel):
                 "Server is not configured: set SUPERSEDED_APP_ID, "
                 "SUPERSEDED_WEBHOOK_SECRET, and SUPERSEDED_PRIVATE_KEY_PATH "
                 "(or provide them in the YAML config)."
+            )
+        if self.host not in ("127.0.0.1", "localhost") and not (
+            self.tls_cert_path and self.tls_key_path
+        ):
+            raise ValueError(
+                f"Binding to {self.host} requires TLS. Set SUPERSEDED_TLS_CERT "
+                "and SUPERSEDED_TLS_KEY, or use --host 127.0.0.1."
             )
 
     @model_validator(mode="after")

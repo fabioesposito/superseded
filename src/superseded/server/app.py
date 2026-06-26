@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
@@ -18,6 +20,27 @@ logger = logging.getLogger(__name__)
 
 WEBHOOK_RATE_LIMIT = 60
 WEBHOOK_RATE_WINDOW = 60.0
+REPLAY_WINDOW = 300.0
+
+
+class ReplayProtector:
+    """Reject duplicate webhook payloads within a sliding time window."""
+
+    def __init__(self, window: float = REPLAY_WINDOW) -> None:
+        self._window = window
+        self._recent: dict[str, float] = {}
+
+    def is_replay(self, payload: bytes, signature: str) -> bool:
+        now = time.time()
+        cutoff = now - self._window
+        self._recent = {k: v for k, v in self._recent.items() if v > cutoff}
+        sig_hash = hashlib.sha256(
+            (signature + payload.decode(errors="replace")).encode()
+        ).hexdigest()
+        if sig_hash in self._recent:
+            return True
+        self._recent[sig_hash] = now
+        return False
 
 
 class RateLimiter:
@@ -51,13 +74,15 @@ def create_app(
     app = FastAPI(title="Superseded", version="0.1.0", lifespan=lifespan)
     start_time = time.time()
     rate_limiter = RateLimiter(WEBHOOK_RATE_LIMIT, WEBHOOK_RATE_WINDOW)
+    replay_limiter = ReplayProtector()
 
     @app.get("/health")
     async def health(request: Request) -> dict:
         token = config.health_token
         if token:
             auth = request.headers.get("Authorization", "")
-            if auth != f"Bearer {token}":
+            expected = f"Bearer {token}"
+            if not hmac.compare_digest(auth, expected):
                 raise HTTPException(status_code=401, detail="Unauthorized")
             return {
                 "status": "ok",
@@ -86,6 +111,9 @@ def create_app(
 
         if not github.verify_webhook(payload, signature):
             return Response(status_code=401, content="Invalid signature")
+
+        if replay_limiter.is_replay(payload, signature):
+            return Response(status_code=409, content="Duplicate webhook")
 
         event = request.headers.get("X-GitHub-Event", "")
         data = await request.json()

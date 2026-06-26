@@ -28,9 +28,11 @@ def _redact_token(text: str, token: str) -> str:
     """Strip any occurrence of *token* (and URL-embedded variants) from text."""
     if not token:
         return text
+    encoded = base64.b64encode(f"x-access-token:{token}".encode()).decode()
     patterns = [
         token,
         f"x-access-token:{token}",
+        encoded,
         re.escape(token),
     ]
     result = text

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import yaml
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 _SEVERITY_ORDER = ("critical", "important", "suggestion", "nit")
 DISK_USAGE_LIMIT = 0.9
+MAX_DIFF_CHARS = 1_000_000
 
 
 @dataclass
@@ -34,13 +35,14 @@ class ReviewJob:
     pr_number: int
     head_sha: str
     base_sha: str
+    job_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
 
 @dataclass
 class ReviewOutcome:
     conclusion: str
     title: str
-    summary: str
+    summary: str = ""
 
 
 def build_check_run_title(result: ReviewResult) -> str:
@@ -65,7 +67,9 @@ class ReviewWorker:
         # 429) rather than allowed to grow without limit and exhaust memory.
         self.queue: asyncio.Queue[ReviewJob] = asyncio.Queue(maxsize=max_queue)
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._lock = asyncio.Lock()
         self._active_count = 0
+        self._tasks: set[asyncio.Task] = set()
         self.store = store
 
     @property
@@ -90,12 +94,44 @@ class ReviewWorker:
             raise
 
     async def run(self) -> None:
+        """Consumer loop: spawn a bounded task for each queued job."""
         while True:
             job = await self.queue.get()
-            try:
-                await self._process(job)
-            finally:
-                self.queue.task_done()
+            task = asyncio.create_task(self._run_task(job))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+            task.add_done_callback(lambda _: self.queue.task_done())
+
+    async def _run_task(self, job: ReviewJob) -> None:
+        """Acquire semaphore, process job."""
+        try:
+            async with self._semaphore:
+                async with self._lock:
+                    self._active_count += 1
+                try:
+                    await self._process(job)
+                finally:
+                    async with self._lock:
+                        self._active_count -= 1
+        except asyncio.CancelledError:
+            logger.info(
+                "review_cancelled",
+                extra={"repo": f"{job.owner}/{job.repo}", "pr": job.pr_number},
+            )
+
+    async def shutdown(self, timeout: float = 10.0) -> None:
+        """Drain the queue and cancel any in-flight tasks."""
+        try:
+            await asyncio.wait_for(self.queue.join(), timeout=timeout)
+        except TimeoutError:
+            logger.warning(
+                "Shutdown timeout reached with %d job(s) still in queue",
+                self.queue.qsize(),
+            )
+        for task in list(self._tasks):
+            task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
 
     async def _process(self, job: ReviewJob) -> None:
         correlation_id = str(uuid.uuid4())[:8]
@@ -122,62 +158,74 @@ class ReviewWorker:
             return
 
         check_run_id = None
-        async with self._semaphore:
-            self._active_count += 1
-            try:
-                check_run_id = await self.github.create_check_run(
-                    token=token,
-                    owner=job.owner,
-                    repo=job.repo,
-                    name="Superseded Review",
-                    head_sha=job.head_sha,
-                    status="in_progress",
-                )
+        try:
+            check_run_id = await self.github.create_check_run(
+                token=token,
+                owner=job.owner,
+                repo=job.repo,
+                name="Superseded Review",
+                head_sha=job.head_sha,
+                status="in_progress",
+            )
 
-                outcome = await _run_review_for_job(
-                    github=self.github,
-                    repo_manager=self.repo_manager,
-                    token=token,
-                    job=job,
-                    correlation_id=correlation_id,
-                    store=self.store,
-                )
+            outcome = await _run_review_for_job(
+                github=self.github,
+                repo_manager=self.repo_manager,
+                token=token,
+                job=job,
+                correlation_id=correlation_id,
+                store=self.store,
+            )
 
-                await self.github.update_check_run(
-                    token=token,
-                    owner=job.owner,
-                    repo=job.repo,
-                    check_run_id=check_run_id,
-                    status="completed",
-                    conclusion=outcome.conclusion,
-                    title=outcome.title,
-                    summary=outcome.summary,
-                )
-            except Exception:
-                logger.exception(
-                    "review_failed",
-                    extra={
-                        "correlation_id": correlation_id,
-                        "repo": f"{job.owner}/{job.repo}",
-                        "pr": job.pr_number,
-                    },
-                )
-                if check_run_id is not None:
-                    try:
-                        await self.github.update_check_run(
-                            token=token,
-                            owner=job.owner,
-                            repo=job.repo,
-                            check_run_id=check_run_id,
-                            status="completed",
-                            conclusion="failure",
-                            title="Review failed",
-                            summary=f"Review failed. Correlation ID: {correlation_id}",
-                        )
-                    except Exception:
-                        logger.exception("Failed to update check run on error")
-            finally:
-                self._active_count -= 1
+            await self.github.update_check_run(
+                token=token,
+                owner=job.owner,
+                repo=job.repo,
+                check_run_id=check_run_id,
+                status="completed",
+                conclusion=outcome.conclusion,
+                title=outcome.title,
+                summary=outcome.summary,
+            )
+        except asyncio.CancelledError:
+            if check_run_id is not None:
+                try:
+                    await self.github.update_check_run(
+                        token=token,
+                        owner=job.owner,
+                        repo=job.repo,
+                        check_run_id=check_run_id,
+                        status="completed",
+                        conclusion="failure",
+                        title="Review cancelled",
+                        summary=(f"Review cancelled (shutdown). Correlation ID: {correlation_id}"),
+                    )
+                except Exception:
+                    logger.exception("Failed to update check run on cancellation")
+            raise
+        except Exception:
+            logger.exception(
+                "review_failed",
+                extra={
+                    "correlation_id": correlation_id,
+                    "repo": f"{job.owner}/{job.repo}",
+                    "pr": job.pr_number,
+                },
+            )
+            if check_run_id is not None:
+                try:
+                    await self.github.update_check_run(
+                        token=token,
+                        owner=job.owner,
+                        repo=job.repo,
+                        check_run_id=check_run_id,
+                        status="completed",
+                        conclusion="failure",
+                        title="Review failed",
+                        summary=f"Review failed. Correlation ID: {correlation_id}",
+                    )
+                except Exception:
+                    logger.exception("Failed to update check run on error")
 
 
 async def _load_safe_config(github: GitHubApp, token: str, owner: str, repo: str) -> Config:
@@ -215,7 +263,9 @@ async def _run_review_for_job(
     correlation_id: str,
     store: MemoryStore | None = None,
 ) -> ReviewOutcome:
-    tmp_dir = repo_manager.job_dir(job.installation_id, job.owner, job.repo, job.pr_number)
+    tmp_dir = repo_manager.job_dir(
+        job.installation_id, job.owner, job.repo, job.pr_number, job.job_id
+    )
 
     try:
         if repo_manager.disk_usage() > DISK_USAGE_LIMIT:
@@ -235,6 +285,8 @@ async def _run_review_for_job(
         config = await _load_safe_config(github, token, job.owner, job.repo)
 
         diff = await github.fetch_pr_diff(token, job.owner, job.repo, job.pr_number)
+        if len(diff) > MAX_DIFF_CHARS:
+            diff = diff[:MAX_DIFF_CHARS] + (f"\n\n... (diff truncated at {MAX_DIFF_CHARS:,} chars)")
         pr_description = await github.fetch_pr_description(
             token, job.owner, job.repo, job.pr_number
         )

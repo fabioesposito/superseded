@@ -28,14 +28,26 @@ class RepoManager:
         if path.exists():
             shutil.rmtree(path, ignore_errors=True)
 
-    def job_dir(self, installation_id: int, owner: str, repo: str, pr_number: int) -> Path:
+    def job_dir(
+        self,
+        installation_id: int,
+        owner: str,
+        repo: str,
+        pr_number: int,
+        job_id: str = "",
+    ) -> Path:
         if installation_id < 0:
             raise ValueError(f"invalid installation_id: {installation_id!r}")
         if pr_number < 0:
             raise ValueError(f"invalid pr: {pr_number!r}")
         _validate_segment(owner, "owner")
         _validate_segment(repo, "repo")
-        candidate = self.base_path / str(installation_id) / owner / repo / str(pr_number)
+        pr_dir = self.base_path / str(installation_id) / owner / repo / str(pr_number)
+        if job_id:
+            _validate_segment(job_id, "job_id")
+            candidate = pr_dir / job_id
+        else:
+            candidate = pr_dir
         resolved = candidate.resolve()
         base_resolved = self.base_path.resolve()
         if not resolved.is_relative_to(base_resolved):

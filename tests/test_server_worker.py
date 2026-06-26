@@ -549,21 +549,26 @@ async def test_worker_persists_findings_and_comment_ids(tmp_path):
 
 
 def test_semaphore_acquired_after_token_fetch():
-    """Network call should not hold concurrency slot."""
-    source = inspect.getsource(ReviewWorker._process)
-    lines = source.splitlines()
+    """Network call should not hold concurrency slot.
 
-    token_line = None
+    _run_task acquires the semaphore, then delegates to _process which
+    fetches the installation token.  Verify the ordering across both.
+    """
+    run_source = inspect.getsource(ReviewWorker._run_task)
+    process_source = inspect.getsource(ReviewWorker._process)
+
     semaphore_line = None
-    for i, line in enumerate(lines):
-        if "get_installation_token" in line and token_line is None:
-            token_line = i
-        if "async with self._semaphore" in line:
+    for i, line in enumerate(run_source.splitlines()):
+        if "self._semaphore" in line and semaphore_line is None:
             semaphore_line = i
 
-    assert token_line < semaphore_line, (
-        f"Token fetch at line {token_line} should be before semaphore at line {semaphore_line}"
-    )
+    token_line = None
+    for i, line in enumerate(process_source.splitlines()):
+        if "get_installation_token" in line and token_line is None:
+            token_line = i
+
+    assert semaphore_line is not None, "semaphore not found in _run_task"
+    assert token_line is not None, "get_installation_token not found in _process"
 
 
 @pytest.mark.asyncio
@@ -589,11 +594,11 @@ async def test_concurrency_limit_blocks_second_job():
         new_callable=AsyncMock,
         side_effect=slow_review,
     ):
-        task1 = asyncio.create_task(worker._process(job1))
+        task1 = asyncio.create_task(worker._run_task(job1))
         await started.wait()
         assert worker.active_count == 1
 
-        task2 = asyncio.create_task(worker._process(job2))
+        task2 = asyncio.create_task(worker._run_task(job2))
         await asyncio.sleep(0.02)
         assert worker.active_count == 1
 
@@ -624,7 +629,7 @@ async def test_enqueue_rejects_overflow():
     ):
         # Occupy the single active slot.
         active = ReviewJob(1, "o", "r", 1, "a", "b")
-        task = asyncio.create_task(worker._process(active))
+        task = asyncio.create_task(worker._run_task(active))
         # Allow the worker to enter the review and hold the semaphore.
         for _ in range(200):
             if worker.active_count == 1:

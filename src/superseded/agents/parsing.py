@@ -52,6 +52,9 @@ def _extract_first_balanced_array(raw: str, start: int = 0) -> tuple[str, int] |
     return None
 
 
+MAX_FINDINGS_PER_PASS = 500
+
+
 def extract_json_array(raw: str) -> list[dict] | None:
     # Prefer the cheap regex match first: most agents emit a clean JSON array
     # and the regex is allocation-free. If it decodes, we are done.
@@ -133,6 +136,8 @@ def parse_markdown_findings(raw: str, pass_name: str) -> list[dict]:
 def extract_findings(raw: str, pass_name: str) -> list[dict]:
     array = extract_json_array(raw)
     if array is not None:
+        if len(array) > MAX_FINDINGS_PER_PASS:
+            array = array[:MAX_FINDINGS_PER_PASS]
         for item in array:
             item["pass_name"] = pass_name
         return array

@@ -34,7 +34,7 @@ def test_server_config_require_configured_accepts_valid(tmp_path):
 def test_server_config_defaults():
     config = ServerConfig()
     assert config.port == 8000
-    assert config.host == "0.0.0.0"
+    assert config.host == "127.0.0.1"
     assert config.max_concurrent_reviews == 3
     assert config.log_level == "info"
 

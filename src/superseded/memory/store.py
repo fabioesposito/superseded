@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -69,7 +71,10 @@ class MemoryStore:
             return
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = await aiosqlite.connect(self.db_path)
+        await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.executescript(SCHEMA)
+        with contextlib.suppress(OSError):
+            os.chmod(self.db_path, 0o600)
         if not self._migrated:
             await self._migrate(self._conn)
             self._migrated = True
@@ -100,7 +105,10 @@ class MemoryStore:
             return  # open() already created the schema + migrated.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
             await db.executescript(SCHEMA)
+            with contextlib.suppress(OSError):
+                os.chmod(self.db_path, 0o600)
             if not self._migrated:
                 await self._migrate(db)
                 self._migrated = True

@@ -55,7 +55,7 @@ class RuffTool:
         return _detect_pyproject_dep(root, "ruff")
 
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
-        return ["ruff", "check", "--output-format=concise", *changed_files]
+        return ["ruff", "check", "--output-format=concise", "--", *changed_files]
 
     def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""
@@ -69,7 +69,7 @@ class MypyTool:
         return _detect_pyproject_dep(root, "mypy")
 
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
-        return ["mypy", "--no-error-summary", *changed_files]
+        return ["mypy", "--no-error-summary", "--", *changed_files]
 
     def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""
@@ -83,7 +83,7 @@ class BanditTool:
         return _detect_pyproject_dep(root, "bandit")
 
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
-        return ["bandit", "-q", *changed_files]
+        return ["bandit", "-q", "--", *changed_files]
 
     def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""
@@ -102,7 +102,7 @@ class EslintTool:
         return pkg.exists() and "eslintConfig" in pkg.read_text()
 
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
-        return ["eslint", "--format=compact", *changed_files]
+        return ["eslint", "--format=compact", "--", *changed_files]
 
     def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""
@@ -167,7 +167,7 @@ class StaticcheckTool:
         return which("staticcheck") is not None
 
     def build_command(self, changed_files: list[str], root: Path) -> list[str]:
-        return ["staticcheck", *changed_files]
+        return ["staticcheck", "--", *changed_files]
 
     def parse_output(self, stdout: str, stderr: str, root: Path, changed_files: list[str]) -> str:
         return stdout.strip() if stdout.strip() else ""

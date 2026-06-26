@@ -88,13 +88,7 @@ class ServerLifecycle:
         self._shutdown_event.set()
 
         if self._worker_task is not None:
-            try:
-                await asyncio.wait_for(self.worker.queue.join(), timeout=self.shutdown_timeout)
-            except TimeoutError:
-                logger.warning(
-                    "Shutdown timeout reached with %d job(s) still in queue",
-                    self.worker.queue.qsize(),
-                )
+            await self.worker.shutdown(timeout=self.shutdown_timeout)
             unprocessed = self.worker.queue.qsize()
             if unprocessed:
                 logger.warning("%d unprocessed job(s) in queue at shutdown", unprocessed)

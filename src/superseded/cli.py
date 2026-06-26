@@ -593,10 +593,8 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
 
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
-    logging.basicConfig(
-        level=getattr(logging, config.log_level.upper(), logging.INFO),
-        handlers=[handler],
-    )
+    log_level = getattr(logging, config.log_level.upper(), logging.INFO)
+    logging.basicConfig(level=log_level, handlers=[handler])
 
     _status(f"Starting Superseded server on {config.host}:{config.port}")
     ssl_kwargs: dict = {}

@@ -36,7 +36,7 @@ class GitHubApp:
         now = int(time.time())
         if self._jwt_cache is not None:
             cached_time, cached_jwt = self._jwt_cache
-            if now - cached_time < 540:
+            if now - cached_time < 300:
                 return cached_jwt
 
         payload = {

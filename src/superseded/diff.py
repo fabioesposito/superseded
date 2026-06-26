@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CONTEXT_PADDING = 20
 DEFAULT_GH_TIMEOUT = 30
@@ -163,6 +166,7 @@ def compute_file_context(
                 resolved = full.resolve()
                 root_resolved = root.resolve()
                 if not resolved.is_relative_to(root_resolved):
+                    logger.debug("Skipping file outside repo root: %s", file_path)
                     continue
             lines = _read_file_lines(str(full))
         except FileNotFoundError, OSError:
