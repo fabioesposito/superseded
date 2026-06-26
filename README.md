@@ -1,6 +1,6 @@
 # Superseded
 
-AI code review that learns from your feedback. Runs 5 parallel passes (security, correctness, performance, style, architecture) with Claude, Codex, or OpenCode. Posts findings as PR comments. Gets smarter every time you dismiss a finding.
+Reviews that supersede themselves. Runs 5 parallel passes (security, correctness, performance, style, architecture) with Claude, Codex, or OpenCode. Posts findings as PR comments. Gets smarter every time you dismiss a finding.
 
 ## Quickstart (30 seconds)
 

@@ -133,7 +133,7 @@ def format_memory_context(dismissed: list[dict]) -> str | None:
 @click.group()
 @click.version_option(version=_VERSION)
 def cli() -> None:
-    """Superseded — multi-pass AI code review tool."""
+    """Superseded — reviews that supersede themselves."""
 
 
 @cli.command()

@@ -20,37 +20,21 @@
       </feMerge>
     </filter>
     <clipPath id="shieldClip">
-      <polygon points="
-        120,2
-        110,10 100,18 90,26 80,36
-        80,78
-        90,86 100,94 110,102 120,110
-        130,102 140,94 150,86 160,78
-        160,36
-        150,26 140,18 130,10
-      "/>
+      <polygon points="120,2 152,12 171,39 171,73 152,100 120,110 88,100 69,73 69,39 88,12"/>
     </clipPath>
   </defs>
 
-  <!-- Shield background -->
+  <!-- Decagon background -->
   <g filter="url(#shieldShadow)">
-    <polygon points="
-      120,2
-      110,10 100,18 90,26 80,36
-      80,78
-      90,86 100,94 110,102 120,110
-      130,102 140,94 150,86 160,78
-      160,36
-      150,26 140,18 130,10
-    " fill="#0a0a18"/>
+    <polygon points="120,2 152,12 171,39 171,73 152,100 120,110 88,100 69,73 69,39 88,12" fill="#0a0a18"/>
 
     <!-- 5 colored vertical stripes -->
     <g clip-path="url(#shieldClip)">
-      <rect x="82" y="0" width="14" height="120" fill="#ff4466" opacity="0.9"/>
-      <rect x="96" y="0" width="14" height="120" fill="#ff8833" opacity="0.9"/>
-      <rect x="110" y="0" width="14" height="120" fill="#ffd700" opacity="0.9"/>
-      <rect x="124" y="0" width="14" height="120" fill="#00ff41" opacity="0.9"/>
-      <rect x="138" y="0" width="14" height="120" fill="#00f0ff" opacity="0.9"/>
+      <rect x="76" y="0" width="16" height="120" fill="#ff4466" opacity="0.9"/>
+      <rect x="92" y="0" width="16" height="120" fill="#ff8833" opacity="0.9"/>
+      <rect x="108" y="0" width="16" height="120" fill="#ffd700" opacity="0.9"/>
+      <rect x="124" y="0" width="16" height="120" fill="#00ff41" opacity="0.9"/>
+      <rect x="140" y="0" width="16" height="120" fill="#00f0ff" opacity="0.9"/>
       <!-- Scanlines -->
       <g opacity="0.15">
         <line x1="70" y1="40" x2="170" y2="40" stroke="#fff" stroke-width="2"/>
@@ -63,28 +47,10 @@
       </g>
     </g>
 
-    <!-- Shield outline -->
-    <polygon points="
-      120,2
-      110,10 100,18 90,26 80,36
-      80,78
-      90,86 100,94 110,102 120,110
-      130,102 140,94 150,86 160,78
-      160,36
-      150,26 140,18 130,10
-    " fill="none" stroke="#e8e8f0" stroke-width="2.5" stroke-linejoin="miter" filter="url(#neonGlow)"/>
+    <!-- Decagon outline -->
+    <polygon points="120,2 152,12 171,39 171,73 152,100 120,110 88,100 69,73 69,39 88,12" fill="none" stroke="#e8e8f0" stroke-width="2.5" stroke-linejoin="miter" filter="url(#neonGlow)"/>
 
-    <!-- Pixel-art corner accents -->
-    <rect x="77" y="16" width="6" height="6" fill="#e8e8f0"/>
-    <rect x="83" y="10" width="6" height="6" fill="#e8e8f0"/>
-    <rect x="157" y="16" width="6" height="6" fill="#e8e8f0"/>
-    <rect x="151" y="10" width="6" height="6" fill="#e8e8f0"/>
-    <rect x="77" y="98" width="6" height="6" fill="#e8e8f0"/>
-    <rect x="83" y="104" width="6" height="6" fill="#e8e8f0"/>
-    <rect x="157" y="98" width="6" height="6" fill="#e8e8f0"/>
-    <rect x="151" y="104" width="6" height="6" fill="#e8e8f0"/>
-
-    <!-- Pixel-art "S" inside shield -->
+    <!-- Pixel-art "S" inside decagon -->
     <g transform="translate(120, 56)" opacity="0.85" filter="url(#glow)">
       <!-- Row 0: █ █ █ █ -->
       <rect x="-12" y="-20" width="4" height="4" fill="#fff"/>

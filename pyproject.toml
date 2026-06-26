@@ -1,7 +1,7 @@
 [project]
 name = "superseded"
 version = "0.1.0"
-description = "Multi-pass AI code review tool"
+description = "Reviews that supersede themselves."
 requires-python = ">=3.14"
 dependencies = [
     "click>=8.1.0",
