@@ -124,7 +124,13 @@ def test_persist_findings_passes_reasoning(monkeypatch):
     async def async_record(**kwargs):
         calls.append(kwargs)
 
-    mock_store = type("FakeStore", (), {})()
+    async def _dummy_aenter(self):
+        return self
+
+    async def _dummy_aexit(self, *exc):
+        pass
+
+    mock_store = type("FakeStore", (), {"__aenter__": _dummy_aenter, "__aexit__": _dummy_aexit})()
     mock_store.record_finding = staticmethod(async_record)
 
     import asyncio
@@ -251,7 +257,17 @@ def test_persist_and_link_batch_into_single_event_loop(monkeypatch):
     async def async_record(**kwargs):
         calls.append(kwargs)
 
-    mock_store = type("FakeStore", (), {})()
+    async def _dummy_aenter_b(self):
+        return self
+
+    async def _dummy_aexit_b(self, *exc):
+        pass
+
+    mock_store = type(
+        "FakeStore",
+        (),
+        {"__aenter__": _dummy_aenter_b, "__aexit__": _dummy_aexit_b},
+    )()
     mock_store.record_finding = staticmethod(async_record)
     mock_store.set_comment_id = AsyncMock()
 

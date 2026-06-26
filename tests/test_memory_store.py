@@ -232,3 +232,72 @@ def test_dismissed_findings_include_reasoning(store):
     dismissed = asyncio.run(store.get_dismissed_findings("owner/repo"))
     assert len(dismissed) == 1
     assert dismissed[0]["reasoning"] == "N+1 query"
+
+
+def test_init_runs_migration_once(tmp_path):
+    """Repeated init() must not re-run ALTER TABLE migration within a store instance."""
+    store = MemoryStore(db_path=tmp_path / "once.db")
+    calls = {"n": 0}
+    real_migrate = store._migrate
+
+    async def counting_migrate(db):
+        calls["n"] += 1
+        await real_migrate(db)
+
+    store._migrate = counting_migrate
+    asyncio.run(store.init())
+    asyncio.run(store.init())
+    asyncio.run(store.init())
+    assert calls["n"] == 1
+
+
+async def test_open_reuses_single_connection(tmp_path):
+    """While a long-lived connection is open, methods must NOT open new connections."""
+    import aiosqlite
+
+    store = MemoryStore(db_path=tmp_path / "reuse.db")
+    connects = {"n": 0}
+    real_connect = aiosqlite.connect
+
+    def counting_connect(path):
+        connects["n"] += 1
+        return real_connect(path)
+
+    import superseded.memory.store as store_mod
+
+    orig = store_mod.aiosqlite.connect
+    store_mod.aiosqlite.connect = counting_connect
+    try:
+        async with store:
+            await store.record_finding(
+                finding_id="a",
+                repo="o/r",
+                pass_name="security",
+                severity="critical",
+                file="x.py",
+                line=1,
+                title="t",
+                description="d",
+            )
+            await store.record_finding(
+                finding_id="b",
+                repo="o/r",
+                pass_name="security",
+                severity="critical",
+                file="x.py",
+                line=2,
+                title="t2",
+                description="d",
+            )
+            await store.record_feedback("a", "dismiss")
+            await store.get_dismissed_findings("o/r")
+    finally:
+        store_mod.aiosqlite.connect = orig
+    assert connects["n"] == 1
+
+
+async def test_aenter_aexit_round_trip(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "ctx.db")
+    async with store:
+        assert store._conn is not None
+    assert store._conn is None

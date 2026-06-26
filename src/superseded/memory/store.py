@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import aiosqlite
@@ -41,14 +43,68 @@ CREATE TABLE IF NOT EXISTS installations (
 
 
 class MemoryStore:
+    """SQLite-backed memory with an optional long-lived connection.
+
+    Callers that perform many operations (the CLI persisting N findings, the
+    server worker recording a review) should use ``async with store:`` so all
+    operations reuse a single connection. Each ``init()``/``open()`` runs the
+    ALTER TABLE migration exactly once per instance.
+    """
+
     def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = db_path or DEFAULT_DB_PATH
+        self._conn: aiosqlite.Connection | None = None
+        self._migrated = False
+
+    async def __aenter__(self) -> MemoryStore:
+        await self.open()
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.close()
+
+    async def open(self) -> None:
+        """Open (and migrate) a long-lived connection. Idempotent."""
+        if self._conn is not None:
+            return
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = await aiosqlite.connect(self.db_path)
+        await self._conn.executescript(SCHEMA)
+        if not self._migrated:
+            await self._migrate(self._conn)
+            self._migrated = True
+        await self._conn.commit()
+
+    async def close(self) -> None:
+        if self._conn is not None:
+            await self._conn.close()
+            self._conn = None
+
+    @asynccontextmanager
+    async def _db(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Yield the long-lived connection when open, else a one-shot connection."""
+        if self._conn is not None:
+            yield self._conn
+            return
+        async with aiosqlite.connect(self.db_path) as db:
+            yield db
 
     async def init(self) -> None:
+        """Ensure the schema exists and migration has run once.
+
+        Idempotent. Prefer ``async with store:`` for batched work; this is the
+        back-compat entrypoint for callers that historically called ``init()``
+        before each operation. Migration runs at most once per instance.
+        """
+        if self._conn is not None:
+            return  # open() already created the schema + migrated.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(self.db_path) as db:
             await db.executescript(SCHEMA)
-            await self._migrate(db)
+            if not self._migrated:
+                await self._migrate(db)
+                self._migrated = True
+            await db.commit()
 
     async def _migrate(self, db: aiosqlite.Connection) -> None:
         cursor = await db.execute("PRAGMA table_info(findings)")
@@ -70,7 +126,7 @@ class MemoryStore:
         description: str,
         reasoning: str = "",
     ) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._db() as db:
             await db.execute(
                 "INSERT INTO findings "
                 "(id, repo, pass, severity, file, line, title, description, reasoning) "
@@ -87,7 +143,7 @@ class MemoryStore:
             await db.commit()
 
     async def set_comment_id(self, finding_id: str, comment_id: int) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._db() as db:
             await db.execute(
                 "UPDATE findings SET comment_id = ? WHERE id = ?",
                 (comment_id, finding_id),
@@ -95,7 +151,7 @@ class MemoryStore:
             await db.commit()
 
     async def get_finding_by_comment_id(self, comment_id: int) -> dict | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._db() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
                 "SELECT * FROM findings WHERE comment_id = ?",
@@ -105,7 +161,7 @@ class MemoryStore:
             return dict(row) if row is not None else None
 
     async def record_feedback(self, finding_id: str, action: str) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._db() as db:
             await db.execute(
                 "INSERT INTO feedback (finding_id, action) VALUES (?, ?)",
                 (finding_id, action),
@@ -125,7 +181,7 @@ class MemoryStore:
         return True
 
     async def get_dismissed_findings(self, repo: str) -> list[dict]:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._db() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
                 "SELECT * FROM findings WHERE repo = ? AND dismissed = TRUE",
@@ -135,7 +191,7 @@ class MemoryStore:
             return [dict(row) for row in rows]
 
     async def record_installation(self, installation_id: int, owner: str, repos: list[str]) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._db() as db:
             await db.execute(
                 "INSERT OR REPLACE INTO installations (app_installation_id, owner, repos) "
                 "VALUES (?, ?, ?)",
@@ -144,7 +200,7 @@ class MemoryStore:
             await db.commit()
 
     async def get_installation(self, installation_id: int) -> dict | None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._db() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
                 "SELECT * FROM installations WHERE app_installation_id = ?",
@@ -154,7 +210,7 @@ class MemoryStore:
             return dict(row) if row is not None else None
 
     async def remove_installation(self, installation_id: int) -> None:
-        async with aiosqlite.connect(self.db_path) as db:
+        async with self._db() as db:
             await db.execute(
                 "DELETE FROM installations WHERE app_installation_id = ?",
                 (installation_id,),

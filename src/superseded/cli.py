@@ -277,11 +277,7 @@ def _run_review(
     enable_conventions = config.conventions and not no_conventions
     enable_specs = config.spec_retrieval and not no_specs
 
-    from concurrent.futures import ThreadPoolExecutor
-
-    with ThreadPoolExecutor(max_workers=1) as temp_executor:
-        pr_future = temp_executor.submit(fetch_pr_description, pr) if pr is not None else None
-        pr_description = pr_future.result() if pr_future else None
+    pr_description = fetch_pr_description(pr) if pr is not None else None
 
     context = gather_context(
         diff,
@@ -341,38 +337,40 @@ def _run_review(
 
     if post and pr is not None:
         _status("Posting to GitHub PR...")
-        comment_ids = post_review_to_pr(pr=pr, result=result)
+        comment_ids = post_review_to_pr(pr=pr, result=result, diff=diff)
         if store is not None:
             asyncio.run(_link_comment_ids(store, result, comment_ids))
         _status(f"Done. Posted {len(comment_ids)} comment(s).")
 
 
 async def _load_dismissed(store: MemoryStore, repo: str) -> list[dict]:
-    await store.init()
-    return await store.get_dismissed_findings(repo)
+    async with store:
+        return await store.get_dismissed_findings(repo)
 
 
 async def _persist_findings(store: MemoryStore, result: ReviewResult, repo: str) -> None:
-    for f in result.findings:
-        await store.record_finding(
-            finding_id=f.id,
-            repo=repo,
-            pass_name=f.pass_name,
-            severity=f.severity,
-            file=f.file,
-            line=f.line,
-            title=f.title,
-            description=f.description,
-            reasoning=f.reasoning,
-        )
+    async with store:
+        for f in result.findings:
+            await store.record_finding(
+                finding_id=f.id,
+                repo=repo,
+                pass_name=f.pass_name,
+                severity=f.severity,
+                file=f.file,
+                line=f.line,
+                title=f.title,
+                description=f.description,
+                reasoning=f.reasoning,
+            )
 
 
 async def _link_comment_ids(
     store: MemoryStore, result: ReviewResult, comment_ids: list[int | None]
 ) -> None:
-    for finding, comment_id in zip(result.findings, comment_ids, strict=True):
-        if comment_id is not None:
-            await store.set_comment_id(finding.id, comment_id)
+    async with store:
+        for finding, comment_id in zip(result.findings, comment_ids, strict=True):
+            if comment_id is not None:
+                await store.set_comment_id(finding.id, comment_id)
 
 
 @cli.command()
@@ -489,6 +487,7 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
         github=github,
         repo_manager=repo_manager,
         max_concurrent=config.max_concurrent_reviews,
+        store=MemoryStore(),
     )
 
     import uvicorn

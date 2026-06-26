@@ -17,6 +17,7 @@ def check_pr_feedback(pr: int, repo: str) -> list[dict]:
             capture_output=True,
             text=True,
             check=True,
+            timeout=30,
         )
     except subprocess.CalledProcessError:
         return []

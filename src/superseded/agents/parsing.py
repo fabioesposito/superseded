@@ -6,17 +6,79 @@ import re
 JSON_ARRAY_RE = re.compile(r"\[\s*\{.*?\}\s*\]", re.DOTALL)
 
 
+def _extract_first_balanced_array(raw: str, start: int = 0) -> tuple[str, int] | None:
+    """Return (text, end_index) of the first balanced ``[...]`` after *start*.
+
+    Respects JSON string literals (with escapes) so a ``}]`` substring inside
+    a string value does not prematurely close the scan. Returns ``None`` if no
+    balanced array starts at or after *start*.
+    """
+    n = len(raw)
+    i = start
+    while i < n:
+        # Find the next '[' that could begin an array.
+        open_idx = raw.find("[", i)
+        if open_idx == -1:
+            return None
+        depth = 0
+        in_str = False
+        esc = False
+        j = open_idx
+        end = -1
+        while j < n:
+            ch = raw[j]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+            else:
+                if ch == '"':
+                    in_str = True
+                elif ch == "[":
+                    depth += 1
+                elif ch == "]":
+                    depth -= 1
+                    if depth == 0:
+                        end = j
+                        break
+            j += 1
+        if end != -1:
+            return raw[open_idx : end + 1], end + 1
+        # No closer for this '['; advance past it and keep scanning.
+        i = open_idx + 1
+    return None
+
+
 def extract_json_array(raw: str) -> list[dict] | None:
+    # Prefer the cheap regex match first: most agents emit a clean JSON array
+    # and the regex is allocation-free. If it decodes, we are done.
     match = JSON_ARRAY_RE.search(raw)
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group())
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(data, list):
-        return None
-    return data
+    if match:
+        try:
+            data = json.loads(match.group())
+        except json.JSONDecodeError:
+            data = None
+        if isinstance(data, list):
+            return data
+
+    # Fall back to a bracket-aware scan that handles `}]` appearing inside
+    # string values, nested objects, and trailing commentary the non-greedy
+    # regex would truncate on. Try each balanced `[...]` until one parses.
+    scan_from = 0
+    while True:
+        span = _extract_first_balanced_array(raw, scan_from)
+        if span is None:
+            return None
+        text, scan_from = span
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, list):
+            return data
 
 
 def parse_markdown_findings(raw: str, pass_name: str) -> list[dict]:

@@ -484,6 +484,70 @@ async def test_run_review_for_job_end_to_end(tmp_path):
     assert "1 critical" in outcome.title
 
 
+@pytest.mark.asyncio
+async def test_worker_persists_findings_and_comment_ids(tmp_path):
+    """After a successful review the worker must persist findings and link comment ids.
+
+    Closes the self-improvement loop on the server path: findings are stored so
+    future reviews can avoid re-raising dismissed ones.
+    """
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+
+    finding = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        end_line=2,
+        title="t",
+        description="d",
+        suggestion="s",
+    )
+    fake_engine = MagicMock()
+    fake_engine.review.return_value = ReviewResult(findings=[finding])
+
+    github = FakeGitHubApp()
+    # post_review returns one comment id aligned with the single finding.
+    github.post_review = AsyncMock(return_value=[4242])
+    repo_manager = FakeRepoManager()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
+    job = ReviewJob(1, "owner", "repo", 7, "abc", "def")
+
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo",
+            new_callable=AsyncMock,
+            return_value=tmp_path,
+        ),
+        patch("superseded.config.load_config", return_value=Config()),
+        patch("superseded.review.engine.ReviewEngine.select", return_value=fake_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value=None),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
+    ):
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="t",
+            job=job,
+            correlation_id="c",
+            store=store,
+        )
+
+    # Persisted with repo key and comment_id linked.
+    async with store:
+        rows = await store.get_dismissed_findings("owner/repo")
+        by_id = await store.get_finding_by_comment_id(4242)
+    assert rows == []  # not dismissed yet
+    assert by_id is not None
+    assert by_id["id"] == finding.id
+    assert by_id["repo"] == "owner/repo"
+    assert by_id["comment_id"] == 4242
+
+
 def test_semaphore_acquired_after_token_fetch():
     """Network call should not hold concurrency slot."""
     source = inspect.getsource(ReviewWorker._process)
@@ -536,5 +600,47 @@ async def test_concurrency_limit_blocks_second_job():
         release.set()
         await task1
         await task2
+
+    assert worker.active_count == 0
+
+
+@pytest.mark.asyncio
+async def test_enqueue_rejects_overflow():
+    """When the pending queue is full, enqueue must refuse rather than grow unbounded."""
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1, max_queue=1)
+
+    block = asyncio.Event()
+
+    async def slow_review(**kwargs):
+        await block.wait()
+        return ReviewOutcome(conclusion="success", title="0 findings", summary="done")
+
+    with patch(
+        "superseded.server.worker._run_review_for_job",
+        new_callable=AsyncMock,
+        side_effect=slow_review,
+    ):
+        # Occupy the single active slot.
+        active = ReviewJob(1, "o", "r", 1, "a", "b")
+        task = asyncio.create_task(worker._process(active))
+        # Allow the worker to enter the review and hold the semaphore.
+        for _ in range(200):
+            if worker.active_count == 1:
+                break
+            await asyncio.sleep(0.005)
+        assert worker.active_count == 1
+
+        # First queued job fills the (max_queue=1) pending slot.
+        await worker.enqueue(ReviewJob(1, "o", "r", 2, "a", "b"))
+        assert worker.queue.qsize() == 1
+
+        # Second queued job must be rejected — the queue is full.
+        with pytest.raises(asyncio.QueueFull):
+            await worker.enqueue(ReviewJob(1, "o", "r", 3, "a", "b"))
+
+        block.set()
+        await task
 
     assert worker.active_count == 0

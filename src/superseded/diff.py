@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 DEFAULT_CONTEXT_PADDING = 20
+DEFAULT_GH_TIMEOUT = 30
 
 
 def fetch_diff(
@@ -36,6 +37,7 @@ def _fetch_pr_diff(pr: int) -> str:
             capture_output=True,
             text=True,
             check=True,
+            timeout=DEFAULT_GH_TIMEOUT,
         )
     except FileNotFoundError as err:
         raise RuntimeError(
@@ -54,6 +56,7 @@ def _fetch_git_diff(diff_range: str, files: list[str] | None = None) -> str:
             capture_output=True,
             text=True,
             check=True,
+            timeout=DEFAULT_GH_TIMEOUT,
         )
     except FileNotFoundError as err:
         raise RuntimeError("'git' not found on PATH. Install git to use --diff.") from err
@@ -67,11 +70,56 @@ def fetch_pr_description(pr: int) -> str | None:
             capture_output=True,
             text=True,
             check=True,
+            timeout=DEFAULT_GH_TIMEOUT,
         )
     except subprocess.CalledProcessError, FileNotFoundError:
         return None
     body = result.stdout.strip()
     return body or None
+
+
+_PLUS_RE = re.compile(r"^\+\+\+ b/(.+?)\s*$", re.MULTILINE)
+_PLUS_QUOTED_RE = re.compile(r'^\+\+\+ "b/(.+?)"\s*$', re.MULTILINE)
+_MINUS_RE = re.compile(r"^--- a/(.+?)\s*$", re.MULTILINE)
+_MINUS_QUOTED_RE = re.compile(r'^--- "a/(.+?)"\s*$', re.MULTILINE)
+# Blocks are split on `diff --git `, so the block body begins with `a/<old> b/<new>`.
+_HEADER_RE = re.compile(r"^a/.+? b/(.+?)\s*$", re.MULTILINE)
+_HEADER_QUOTED_RE = re.compile(r'^"a/.+?" "b/(.+?)"\s*$', re.MULTILINE)
+
+
+def _unescape_git_path(s: str) -> str:
+    """Reverse git's C-style path quoting (\" \\\\ \\t \\n are the common escapes)."""
+    return s.replace('\\"', '"').replace("\\\\", "\\").replace("\\t", "\t").replace("\\n", "\n")
+
+
+def _extract_path(block: str) -> str | None:
+    """Pick the canonical filesystem path for a diff block.
+
+    Prefers the new side (``+++ b/<path>``), which is correct for renames and
+    additions; falls back to the old side for deletions (``+++ /dev/null``).
+    When the block has no ``+++``/``---`` lines (binary files), parses the
+    ``diff --git a/<old> b/<new>`` header for the new path. Handles quoted
+    paths containing spaces or special characters.
+    """
+    m = _PLUS_RE.search(block)
+    if m and m.group(1) != "/dev/null":
+        return m.group(1)
+    m = _PLUS_QUOTED_RE.search(block)
+    if m:
+        return _unescape_git_path(m.group(1))
+    m = _MINUS_RE.search(block)
+    if m and m.group(1) != "/dev/null":
+        return m.group(1)
+    m = _MINUS_QUOTED_RE.search(block)
+    if m:
+        return _unescape_git_path(m.group(1))
+    m = _HEADER_RE.search(block)
+    if m:
+        return m.group(1)
+    m = _HEADER_QUOTED_RE.search(block)
+    if m:
+        return _unescape_git_path(m.group(1))
+    return None
 
 
 def parse_diff_files(diff: str) -> list[dict[str, str]]:
@@ -80,9 +128,9 @@ def parse_diff_files(diff: str) -> list[dict[str, str]]:
     for part in parts:
         if not part.strip():
             continue
-        match = re.search(r"a/(.+?) b/", part)
-        if match:
-            files.append({"file": match.group(1), "diff": "diff --git " + part})
+        path = _extract_path(part)
+        if path:
+            files.append({"file": path, "diff": "diff --git " + part})
     return files
 
 
@@ -108,7 +156,7 @@ def compute_file_context(
             if root is not None:
                 resolved = full.resolve()
                 root_resolved = root.resolve()
-                if not str(resolved).startswith(str(root_resolved)):
+                if not resolved.is_relative_to(root_resolved):
                     continue
             lines = _read_file_lines(str(full))
         except FileNotFoundError, OSError:
@@ -133,6 +181,7 @@ def repo_root() -> Path:
             capture_output=True,
             text=True,
             check=True,
+            timeout=DEFAULT_GH_TIMEOUT,
         )
         return Path(result.stdout.strip())
     except subprocess.CalledProcessError, FileNotFoundError:

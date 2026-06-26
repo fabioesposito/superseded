@@ -38,6 +38,6 @@ class RepoManager:
         candidate = self.base_path / str(installation_id) / owner / repo / str(pr_number)
         resolved = candidate.resolve()
         base_resolved = self.base_path.resolve()
-        if not str(resolved).startswith(str(base_resolved)):
+        if not resolved.is_relative_to(base_resolved):
             raise ValueError(f"job_dir escapes base_path: {resolved}")
         return candidate

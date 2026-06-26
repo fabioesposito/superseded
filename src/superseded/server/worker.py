@@ -10,12 +10,13 @@ import yaml
 
 from superseded.config import Config
 from superseded.context.gathering import gather_context
+from superseded.models import ReviewResult
 from superseded.output.github_pr import build_review_payload
 from superseded.review.engine import ReviewEngine
 from superseded.server.checkout import checkout_repo
 
 if TYPE_CHECKING:
-    from superseded.models import ReviewResult
+    from superseded.memory.store import MemoryStore
     from superseded.server.github import GitHubApp
     from superseded.server.repo_manager import RepoManager
 
@@ -55,19 +56,38 @@ class ReviewWorker:
         github: GitHubApp,
         repo_manager: RepoManager,
         max_concurrent: int = 3,
+        max_queue: int = 100,
+        store: MemoryStore | None = None,
     ) -> None:
         self.github = github
         self.repo_manager = repo_manager
-        self.queue: asyncio.Queue[ReviewJob] = asyncio.Queue()
+        # Bounded pending queue: a webhook flood is rejected (callers drop /
+        # 429) rather than allowed to grow without limit and exhaust memory.
+        self.queue: asyncio.Queue[ReviewJob] = asyncio.Queue(maxsize=max_queue)
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._active_count = 0
+        self.store = store
 
     @property
     def active_count(self) -> int:
         return self._active_count
 
     async def enqueue(self, job: ReviewJob) -> None:
-        await self.queue.put(job)
+        # put_nowait raises QueueFull instantly; a failed enqueue is logged and
+        # surfaced to the caller (webhook handler turns it into a 429) rather
+        # than blocking the handler indefinitely or growing without limit.
+        try:
+            self.queue.put_nowait(job)
+        except asyncio.QueueFull:
+            logger.warning(
+                "review_queue_full",
+                extra={
+                    "repo": f"{job.owner}/{job.repo}",
+                    "pr": job.pr_number,
+                    "queue_size": self.queue.maxsize,
+                },
+            )
+            raise
 
     async def run(self) -> None:
         while True:
@@ -120,6 +140,7 @@ class ReviewWorker:
                     token=token,
                     job=job,
                     correlation_id=correlation_id,
+                    store=self.store,
                 )
 
                 await self.github.update_check_run(
@@ -192,6 +213,7 @@ async def _run_review_for_job(
     token: str,
     job: ReviewJob,
     correlation_id: str,
+    store: MemoryStore | None = None,
 ) -> ReviewOutcome:
     tmp_dir = repo_manager.job_dir(job.installation_id, job.owner, job.repo, job.pr_number)
 
@@ -247,7 +269,7 @@ async def _run_review_for_job(
 
         payload = build_review_payload(result)
 
-        await github.post_review(
+        comment_ids = await github.post_review(
             token=token,
             owner=job.owner,
             repo=job.repo,
@@ -256,6 +278,25 @@ async def _run_review_for_job(
             comments=payload["comments"],
             event=payload["event"],
         )
+
+        if store is not None:
+            repo_key = f"{job.owner}/{job.repo}"
+            async with store:
+                for f in result.findings:
+                    await store.record_finding(
+                        finding_id=f.id,
+                        repo=repo_key,
+                        pass_name=f.pass_name,
+                        severity=f.severity,
+                        file=f.file,
+                        line=f.line,
+                        title=f.title,
+                        description=f.description,
+                        reasoning=f.reasoning,
+                    )
+                for finding, cid in zip(result.findings, comment_ids, strict=True):
+                    if cid is not None:
+                        await store.set_comment_id(finding.id, cid)
 
         conclusion = "success" if payload["event"] != "REQUEST_CHANGES" else "failure"
         title = build_check_run_title(result)

@@ -143,12 +143,12 @@ def test_post_review_suggestion_is_comment(mock_run):
 def test_post_review_returns_comment_ids(mock_run):
     mock_run.return_value = MagicMock(
         returncode=0,
-        stdout='{"id": 777, "comments": [{"id": 9001}, {"id": 9002}]}',
+        stdout='{"id": 777, "comments": [{"id": 9001}]}',
         stderr="",
     )
     result = make_result()
-    ids = post_review_to_pr(pr=123, result=result, repo="owner/repo")
-    assert ids == [9001, 9002]
+    ids = post_review_to_pr(pr=123, result=result, repo="owner/repo", diff="")
+    assert ids == [9001]
 
 
 @patch("subprocess.run")
@@ -334,124 +334,41 @@ def test_current_repo_returns_none_on_file_not_found():
         assert current_repo() is None
 
 
-def test_partition_comments_all_valid():
-    from superseded.output.github_pr import _partition_comments
+def test_out_of_range_indices_matches_hunks():
+    from superseded.output.github_pr import _out_of_range_indices
 
-    payload = {"body": "test", "comments": [{"path": "a.py", "line": 1, "body": "x"}]}
-    with patch(
-        "superseded.output.github_pr.subprocess.run",
-        return_value=MagicMock(
-            returncode=0,
-            stdout=json.dumps({"comments": [{"id": 1}]}),
-            stderr="",
-        ),
-    ):
-        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
-        assert bad == set()
-        assert ids == [1]
-
-
-def test_partition_comments_one_bad():
-    from superseded.output.github_pr import _partition_comments
-
-    payload = {"body": "test", "comments": [{"path": "gone.py", "line": 999, "body": "x"}]}
-    with patch(
-        "superseded.output.github_pr.subprocess.run",
-        side_effect=subprocess.CalledProcessError(1, "gh"),
-    ):
-        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
-        assert bad == {0}
-        assert ids == []
-
-
-def test_partition_comments_mixed():
-    from superseded.output.github_pr import _partition_comments
-
-    payload = {
-        "body": "test",
-        "comments": [
-            {"path": "a.py", "line": 1, "body": "good"},
-            {"path": "b.py", "line": 999, "body": "bad"},
-        ],
-    }
-
-    def side_effect(cmd, **kwargs):
-        input_json = json.loads(kwargs.get("input", "{}"))
-        comment_lines = [c["line"] for c in input_json.get("comments", [])]
-        if 999 in comment_lines:
-            raise subprocess.CalledProcessError(1, "gh")
-        return MagicMock(
-            returncode=0,
-            stdout=json.dumps({"comments": [{"id": 1}]}),
-            stderr="",
-        )
-
-    with patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect):
-        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
-        assert bad == {1}
-        assert len(ids) == 1
+    diff = """diff --git a/ok.py b/ok.py
+--- a/ok.py
++++ b/ok.py
+@@ -1,5 +1,5 @@
+ context
+-old
++new
+ context
+diff --git a/other.py b/other.py
+--- a/other.py
++++ b/other.py
+@@ -10,3 +10,3 @@
+ ctx
+-old
++new
+"""
+    comments = [
+        {"path": "ok.py", "line": 3},  # in hunk (1..5)
+        {"path": "ok.py", "line": 99},  # outside hunk
+        {"path": "missing.py", "line": 1},  # file absent from diff
+        {"path": "other.py", "line": 10},  # in other hunk (10..12)
+    ]
+    bad = _out_of_range_indices(comments, diff)
+    assert bad == {1, 2}
 
 
-def test_partition_comments_empty():
-    from superseded.output.github_pr import _partition_comments
+def test_out_of_range_indices_empty_diff_treats_all_as_good():
+    from superseded.output.github_pr import _out_of_range_indices
 
-    bad, ids = _partition_comments([], {"body": "test"}, "r", 1)
-    assert bad == set()
-    assert ids == []
-
-
-def test_partition_comments_all_valid_three():
-    from superseded.output.github_pr import _partition_comments
-
-    payload = {
-        "body": "test",
-        "comments": [
-            {"path": "a.py", "line": 1, "body": "c1"},
-            {"path": "b.py", "line": 2, "body": "c2"},
-            {"path": "c.py", "line": 3, "body": "c3"},
-        ],
-    }
-
-    with patch(
-        "superseded.output.github_pr.subprocess.run",
-        return_value=MagicMock(
-            returncode=0,
-            stdout=json.dumps({"comments": [{"id": 1}, {"id": 2}, {"id": 3}]}),
-            stderr="",
-        ),
-    ):
-        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
-        assert bad == set()
-        assert len(ids) == 3
-
-
-def test_partition_comments_one_bad_three():
-    from superseded.output.github_pr import _partition_comments
-
-    payload = {
-        "body": "test",
-        "comments": [
-            {"path": "a.py", "line": 1, "body": "c1"},
-            {"path": "b.py", "line": 999, "body": "c2"},
-            {"path": "c.py", "line": 3, "body": "c3"},
-        ],
-    }
-
-    def side_effect(cmd, **kwargs):
-        input_json = json.loads(kwargs.get("input", "{}"))
-        comment_lines = [c["line"] for c in input_json.get("comments", [])]
-        if 999 in comment_lines:
-            raise subprocess.CalledProcessError(1, "gh")
-        return MagicMock(
-            returncode=0,
-            stdout=json.dumps({"comments": [{"id": 1}]}),
-            stderr="",
-        )
-
-    with patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect):
-        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
-        assert bad == {1}
-        assert len(ids) == 2
+    comments = [{"path": "a.py", "line": 999}]
+    assert _out_of_range_indices(comments, "") == set()
+    assert _out_of_range_indices(comments, "   ") == set()
 
 
 def test_build_fallback_text_single():
@@ -503,37 +420,8 @@ def test_build_fallback_text_multiple():
     assert "b.py:2" in text
 
 
-def test_partition_comments_two_bad_three():
-    from superseded.output.github_pr import _partition_comments
-
-    payload = {
-        "body": "test",
-        "comments": [
-            {"path": "a.py", "line": 1, "body": "c1"},
-            {"path": "b.py", "line": 999, "body": "c2"},
-            {"path": "c.py", "line": 999, "body": "c3"},
-        ],
-    }
-
-    def side_effect(cmd, **kwargs):
-        input_json = json.loads(kwargs.get("input", "{}"))
-        comment_lines = [c["line"] for c in input_json.get("comments", [])]
-        if 999 in comment_lines:
-            raise subprocess.CalledProcessError(1, "gh")
-        return MagicMock(
-            returncode=0,
-            stdout=json.dumps({"comments": [{"id": 1}]}),
-            stderr="",
-        )
-
-    with patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect):
-        bad, ids = _partition_comments(payload["comments"], payload, "r", 1)
-        assert bad == {1, 2}
-        assert len(ids) == 1
-
-
-def test_post_review_fallback_mixed():
-    """Happy path fails, binary search isolates bad comment, final post is body-only."""
+def test_post_review_local_validation_mixed():
+    """In-range findings post once; out-of-range move to a single body-only fallback."""
     result = ReviewResult(
         findings=[
             Finding(
@@ -559,21 +447,27 @@ def test_post_review_fallback_mixed():
         ]
     )
 
-    call_count = [0]
+    # Diff has a hunk only for ok.py, line 1 is in range.
+    diff = """diff --git a/ok.py b/ok.py
+--- a/ok.py
++++ b/ok.py
+@@ -1,3 +1,3 @@
+ ctx
+-old
++new
+ ctx
+"""
     payloads = []
+    call_count = [0]
 
     def side_effect(cmd, **kwargs):
         call_count[0] += 1
         input_json = json.loads(kwargs.get("input", "{}"))
         payloads.append(input_json)
-        if call_count[0] == 1:
-            raise subprocess.CalledProcessError(1, "gh")
-        comment_bodies = [c.get("body", "") for c in input_json.get("comments", [])]
-        if any("out-of-range" in b for b in comment_bodies):
-            raise subprocess.CalledProcessError(1, "gh")
+        # No probe posts — patches on real GH would not be expected to fail here.
         return MagicMock(
             returncode=0,
-            stdout=json.dumps({"comments": [{"id": 1}]}),
+            stdout=json.dumps({"comments": [{"id": 7}]}),
             stderr="",
         )
 
@@ -581,18 +475,23 @@ def test_post_review_fallback_mixed():
         patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect),
         patch("superseded.output.github_pr._repo", return_value="owner/repo"),
     ):
-        ids = post_review_to_pr(pr=1, result=result)
+        ids = post_review_to_pr(pr=1, result=result, diff=diff)
 
-    # Final payload is body-only (valid comments already live from probe)
-    final_payload = payloads[-1]
-    assert final_payload["comments"] == []
-    assert "## Out-of-range findings" in final_payload["body"]
-    assert "bad.py:999" in final_payload["body"]
-    assert ids == [1, None]  # valid finding gets ID, out-of-range gets None
+    # Exactly two posts: good-comments review, then body-only fallback.
+    assert call_count[0] == 2
+    first, second = payloads
+    # First post carries only the in-range comment.
+    assert len(first["comments"]) == 1
+    assert first["comments"][0]["path"] == "ok.py"
+    # Second post is body-only with fallback section appended.
+    assert second["comments"] == []
+    assert "## Out-of-range findings" in second["body"]
+    assert "bad.py:999" in second["body"]
+    assert ids == [7, None]
 
 
-def test_post_review_fallback_all_bad():
-    """All comments out of range -> body-only review with fallback text."""
+def test_post_review_local_validation_all_bad():
+    """When every finding is out of range, only ONE body-only post happens."""
     result = ReviewResult(
         findings=[
             Finding(
@@ -617,12 +516,83 @@ def test_post_review_fallback_all_bad():
             ),
         ]
     )
-
+    # Diff touches a.py but only around line 1, so 999 is out of range; b.py absent.
+    diff = """diff --git a/a.py b/a.py
+--- a/a.py
++++ b/a.py
+@@ -1,1 +1,1 @@
+-old
++new
+"""
     payloads = []
 
     def side_effect(cmd, **kwargs):
         input_json = json.loads(kwargs.get("input", "{}"))
         payloads.append(input_json)
+        return MagicMock(
+            returncode=0,
+            stdout=json.dumps({"id": 1, "comments": []}),
+            stderr="",
+        )
+
+    with (
+        patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect),
+        patch("superseded.output.github_pr._repo", return_value="owner/repo"),
+    ):
+        ids = post_review_to_pr(pr=1, result=result, diff=diff)
+
+    assert len(payloads) == 1  # no probe posts — single body-only review
+    assert payloads[0]["comments"] == []
+    assert "a.py:999" in payloads[0]["body"]
+    assert "b.py:999" in payloads[0]["body"]
+    assert ids == [None, None]
+
+
+def test_post_review_local_validation_rejects_probe_posts():
+    """Local validation must never fall back to binary-search probe spam.
+
+    Even if GitHub rejects the pre-filtered good batch (e.g. stale diff), the
+    recovery is a single body-only review — not recursive probe posts.
+    """
+    result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="ok.py",
+                line=1,
+                end_line=1,
+                title="good",
+                description="d",
+                suggestion="s",
+            ),
+            Finding(
+                pass_name="style",
+                severity="nit",
+                file="bad.py",
+                line=999,
+                end_line=999,
+                title="out-of-range",
+                description="d",
+                suggestion="s",
+            ),
+        ]
+    )
+    diff = """diff --git a/ok.py b/ok.py
+--- a/ok.py
++++ b/ok.py
+@@ -1,3 +1,3 @@
+ ctx
+-old
++new
+ ctx
+"""
+    call_count = [0]
+
+    def side_effect(cmd, **kwargs):
+        call_count[0] += 1
+        input_json = json.loads(kwargs.get("input", "{}"))
+        # Every post carrying inline comments fails (simulating stale diff).
         if input_json.get("comments"):
             raise subprocess.CalledProcessError(1, "gh")
         return MagicMock(
@@ -635,14 +605,11 @@ def test_post_review_fallback_all_bad():
         patch("superseded.output.github_pr.subprocess.run", side_effect=side_effect),
         patch("superseded.output.github_pr._repo", return_value="owner/repo"),
     ):
-        ids = post_review_to_pr(pr=1, result=result)
+        ids = post_review_to_pr(pr=1, result=result, diff=diff)
 
-    final_payload = payloads[-1]
-    assert final_payload["comments"] == []
-    assert "## Out-of-range findings" in final_payload["body"]
-    assert "a.py:999" in final_payload["body"]
-    assert "b.py:999" in final_payload["body"]
-    assert ids == [None, None]  # all out-of-range, no valid IDs
+    # Exactly two posts total: the rejected good batch, then one body-only.
+    assert call_count[0] == 2
+    assert ids == [None, None]
 
 
 def test_post_review_no_comments_raises():
@@ -657,4 +624,4 @@ def test_post_review_no_comments_raises():
         patch("superseded.output.github_pr._repo", return_value="owner/repo"),
         pytest.raises(subprocess.CalledProcessError),
     ):
-        post_review_to_pr(pr=1, result=result)
+        post_review_to_pr(pr=1, result=result, diff="")

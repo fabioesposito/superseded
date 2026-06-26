@@ -174,3 +174,37 @@ def test_extract_json_array_finds_first_of_two_arrays():
     assert result is not None
     assert len(result) == 1
     assert result[0]["severity"] == "critical"
+
+
+def test_extract_json_array_recovers_when_closing_brace_appears_in_string():
+    r"""A `}]` substring inside a string value must not truncate the array.
+
+    Regression for the non-greedy regex `\[\s*\{.*?\}\s*\]` which returned the
+    smallest match ending in `}]` and silently discarded the rest of the JSON.
+    """
+    from superseded.agents.parsing import extract_json_array
+
+    raw = (
+        "preamble\n"
+        '[{"severity": "critical", "file": "a.py", "line": 1, '
+        '"title": "beware }] injection", "suggestion": "s"}]\n'
+        "trailing commentary\n"
+    )
+    result = extract_json_array(raw)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0]["title"] == "beware }] injection"
+    assert result[0]["file"] == "a.py"
+
+
+def test_extract_json_array_recovers_when_nested_braces_in_string():
+    from superseded.agents.parsing import extract_json_array
+
+    raw = (
+        '[{"severity": "critical", "file": "a.py", "line": 1, '
+        r'"description": "objects look like { \"a\": 1 }"}]'
+    )
+    result = extract_json_array(raw)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0]["severity"] == "critical"

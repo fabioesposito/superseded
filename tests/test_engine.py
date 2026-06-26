@@ -9,14 +9,16 @@ from superseded.models import Finding, ReviewResult
 from superseded.review.engine import ReviewEngine
 
 
-def make_finding(pass_name="security", severity="critical", file="a.py", line=1):
+def make_finding(
+    pass_name="security", severity="critical", file="a.py", line=1, title="test issue"
+):
     return Finding(
         pass_name=pass_name,
         severity=severity,
         file=file,
         line=line,
         end_line=line + 1,
-        title="test issue",
+        title=title,
         description="desc",
         suggestion="fix",
     )
@@ -28,6 +30,23 @@ def test_engine_deduplicates():
     engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
     result = engine.merge_findings([[f1], [f2]])
     assert len(result.findings) == 1
+
+
+def test_engine_deduplicates_across_passes():
+    """Two passes flagging the same file/line/title should collapse to one finding.
+
+    `Finding.id` embeds pass_name, so the old `id`-based dedup never merged
+    cross-pass duplicates. The merger must dedupe on file+line+title instead.
+    """
+    security = make_finding(pass_name="security", file="a.py", line=10, title="same bug")
+    correctness = make_finding(pass_name="correctness", file="a.py", line=10, title="same bug")
+    engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
+    result = engine.merge_findings([[security], [correctness]])
+    assert len(result.findings) == 1
+    # The surviving finding retains one of the contributing passes.
+    assert result.findings[0].file == "a.py"
+    assert result.findings[0].line == 10
+    assert result.findings[0].title == "same bug"
 
 
 def test_engine_sorts_by_severity():

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 
+from superseded.diff import _HUNK_RE, DEFAULT_GH_TIMEOUT, parse_diff_files
 from superseded.models import Finding, ReviewResult
 
 
@@ -47,40 +48,69 @@ def build_review_payload(result: ReviewResult) -> dict:
 def _post_review_payload(payload: dict, target_repo: str, pr: int) -> list[int]:
     cmd = ["gh", "api", f"repos/{target_repo}/pulls/{pr}/reviews", "--input", "-"]
     response = subprocess.run(
-        cmd, input=json.dumps(payload), text=True, capture_output=True, check=True
+        cmd,
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=DEFAULT_GH_TIMEOUT,
     )
     return _extract_comment_ids(response.stdout)
 
 
-def _partition_comments(
-    comments: list[dict], base_payload: dict, target_repo: str, pr: int
-) -> tuple[set[int], list[int]]:
-    """Binary-search to identify indices of invalid (out-of-diff-hunk) comments.
+def _file_hunk_windows(diff: str) -> dict[str, list[tuple[int, int]]]:
+    """Map each changed file to its inclusive new-side line windows.
 
-    Returns (bad_indices, comment_ids) — *bad_indices* identifies out-of-range
-    comments; *comment_ids* collects the GitHub comment IDs from every successful
-    probe post, maintained in the same order as the original comment list.
+    Each window is ``(start, end)`` covering the hunk's counted new lines. A
+    hunk ``@@ -a,b +c,d @@`` covers new lines ``[c, c+d-1]`` (d defaults to 1
+    when omitted). Hunks with ``d == 0`` produce an empty window and are skipped.
     """
-    if len(comments) == 0:
-        return set(), []
-    if len(comments) == 1:
-        try:
-            ids = _post_review_payload({**base_payload, "comments": [comments[0]]}, target_repo, pr)
-            return set(), ids
-        except subprocess.CalledProcessError:
-            return {0}, []
+    windows: dict[str, list[tuple[int, int]]] = {}
+    for entry in parse_diff_files(diff):
+        file_path = entry["file"]
+        wins: list[tuple[int, int]] = []
+        for m in _HUNK_RE.finditer(entry["diff"]):
+            start = int(m.group(2))
+            count = int(m.group(3)) if m.group(3) is not None else 1
+            if count <= 0:
+                continue
+            wins.append((start, start + count - 1))
+        windows[file_path] = wins
+    return windows
 
-    # Test the full batch before recursing
-    try:
-        ids = _post_review_payload({**base_payload, "comments": comments}, target_repo, pr)
-        return set(), ids
-    except subprocess.CalledProcessError:
-        pass
 
-    mid = len(comments) // 2
-    left_bad, left_ids = _partition_comments(comments[:mid], base_payload, target_repo, pr)
-    right_bad, right_ids = _partition_comments(comments[mid:], base_payload, target_repo, pr)
-    return left_bad | {i + mid for i in right_bad}, left_ids + right_ids
+def _line_in_any_window(line: int, windows: list[tuple[int, int]]) -> bool:
+    return any(start <= line <= end for start, end in windows)
+
+
+def _out_of_range_indices(comments: list[dict], diff: str) -> set[int]:
+    """Return indices of comments whose line range falls outside the diff hunks.
+
+    A comment is in-range when both its ``start_line`` (if present) and ``line``
+    land within the same file's hunk window. When *diff* is empty/whitespace
+    no validation is possible and every comment is treated as in-range (the
+    caller opts into validation by supplying the diff).
+    """
+    if not diff or not diff.strip() or not comments:
+        return set()
+    windows = _file_hunk_windows(diff)
+    bad: set[int] = set()
+    for i, c in enumerate(comments):
+        path = c.get("path", "")
+        wins = windows.get(path)
+        if not wins:
+            bad.add(i)
+            continue
+        line = int(c.get("line", 0))
+        start_line = c.get("start_line")
+        if start_line is not None:
+            if not _line_in_any_window(int(start_line), wins) or not _line_in_any_window(
+                line, wins
+            ):
+                bad.add(i)
+        elif not _line_in_any_window(line, wins):
+            bad.add(i)
+    return bad
 
 
 def _build_fallback_text(findings: list[Finding]) -> str:
@@ -94,39 +124,52 @@ def _build_fallback_text(findings: list[Finding]) -> str:
     return "".join(lines)
 
 
-def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) -> list[int | None]:
+def post_review_to_pr(
+    pr: int, result: ReviewResult, repo: str | None = None, diff: str = ""
+) -> list[int | None]:
+    """Post a review with inline comments, demoting out-of-range findings to body text.
+
+    Validation is local: each finding's line range is checked against the diff
+    hunks *before* any GitHub API call. In-range findings are posted in a single
+    review; out-of-range findings are appended to the review body as a fallback
+    list and posted in one additional body-only review. If GitHub rejects the
+    pre-filtered good batch anyway (e.g. a stale diff), the entire set is demoted
+    to the body — never probed recursively.
+    """
     payload = build_review_payload(result)
     target_repo = repo if repo is not None else _repo()
+    comments = payload["comments"]
 
-    try:
-        return _post_review_payload(payload, target_repo, pr)
-    except subprocess.CalledProcessError:
-        if not payload["comments"]:
-            raise
+    if not comments:
+        _post_review_payload(payload, target_repo, pr)
+        return []
 
-        bad_indices, comment_ids = _partition_comments(
-            payload["comments"], payload, target_repo, pr
-        )
+    bad_indices = _out_of_range_indices(comments, diff)
+    good_indices = [i for i in range(len(comments)) if i not in bad_indices]
+    comment_ids: list[int | None] = [None] * len(comments)
 
-        bad_findings = [result.findings[i] for i in sorted(bad_indices)]
-        if bad_findings:
-            payload["body"] += _build_fallback_text(bad_findings)
+    good_comments = [comments[i] for i in good_indices]
+    if good_comments:
+        try:
+            ids = _post_review_payload({**payload, "comments": good_comments}, target_repo, pr)
+        except subprocess.CalledProcessError:
+            if not bad_indices:
+                raise
+            # Stale diff / race: demote everything to the fallback body.
+            bad_indices = set(range(len(comments)))
+            good_indices = []
+        else:
+            for j, idx in enumerate(good_indices):
+                if j < len(ids):
+                    comment_ids[idx] = ids[j]
 
-        # Post body-only — valid inline comments are already live from the probe.
+    bad_findings = [result.findings[i] for i in sorted(bad_indices)]
+    if bad_findings:
+        payload["body"] += _build_fallback_text(bad_findings)
         payload["comments"] = []
         _post_review_payload(payload, target_repo, pr)
 
-        # Pad comment_ids with None for out-of-range findings so the result
-        # aligns with result.findings for _link_comment_ids (stored per-finding).
-        padded_ids: list[int | None] = []
-        ci = 0
-        for i in range(len(result.findings)):
-            if i in bad_indices:
-                padded_ids.append(None)
-            else:
-                padded_ids.append(comment_ids[ci])
-                ci += 1
-        return padded_ids
+    return comment_ids
 
 
 def _extract_comment_ids(stdout: str) -> list[int]:
@@ -145,6 +188,7 @@ def _repo() -> str:
         capture_output=True,
         text=True,
         check=True,
+        timeout=DEFAULT_GH_TIMEOUT,
     )
     return result.stdout.strip()
 
