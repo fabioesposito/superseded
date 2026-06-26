@@ -18,6 +18,7 @@ uv run pytest "tests/test_diff.py::test_parse_diff_files" -v   # one test
 uv run ruff check src/ tests/             # lint
 uv run ruff format src/ tests/            # format
 uv run superseded review --diff HEAD~1..HEAD --format json   # run the tool locally
+uv run superseded init                          # detect AI CLIs + write .superseded.yaml
 ```
 
 There is no CI, no Makefile/Taskfile, and no pre-commit hooks configured. Verifying your work = run ruff check + ruff format + pytest yourself before declaring done.
@@ -36,6 +37,7 @@ There is no CI, no Makefile/Taskfile, and no pre-commit hooks configured. Verify
 - Entry point: `superseded = superseded.cli:cli` (a click group). CLI commands are `review` and `feedback` (`src/superseded/cli.py`).
 - `review/engine.py` runs passes concurrently via `ThreadPoolExecutor(max_workers=len(passes))`; each pass builds a prompt (`review/prompts.py`) and calls `agent.build_command()` then `subprocess.run` (timeout 300s). Failures in a single pass are logged and skipped, not fatal.
 - Agents are pluggable: subclass `agents/base.py:Agent` (implement `name`, `build_command`, `parse_output`) and register in `AGENT_MAP` in `review/engine.py`. Output parsing expects JSON findings usable as `Finding(**item)`.
+- `superseded init` is a non-interactive setup command: it probes PATH for the supported AI CLIs (via `src/superseded/detection.py`, which wraps `AGENT_MAP` + `Agent.is_available()`) plus `gh`, picks a default agent + model, and writes a `.superseded.yaml` via `config.write_config`. Refuses to overwrite without `--force`.
 - Memory/feedback store is SQLite at `.superseded/memory.db` (`memory/store.py`). `.superseded/` and `*.db` are gitignored — do not commit the DB. The schema self-migrates on `store.init()`.
 - Runtime external dependencies an agent typically will not have: the `gh` CLI must be authenticated (used for `gh pr diff`, `gh pr view`, PR comments, feedback reactions) and at least one AI CLI on PATH matching the selected `--agent`. Tests mock these (`tests/test_integration.py`, `tests/test_diff.py`); do not make them hit real `gh` or AI CLIs.
 
