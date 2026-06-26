@@ -72,7 +72,7 @@ _LANG_MAP: dict[str, str] = {
 }
 
 
-def extract_symbols(diff: str, lang: str) -> list[str]:
+def extract_symbols(diff: str, lang: str | None) -> list[str]:
     """Extract changed symbol names from added diff lines."""
     added_lines = "\n".join(
         line[1:]
