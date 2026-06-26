@@ -16,6 +16,16 @@ def test_cli_version():
     assert "0.1.0" in result.output
 
 
+def test_serve_refuses_unconfigured_config(tmp_path):
+    """serve must exit with error when config has no app_id/webhook_secret."""
+    config_file = tmp_path / "server.yaml"
+    config_file.write_text("port: 9999\n")  # no app_id, no webhook_secret
+    runner = CliRunner()
+    result = runner.invoke(cli, ["serve", "--config", str(config_file)])
+    assert result.exit_code == 2
+    assert "not configured" in result.output.lower() or "app_id" in result.output.lower()
+
+
 def test_review_requires_pr_or_diff():
     runner = CliRunner()
     result = runner.invoke(cli, ["review"])
@@ -181,7 +191,7 @@ def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, mo
 
     invoked: list[str] = []
 
-    def fake_run_pass(self, pass_name, prompt, timeout=300, progress=None):
+    def fake_run_pass(self, pass_name, prompt, timeout=300, progress=None, cwd=None):
         invoked.append(pass_name)
         if progress is not None:
             progress(pass_name, "done")

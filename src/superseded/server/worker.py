@@ -6,7 +6,9 @@ import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from superseded.config import load_config
+import yaml
+
+from superseded.config import Config
 from superseded.context.gathering import gather_context
 from superseded.output.github_pr import build_review_payload
 from superseded.review.engine import ReviewEngine
@@ -157,13 +159,40 @@ class ReviewWorker:
                 self._active_count -= 1
 
 
+async def _load_safe_config(github: GitHubApp, token: str, owner: str, repo: str) -> Config:
+    """Load repo config from the default branch (trusted), not the PR head.
+
+    A PR can commit a malicious ``.superseded.yaml`` that disables
+    ``static_analysis`` (suppressing gitleaks) or forces an expensive
+    ``agent``/``model``. Reading from the default branch avoids this.
+    ``static_analysis`` is forced on regardless, so secret scanning
+    cannot be suppressed by repo config in server mode.
+    """
+    try:
+        raw = await github.fetch_repo_file(token, owner, repo, ".superseded.yaml")
+    except Exception:
+        logger.warning("Failed to fetch .superseded.yaml from default branch, using defaults")
+        raw = None
+    if raw:
+        try:
+            data = yaml.safe_load(raw) or {}
+        except yaml.YAMLError:
+            logger.warning("Malformed .superseded.yaml on default branch, using defaults")
+            data = {}
+        config = Config(**data)
+    else:
+        config = Config()
+    config.static_analysis = True
+    return config
+
+
 async def _run_review_for_job(
     github: GitHubApp,
     repo_manager: RepoManager,
     token: str,
     job: ReviewJob,
     correlation_id: str,
-) -> None:
+) -> ReviewOutcome:
     tmp_dir = repo_manager.job_dir(job.installation_id, job.owner, job.repo, job.pr_number)
 
     try:
@@ -181,7 +210,7 @@ async def _run_review_for_job(
             tmp_dir=str(tmp_dir),
         )
 
-        config = load_config(repo_path / ".superseded.yaml")
+        config = await _load_safe_config(github, token, job.owner, job.repo)
 
         diff = await github.fetch_pr_diff(token, job.owner, job.repo, job.pr_number)
         pr_description = await github.fetch_pr_description(
@@ -213,6 +242,7 @@ async def _run_review_for_job(
             usage_signals=usage_signals,
             conventions_signals=conventions_signals,
             spec_signals=spec_signals,
+            cwd=repo_path,
         )
 
         payload = build_review_payload(result)

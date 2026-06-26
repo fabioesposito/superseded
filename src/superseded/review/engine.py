@@ -4,6 +4,7 @@ import logging
 import subprocess
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from superseded.agents.base import Agent
@@ -53,6 +54,7 @@ class ReviewEngine:
         prompt: str,
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
+        cwd: str | Path | None = None,
     ) -> list[Finding]:
         cmd = self.agent.build_command()
         if progress is not None:
@@ -64,6 +66,7 @@ class ReviewEngine:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                cwd=str(cwd) if cwd is not None else None,
             )
         except FileNotFoundError as err:
             raise RuntimeError(
@@ -106,6 +109,7 @@ class ReviewEngine:
         passes: list[str] | None = None,
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
+        cwd: str | Path | None = None,
     ) -> ReviewResult:
         if not self.agent.is_available():
             raise RuntimeError(
@@ -136,7 +140,7 @@ class ReviewEngine:
                     conventions_signals=conventions_signals,
                     spec_signals=spec_signals,
                 )
-                future = executor.submit(self.run_pass, pass_name, prompt, timeout, progress)
+                future = executor.submit(self.run_pass, pass_name, prompt, timeout, progress, cwd)
                 future_to_pass[future] = pass_name
 
             for future in as_completed(future_to_pass):

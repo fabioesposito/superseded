@@ -105,6 +105,11 @@ def compute_file_context(
         new_starts = sorted({int(m.group(2)) for m in hunks})
         try:
             full = root / file_path if root is not None else Path(file_path)
+            if root is not None:
+                resolved = full.resolve()
+                root_resolved = root.resolve()
+                if not str(resolved).startswith(str(root_resolved)):
+                    continue
             lines = _read_file_lines(str(full))
         except FileNotFoundError, OSError:
             continue

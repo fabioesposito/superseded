@@ -16,6 +16,36 @@ def test_repo_manager_disk_usage():
     assert 0.0 <= usage <= 1.0
 
 
+def test_repo_manager_job_dir_normal(tmp_path):
+    manager = RepoManager(base_path=tmp_path)
+    p = manager.job_dir(123, "octocat", "hello-world", 42)
+    assert p == tmp_path / "123" / "octocat" / "hello-world" / "42"
+
+
+def test_repo_manager_job_dir_rejects_traversal_owner(tmp_path):
+    manager = RepoManager(base_path=tmp_path)
+    with pytest.raises(ValueError, match="owner"):
+        manager.job_dir(123, "../..", "repo", 42)
+
+
+def test_repo_manager_job_dir_rejects_traversal_repo(tmp_path):
+    manager = RepoManager(base_path=tmp_path)
+    with pytest.raises(ValueError, match="repo"):
+        manager.job_dir(123, "octocat", "..", 42)
+
+
+def test_repo_manager_job_dir_rejects_slash_in_owner(tmp_path):
+    manager = RepoManager(base_path=tmp_path)
+    with pytest.raises(ValueError, match="owner"):
+        manager.job_dir(123, "evil/owner", "repo", 42)
+
+
+def test_repo_manager_job_dir_rejects_negative_pr(tmp_path):
+    manager = RepoManager(base_path=tmp_path)
+    with pytest.raises(ValueError, match="pr"):
+        manager.job_dir(123, "octocat", "repo", -1)
+
+
 def test_repo_manager_cleanup(tmp_path):
     target = tmp_path / "repo"
     target.mkdir()
@@ -54,6 +84,64 @@ def test_checkout_repo_calls_git_clone(mock_create):
     second_call_args = mock_create.call_args_list[1][0]
     assert "checkout" in second_call_args
     assert "abc123" in second_call_args
+
+
+@patch("superseded.server.checkout.asyncio.create_subprocess_exec")
+def test_checkout_repo_token_not_in_clone_args(mock_create):
+    """Token must NOT appear in the clone command args (process-table visible)."""
+    import base64
+
+    proc = AsyncMock()
+    proc.returncode = 0
+    proc.communicate.return_value = (b"", b"")
+    mock_create.return_value = proc
+
+    async def _test():
+        return await checkout_repo(
+            token="ghp_SECRET_TOKEN",
+            owner="octocat",
+            repo="hello-world",
+            ref="abc123",
+            tmp_dir="/tmp/test/checkout",
+        )
+
+    asyncio.run(_test())
+
+    clone_call = mock_create.call_args_list[0]
+    all_args = list(clone_call[0])
+    joined = " ".join(str(a) for a in all_args)
+    assert "ghp_SECRET_TOKEN" not in joined
+    assert "x-access-token:ghp_SECRET_TOKEN" not in joined
+    env = clone_call[1].get("env", {})
+    expected_b64 = base64.b64encode(b"x-access-token:ghp_SECRET_TOKEN").decode()
+    assert any(expected_b64 in str(v) for v in env.values()), (
+        "Token should be passed base64-encoded via env var, not in args"
+    )
+
+
+@patch("superseded.server.checkout.asyncio.create_subprocess_exec")
+def test_checkout_repo_error_redacts_token(mock_create):
+    """RuntimeError on clone failure must not include the token."""
+    proc = AsyncMock()
+    proc.returncode = 128
+    proc.communicate.return_value = (
+        b"",
+        b"fatal: could not read https://x-access-token:ghp_SECRET@github.com/x/y.git",
+    )
+    mock_create.return_value = proc
+
+    async def _test():
+        return await checkout_repo(
+            token="ghp_SECRET",
+            owner="no",
+            repo="such-repo",
+            ref="abc",
+            tmp_dir="/tmp/test/fail",
+        )
+
+    with pytest.raises(RuntimeError, match="git clone failed") as exc_info:
+        asyncio.run(_test())
+    assert "ghp_SECRET" not in str(exc_info.value)
 
 
 @patch("superseded.server.checkout.asyncio.create_subprocess_exec")

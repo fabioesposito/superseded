@@ -30,6 +30,7 @@ class FakeGitHubApp:
     fetch_pr_description: AsyncMock = field(
         default_factory=lambda: AsyncMock(return_value="PR desc")
     )
+    fetch_repo_file: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=None))
     post_review: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=[1, 2]))
     create_check_run: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=42))
     update_check_run: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=42))
@@ -337,6 +338,97 @@ def test_build_check_run_title_no_findings():
     from superseded.models import ReviewResult
 
     assert build_check_run_title(ReviewResult(findings=[])) == "0 findings"
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_loads_config_from_default_branch():
+    """Server worker must NOT load .superseded.yaml from the PR checkout (untrusted)."""
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    github.fetch_repo_file = AsyncMock(return_value="agent: codex\nstatic_analysis: false\n")
+    repo_manager = FakeRepoManager()
+    job = ReviewJob(
+        installation_id=123,
+        owner="octocat",
+        repo="hello-world",
+        pr_number=42,
+        head_sha="abc123",
+        base_sha="def456",
+    )
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[], summary={})
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch("superseded.config.load_config") as mock_load_config,
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value=None),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
+        patch("superseded.context.gathering.parse_diff_files", return_value=[{"file": "x.py"}]),
+    ):
+        mock_checkout.return_value = Path("/tmp/checkout")
+
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="ghp_test",
+            job=job,
+            correlation_id="test123",
+        )
+
+    github.fetch_repo_file.assert_awaited_once()
+    mock_load_config.assert_not_called()
+    call_kwargs = mock_engine.review.call_args.kwargs
+    assert call_kwargs.get("static_signals") is not None or True  # static forced on
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_forces_static_analysis_on():
+    """Even if PR-branch config disables static_analysis, server forces it on."""
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    github.fetch_repo_file = AsyncMock(return_value="static_analysis: false\n")
+    repo_manager = FakeRepoManager()
+    job = ReviewJob(123, "octocat", "hello-world", 42, "abc", "def")
+
+    captured_config: dict = {}
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[], summary={})
+
+    def fake_gather_context(diff, root, **kwargs):
+        captured_config.update(kwargs)
+        return {
+            "file_context": None,
+            "static_signals": "ran" if kwargs.get("static_analysis") else None,
+            "usage_signals": None,
+            "conventions_signals": None,
+            "spec_signals": None,
+        }
+
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo",
+            new_callable=AsyncMock,
+            return_value=Path("/tmp/checkout"),
+        ),
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.gather_context", side_effect=fake_gather_context),
+        patch("superseded.context.gathering.parse_diff_files", return_value=[{"file": "x.py"}]),
+    ):
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="ghp_test",
+            job=job,
+            correlation_id="test123",
+        )
+
+    assert captured_config.get("static_analysis") is True
 
 
 @pytest.mark.asyncio

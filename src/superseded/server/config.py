@@ -16,11 +16,27 @@ class ServerConfig(BaseModel):
     max_concurrent_reviews: int = 3
     temp_dir: Path = Path("/tmp/superseded")
     log_level: str = "info"
+    health_token: str = ""
+    tls_cert_path: Path | None = None
+    tls_key_path: Path | None = None
 
     @property
     def is_configured(self) -> bool:
         """Return True if this config has a real app_id (not default 0)."""
         return self.app_id != 0
+
+    def require_configured(self) -> None:
+        """Raise ValueError if the server is not fully configured for production.
+
+        Guards against booting a webhook receiver with a forgeable empty
+        webhook secret / missing app credentials.
+        """
+        if not self.is_configured:
+            raise ValueError(
+                "Server is not configured: set SUPERSEDED_APP_ID, "
+                "SUPERSEDED_WEBHOOK_SECRET, and SUPERSEDED_PRIVATE_KEY_PATH "
+                "(or provide them in the YAML config)."
+            )
 
     @model_validator(mode="after")
     def _validate_required_fields(self) -> ServerConfig:
@@ -71,6 +87,17 @@ class ServerConfig(BaseModel):
         log_level = os.environ.get("SUPERSEDED_LOG_LEVEL")
         if log_level:
             kwargs["log_level"] = log_level
+
+        tls_cert = os.environ.get("SUPERSEDED_TLS_CERT")
+        tls_key = os.environ.get("SUPERSEDED_TLS_KEY")
+        if tls_cert:
+            kwargs["tls_cert_path"] = Path(tls_cert)
+        if tls_key:
+            kwargs["tls_key_path"] = Path(tls_key)
+
+        health_token = os.environ.get("SUPERSEDED_HEALTH_TOKEN")
+        if health_token:
+            kwargs["health_token"] = health_token
 
         return cls(**kwargs)
 

@@ -137,3 +137,40 @@ def test_parse_falls_back_to_markdown_when_no_json():
     assert findings[0]["severity"] == "critical"
     assert findings[0]["pass_name"] == "security"
     assert "src/auth.py" in findings[0]["file"]
+
+
+def test_extract_json_array_handles_large_input_without_catastrophic_backtracking():
+    """Greedy .* under DOTALL must not cause catastrophic backtracking on big inputs."""
+    import time
+
+    from superseded.agents.parsing import extract_json_array
+
+    large = "[{" + "x" * 50_000 + "}] not json"
+    start = time.time()
+    extract_json_array(large)
+    elapsed = time.time() - start
+    assert elapsed < 1.0, f"extract_json_array took {elapsed:.2f}s on 50KB input"
+
+
+def test_extract_json_array_finds_nested_array():
+    from superseded.agents.parsing import extract_json_array
+
+    raw = 'preamble [{"severity": "critical", "file": "a.py", "line": 1}] trailing'
+    result = extract_json_array(raw)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0]["severity"] == "critical"
+
+
+def test_extract_json_array_finds_first_of_two_arrays():
+    from superseded.agents.parsing import extract_json_array
+
+    raw = (
+        '[{"severity": "critical", "file": "a.py", "line": 1}] '
+        "garbage between "
+        '[{"severity": "nit", "file": "b.py", "line": 2}]'
+    )
+    result = extract_json_array(raw)
+    assert result is not None
+    assert len(result) == 1
+    assert result[0]["severity"] == "critical"

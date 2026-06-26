@@ -110,6 +110,23 @@ def test_compute_file_context_reads_relative_to_root(tmp_path, monkeypatch):
     assert "line 30" in ctx
 
 
+def test_compute_file_context_rejects_path_traversal(tmp_path):
+    """A diff with ../ in the file path must not read outside root."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    secret = tmp_path / "secret.txt"
+    secret.write_text("TOP SECRET")
+    diff = """diff --git a/../secret.txt b/../secret.txt
+--- a/../secret.txt
++++ b/../secret.txt
+@@ -1 +1 @@
+-old
++new
+"""
+    ctx = compute_file_context(diff, root=repo, context_padding=20)
+    assert "TOP SECRET" not in ctx
+
+
 def test_repo_root_returns_path(monkeypatch):
     from superseded.diff import repo_root
 

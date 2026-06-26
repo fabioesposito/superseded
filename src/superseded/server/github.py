@@ -17,6 +17,8 @@ class GitHubApp:
         self._jwt_cache: tuple[float, str] | None = None
 
     def verify_webhook(self, payload: bytes, signature: str) -> bool:
+        if not self._webhook_secret:
+            return False
         if not signature or not signature.startswith("sha256="):
             return False
         expected = hmac.new(self._webhook_secret, payload, hashlib.sha256).hexdigest()
@@ -64,6 +66,46 @@ class GitHubApp:
             )
             response.raise_for_status()
             return response.text
+
+    async def fetch_default_branch(self, token: str, owner: str, repo: str) -> str:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}",
+                headers=self._api_headers(token),
+            )
+            response.raise_for_status()
+            return response.json()["default_branch"]
+
+    async def fetch_repo_file(
+        self,
+        token: str,
+        owner: str,
+        repo: str,
+        path: str,
+        ref: str | None = None,
+    ) -> str | None:
+        """Fetch a file's text contents from a ref (default: repo default branch).
+
+        Returns ``None`` if the file does not exist (404). Uses the GitHub
+        Contents API with base64-encoded content.
+        """
+        import base64
+
+        branch = ref or await self.fetch_default_branch(token, owner, repo)
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/contents/{path}",
+                headers=self._api_headers(token),
+                params={"ref": branch},
+            )
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            data = response.json()
+            encoded = data.get("content", "")
+            if data.get("encoding") == "base64" and encoded:
+                return base64.b64decode(encoded).decode()
+            return data.get("content", "")
 
     async def fetch_pr_description(
         self, token: str, owner: str, repo: str, pr_number: int

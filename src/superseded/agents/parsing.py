@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 
-JSON_ARRAY_RE = re.compile(r"\[\s*\{.*\}\s*\]", re.DOTALL)
+JSON_ARRAY_RE = re.compile(r"\[\s*\{.*?\}\s*\]", re.DOTALL)
 
 
 def extract_json_array(raw: str) -> list[dict] | None:

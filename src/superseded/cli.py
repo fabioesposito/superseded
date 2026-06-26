@@ -320,6 +320,7 @@ def _run_review(
             passes=passes,
             timeout=pass_timeout,
             progress=_progress,
+            cwd=str(root),
         )
     except RuntimeError as err:
         click.echo(f"Error: {err}", err=True)
@@ -467,6 +468,12 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
 
     config = ServerConfig.from_yaml(Path(config_path)) if config_path else ServerConfig.from_env()
 
+    try:
+        config.require_configured()
+    except ValueError as err:
+        click.echo(f"Error: {err}", err=True)
+        sys.exit(2)
+
     if port is not None:
         config.port = port
     if host is not None:
@@ -516,7 +523,12 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
     )
 
     _status(f"Starting Superseded server on {config.host}:{config.port}")
-    uvicorn.run(app, host=config.host, port=config.port, log_level=config.log_level)
+    ssl_kwargs: dict = {}
+    if config.tls_cert_path and config.tls_key_path:
+        ssl_kwargs["ssl_certfile"] = str(config.tls_cert_path)
+        ssl_kwargs["ssl_keyfile"] = str(config.tls_key_path)
+        _status(f"TLS enabled: cert={config.tls_cert_path}")
+    uvicorn.run(app, host=config.host, port=config.port, log_level=config.log_level, **ssl_kwargs)
 
 
 async def _apply_feedback(store: MemoryStore, comment_id: int, action: str) -> bool:

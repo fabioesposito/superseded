@@ -70,6 +70,28 @@ def test_run_pass_raises_on_nonzero_exit():
             engine.run_pass("security", "prompt")
 
 
+def test_run_pass_forwards_cwd_to_subprocess(tmp_path):
+    agent = MagicMock()
+    agent.build_command.return_value = ["fakeclaude"]
+    agent.parse_output.return_value = []
+    engine = ReviewEngine(agent=agent, config=MagicMock())
+    with patch("superseded.review.engine.subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed(stdout="[]", stderr="")
+        engine.run_pass("security", "prompt", cwd=tmp_path)
+    assert mock_run.call_args.kwargs.get("cwd") == str(tmp_path)
+
+
+def test_run_pass_defaults_cwd_to_none():
+    agent = MagicMock()
+    agent.build_command.return_value = ["fakeclaude"]
+    agent.parse_output.return_value = []
+    engine = ReviewEngine(agent=agent, config=MagicMock())
+    with patch("superseded.review.engine.subprocess.run") as mock_run:
+        mock_run.return_value = _make_completed(stdout="[]", stderr="")
+        engine.run_pass("security", "prompt")
+    assert mock_run.call_args.kwargs.get("cwd") is None
+
+
 def test_run_pass_raises_on_timeout():
     agent = MagicMock()
     agent.build_command.return_value = ["fakeclaude"]
@@ -87,7 +109,7 @@ def test_review_continues_when_one_pass_fails():
 
     good_finding = make_finding(severity="critical", line=5)
 
-    def fake_run_pass(pass_name, prompt, timeout=300, progress=None):
+    def fake_run_pass(pass_name, prompt, timeout=300, progress=None, cwd=None):
         if pass_name == "correctness":
             raise RuntimeError("boom")
         return [good_finding]
