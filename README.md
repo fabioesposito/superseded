@@ -40,7 +40,7 @@ superseded review --diff HEAD~3..HEAD
 superseded review --diff main..feature-branch
 
 # Choose agent + model
-superseded review --pr 123 --agent claude-code --model claude-sonnet-4-20250514
+superseded review --pr 123 --agent claude-code --model claude-sonnet-4-6
 
 # Output format
 superseded review --pr 123 --format json
@@ -71,7 +71,7 @@ jobs:
       - uses: fabioesposito/superseded@v1
         with:
           agent: claude-code
-          model: claude-sonnet-4-20250514
+          model: claude-sonnet-4-6
           passes: security,correctness,performance
           post: true
         env:
@@ -108,7 +108,7 @@ log_level: info
 
 defaults:
   agent: claude-code
-  model: claude-sonnet-4-20250514
+  model: claude-sonnet-4-6
   passes: [security, correctness, performance, style, architecture]
 ```
 
@@ -174,7 +174,7 @@ Dismissed findings are injected into future review prompts so the tool avoids re
 
 ```yaml
 agent: claude-code
-model: claude-sonnet-4-20250514
+model: claude-sonnet-4-6
 passes:
   security: true
   correctness: true
