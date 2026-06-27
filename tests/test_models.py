@@ -35,6 +35,33 @@ def test_finding_generates_id():
     assert len(f.id) > 10
 
 
+def test_finding_defaults_end_line_to_line():
+    f = Finding(
+        pass_name="security",
+        severity="critical",
+        file="src/auth.py",
+        line=42,
+        title="SQL injection",
+        description="desc",
+        suggestion="fix",
+    )
+    assert f.end_line == 42
+
+
+def test_finding_keeps_explicit_end_line():
+    f = Finding(
+        pass_name="security",
+        severity="critical",
+        file="src/auth.py",
+        line=42,
+        end_line=50,
+        title="SQL injection",
+        description="desc",
+        suggestion="fix",
+    )
+    assert f.end_line == 50
+
+
 def test_review_result_from_findings():
     findings = [
         Finding(

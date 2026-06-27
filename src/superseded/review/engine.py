@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PASS_TIMEOUT = 300
+DEFAULT_PASS_TIMEOUT = 600
 
 ProgressFn = Callable[[str, str], None]
 

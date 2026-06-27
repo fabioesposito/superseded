@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 Severity = Literal["critical", "important", "suggestion", "nit"]
 PassName = Literal["security", "correctness", "performance", "style", "architecture"]
@@ -15,13 +15,21 @@ class Finding(BaseModel):
     severity: Severity
     file: str
     line: int
-    end_line: int
+    end_line: int | None = None
     title: str
     description: str
     suggestion: str
     confidence: Confidence = "high"
     reasoning: str = Field(default="")
     id: str = Field(default="")
+
+    @model_validator(mode="after")
+    def _default_end_line(self) -> Finding:
+        # Agents sometimes omit end_line; treat a single-line span (end == start)
+        # as the default so a missing field never drops an otherwise-valid finding.
+        if self.end_line is None:
+            self.end_line = self.line
+        return self
 
     def model_post_init(self, __context) -> None:
         if not self.id:

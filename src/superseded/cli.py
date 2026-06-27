@@ -35,7 +35,7 @@ from superseded.review.engine import ReviewEngine
 
 AGENT_ENV = "SUPERSEDED_AGENT"
 MODEL_ENV = "SUPERSEDED_MODEL"
-DEFAULT_TIMEOUT = 300
+DEFAULT_TIMEOUT = 600
 KNOWN_PASSES: list[str] = list(get_args(PassName))
 
 try:
