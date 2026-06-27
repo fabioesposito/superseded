@@ -63,21 +63,80 @@ on:
   pull_request:
     types: [opened, synchronize]
 
+# Required: superseded posts inline review comments via the GitHub API.
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: fabioesposito/superseded@v1
         with:
           agent: claude-code
           model: claude-sonnet-4-6
           passes: security,correctness,performance
           post: true
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
+
+#### Using opencode with custom providers (DeepSeek, z.ai, ...)
+
+The `opencode` agent delegates auth to opencode itself, which reads any provider
+key from the environment. The Action only forwards `ANTHROPIC_API_KEY` and
+`OPENAI_API_KEY` from inputs; for any other provider, add the key directly to the
+step `env:` block and reference it from an `opencode.json` committed at the repo
+root.
+
+**1. Commit an `opencode.json`** using `{env:VAR}` substitution:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "deepseek": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "DeepSeek",
+      "options": {
+        "baseURL": "https://api.deepseek.com/v1",
+        "apiKey": "{env:DEEPSEEK_API_KEY}"
+      },
+      "models": { "deepseek-chat": { "name": "DeepSeek Chat" } }
+    },
+    "zai": {
+      "npm": "@ai-sdk/xai",
+      "name": "z.ai",
+      "options": { "apiKey": "{env:XAI_API_KEY}" },
+      "models": { "glm-4.6": { "name": "GLM 4.6" } }
+    }
+  }
+}
+```
+
+**2. Wire the secret into the workflow** and point superseded at the provider/model:
+
+```yaml
+- uses: fabioesposito/superseded@v1
+  with:
+    agent: opencode
+    model: deepseek/deepseek-chat   # or zai/glm-4.6
+    post: true
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    # XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+```
+
+opencode reads env vars at runtime, so any provider your `opencode.json`
+references via `{env:...}` just needs to be present in the step environment. See
+the [opencode provider docs](https://opencode.ai/docs/providers) for the full
+list of built-in providers and their SDK packages.
 
 ### Server Mode (Self-Hosted)
 

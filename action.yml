@@ -1,14 +1,14 @@
 name: "Superseded Code Review"
-description: "Multi-pass AI code review on pull requests"
+description: "Multi-pass AI code review on pull requests. The calling workflow MUST grant `permissions: { contents: read, pull-requests: write }` so review comments can be posted."
 inputs:
   agent:
-    description: "AI CLI agent (claude-code, opencode, codex)"
+    description: "AI CLI agent (claude-code, opencode, codex). Leave empty to auto-detect the highest-preference CLI installed in the image."
     required: false
-    default: "opencode"
+    default: ""
   model:
-    description: "Model to use"
+    description: "Model id for the selected agent. Leave empty to use the agent's built-in default (e.g. claude-sonnet-4-6, gpt-5.4-mini)."
     required: false
-    default: "deepseek-v4-pro"
+    default: ""
   passes:
     description: "Comma-separated passes to run"
     required: false
@@ -17,8 +17,20 @@ inputs:
     description: "Post review to GitHub PR"
     required: false
     default: "true"
+  anthropic_api_key:
+    description: "Anthropic API key. Required when agent is claude-code, and forwarded to opencode if it targets Anthropic. Map from a secret, e.g. `${{ secrets.ANTHROPIC_API_KEY }}`."
+    required: false
+    default: ""
+  openai_api_key:
+    description: "OpenAI API key. Required when agent is codex, and forwarded to opencode if it targets OpenAI. Map from a secret, e.g. `${{ secrets.OPENAI_API_KEY }}`."
+    required: false
+    default: ""
 runs:
   using: "docker"
   image: "Dockerfile"
   env:
     GITHUB_TOKEN: ${{ github.token }}
+    SUPERSEDED_AGENT: ${{ inputs.agent }}
+    SUPERSEDED_MODEL: ${{ inputs.model }}
+    ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+    OPENAI_API_KEY: ${{ inputs.openai_api_key }}
