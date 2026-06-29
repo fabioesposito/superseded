@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 from superseded.review.engine import AGENT_MAP
 
@@ -45,3 +46,12 @@ def pick_agent(available: list[str]) -> str | None:
 
 def default_model_for(agent: str) -> str | None:
     return DEFAULT_MODELS.get(agent)
+
+
+def detect_code_review_graph(root: Path) -> bool:
+    """True iff code_review_graph imports AND a built graph exists at <root>/.code-review-graph."""
+    try:
+        import code_review_graph  # noqa: F401
+    except ImportError:
+        return False
+    return (root / ".code-review-graph").is_dir()

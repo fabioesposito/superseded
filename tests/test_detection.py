@@ -85,3 +85,45 @@ def test_default_model_for_opencode():
 
 def test_default_model_for_unknown_is_none():
     assert default_model_for("bogus") is None
+
+
+def test_detect_code_review_graph_false_when_import_missing(tmp_path, monkeypatch):
+    """When code_review_graph can't be imported, detection returns False even if
+    a .code-review-graph/ dir exists."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "code_review_graph":
+            raise ImportError("simulated")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    (tmp_path / ".code-review-graph").mkdir()
+    from superseded.detection import detect_code_review_graph
+
+    assert detect_code_review_graph(tmp_path) is False
+
+
+def test_detect_code_review_graph_false_when_dir_missing(tmp_path, monkeypatch):
+    """Importable but no built graph dir -> False."""
+    import sys
+    from types import ModuleType
+
+    monkeypatch.setitem(sys.modules, "code_review_graph", ModuleType("code_review_graph"))
+    from superseded.detection import detect_code_review_graph
+
+    assert detect_code_review_graph(tmp_path) is False
+
+
+def test_detect_code_review_graph_true(tmp_path, monkeypatch):
+    """Importable AND built graph dir -> True."""
+    import sys
+    from types import ModuleType
+
+    monkeypatch.setitem(sys.modules, "code_review_graph", ModuleType("code_review_graph"))
+    (tmp_path / ".code-review-graph").mkdir()
+    from superseded.detection import detect_code_review_graph
+
+    assert detect_code_review_graph(tmp_path) is True
