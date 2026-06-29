@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -282,3 +283,100 @@ def test_persist_and_link_batch_into_single_event_loop(monkeypatch):
         f"Expected 1 asyncio.run() for link, got {total_runs - persist_runs}"
     )
     assert len(calls) == 3
+
+
+def test_resolve_graph_env_overrides_flag(monkeypatch):
+    monkeypatch.setenv("SUPERSEDED_GRAPH", "false")
+    from superseded.cli import resolve_graph
+    from superseded.config import Config
+
+    assert resolve_graph(True, Config()) is False
+
+
+def test_resolve_graph_env_truthy_overrides_flag(monkeypatch):
+    monkeypatch.setenv("SUPERSEDED_GRAPH", "1")
+    from superseded.cli import resolve_graph
+    from superseded.config import Config
+
+    assert resolve_graph(False, Config()) is True
+
+
+def test_resolve_graph_flag_overrides_config():
+    from superseded.cli import resolve_graph
+    from superseded.config import Config
+
+    cfg = Config(graph=False)
+    assert resolve_graph(True, cfg) is True
+    cfg2 = Config(graph=True)
+    assert resolve_graph(False, cfg2) is False
+
+
+def test_resolve_graph_defaults_to_config():
+    from superseded.cli import resolve_graph
+    from superseded.config import Config
+
+    assert resolve_graph(None, Config(graph=True)) is True
+    assert resolve_graph(None, Config(graph=False)) is False
+
+
+def test_resolve_graph_defaults_true():
+    from superseded.cli import resolve_graph
+    from superseded.config import Config
+
+    assert resolve_graph(None, Config()) is True
+
+
+def test_review_passes_graph_to_gather_context(monkeypatch):
+    """`--graph`/`--no-graph` must propagate as the `graph` kwarg to
+    `gather_context`."""
+    from click.testing import CliRunner
+
+    from superseded import cli as cli_mod
+    from superseded.cli import cli
+
+    captured = {}
+
+    def fake_gather_context(diff, root, **kwargs):
+        captured.update(kwargs)
+        return {
+            "file_context": None,
+            "static_signals": None,
+            "usage_signals": None,
+            "conventions_signals": None,
+            "spec_signals": None,
+        }
+
+    def fake_fetch_diff(*, pr, diff_range, files):
+        return "diff"
+
+    def fake_engine_review(*a, **kw):
+        from superseded.models import ReviewResult
+
+        return ReviewResult(findings=[], warnings=[])
+
+    monkeypatch.setattr(cli_mod, "gather_context", fake_gather_context)
+    monkeypatch.setattr(cli_mod, "fetch_diff", fake_fetch_diff)
+    monkeypatch.setattr(cli_mod, "repo_root", lambda: Path("/repo"))
+    monkeypatch.setattr(cli_mod, "fetch_pr_description", lambda pr: None)
+    fake_engine = MagicMock()
+    fake_engine.agent.is_available.return_value = True
+    fake_engine.review = fake_engine_review
+    monkeypatch.setattr(
+        cli_mod.ReviewEngine, "select", classmethod(lambda cls, *a, **kw: fake_engine)
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        ["review", "--diff", "HEAD~1..HEAD", "--no-graph", "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured.get("graph") is False
+
+    captured.clear()
+    result = runner.invoke(
+        cli,
+        ["review", "--diff", "HEAD~1..HEAD", "--graph", "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured.get("graph") is True
