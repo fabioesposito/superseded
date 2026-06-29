@@ -286,6 +286,7 @@ def test_context_enrichment_called(monkeypatch):
         output_format="json",
         post=False,
         passes=None,
+        graph=False,
     )
 
     assert called_static
