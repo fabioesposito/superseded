@@ -31,6 +31,7 @@ There is no CI, no Makefile/Taskfile, and no pre-commit hooks configured. Verify
 - pytest is configured with `asyncio_mode = "auto"`: async test functions run without an explicit `@pytest.mark.asyncio`. `pytest-asyncio` is a dev dep.
 - The 5 pass names are fixed `Literal`s in `models.py` (`PassName`): `security, correctness, performance, style, architecture`. Adding a pass means updating that Literal, `PassConfig` in `config.py`, and the default list in `review/engine.py`.
 - `Config.conventions` and `Config.spec_retrieval` (default `true`) inject repo-grounded convention docs and diff-relevant specs/plans/skills into every pass prompt. Disable with `.superseded.yaml` `conventions: false` / `spec_retrieval: false`, or `--no-conventions` / `--no-specs`. See `context/conventions.py` and `context/spec_retrieval.py`.
+- `Config.graph` (default `true`) routes usage retrieval through `code-review-graph` when installed and a built graph exists at `.code-review-graph/`; otherwise the rg path in `context/usage_retrieval.py` runs unchanged. Toggle precedence mirrors agent/model: `SUPERSEDED_GRAPH` env > `--graph`/`--no-graph` flag > config file. Install the optional dep with `uv sync --extra graph` (or `uv add code-review-graph`) then `code-review-graph build`.
 
 ## Architecture notes
 
@@ -40,6 +41,7 @@ There is no CI, no Makefile/Taskfile, and no pre-commit hooks configured. Verify
 - `superseded init` is a non-interactive setup command: it probes PATH for the supported AI CLIs (via `src/superseded/detection.py`, which wraps `AGENT_MAP` + `Agent.is_available()`) plus `gh`, picks a default agent + model, and writes a `.superseded.yaml` via `config.write_config`. Refuses to overwrite without `--force`.
 - Memory/feedback store is SQLite at `.superseded/memory.db` (`memory/store.py`). `.superseded/` and `*.db` are gitignored — do not commit the DB. The schema self-migrates on `store.init()`.
 - Runtime external dependencies an agent typically will not have: the `gh` CLI must be authenticated (used for `gh pr diff`, `gh pr view`, PR comments, feedback reactions) and at least one AI CLI on PATH matching the selected `--agent`. Tests mock these (`tests/test_integration.py`, `tests/test_diff.py`); do not make them hit real `gh` or AI CLIs.
+- Usage retrieval has two interchangeable paths: the default rg-based `context/usage_retrieval.py` (calls `rg` over the repo for changed symbols) and the graph-grounded `context/graph_retrieval.py` (queries `code-review-graph`'s in-process `query_graph` for callers of those symbols). `context/gathering.py` picks at runtime based on `is_available(root)` and the resolved `graph` toggle. Refresh-before-query (`code-review-graph update --brief`) runs in the same worker thread as the query so it always completes first; both run in parallel with the other context futures.
 
 ## Configuration precedence
 
@@ -62,4 +64,4 @@ When implementing a plan, follow its checkbox ordering. `index.html` at repo roo
 
 ## Gitignore gotchas
 
-`.superseded/` (runtime memory dir), `*.db`/`*.sqlite3`, `.code-review-graph/`, `.ruff_cache/`, `.pytest_cache/`, and `.venv/` are all gitignored. Don't add these to commits.
+`.superseded/` (runtime memory dir), `*.db`/`*.sqlite3`, `.code-review-graph/`, `.ruff_cache/`, `.pytest_cache/`, and `.venv/` are all gitignored. Don't add these to commits. `.code-review-graph/` (CRG's local SQLite graph DB and artifacts) is gitignored. Don't commit it.

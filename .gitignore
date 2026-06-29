@@ -22,5 +22,6 @@ htmlcov/
 coverage/
 playwright-report/
 .playwright/.code-review-graph/
+.code-review-graph/
 .worktrees/
 .superpowers/

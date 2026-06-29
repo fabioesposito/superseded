@@ -26,6 +26,7 @@ class Config(BaseModel):
     usage_retrieval: bool = True
     conventions: bool = True
     spec_retrieval: bool = True
+    graph: bool = True
 
     def is_pass_enabled(self, name: str) -> bool:
         return getattr(self.passes, name, False)

@@ -164,3 +164,36 @@ def test_init_default_target_when_no_config_flag(tmp_path, monkeypatch):
     result = runner.invoke(cli, ["init"])
     assert result.exit_code == 0
     assert (tmp_path / ".superseded.yaml").exists()
+
+
+def test_init_crg_missing_prints_instruction(tmp_path, monkeypatch):
+    """When CRG is not detected, init prints the install-instruction line to
+    stderr and still succeeds."""
+    _patch_detection(
+        monkeypatch,
+        agents=[AgentStatus("opencode", True, "opencode")],
+        gh=True,
+    )
+    monkeypatch.setattr("superseded.cli.detect_code_review_graph", lambda root: False)
+    target = tmp_path / ".superseded.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--config", str(target)])
+    assert result.exit_code == 0, result.output
+    assert target.exists()
+    assert "code-review-graph" in result.output
+    assert "uv add code-review-graph" in result.output
+
+
+def test_init_crg_present_prints_found(tmp_path, monkeypatch):
+    """When CRG is detected, init prints 'code-review-graph: found'."""
+    _patch_detection(
+        monkeypatch,
+        agents=[AgentStatus("opencode", True, "opencode")],
+        gh=True,
+    )
+    monkeypatch.setattr("superseded.cli.detect_code_review_graph", lambda root: True)
+    target = tmp_path / ".superseded.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--config", str(target)])
+    assert result.exit_code == 0, result.output
+    assert "code-review-graph: found" in result.output

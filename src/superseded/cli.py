@@ -16,6 +16,7 @@ from superseded.context.gathering import gather_context
 from superseded.detection import (
     default_model_for,
     detect_agents,
+    detect_code_review_graph,
     detect_gh,
     pick_agent,
 )
@@ -35,6 +36,7 @@ from superseded.review.engine import ReviewEngine
 
 AGENT_ENV = "SUPERSEDED_AGENT"
 MODEL_ENV = "SUPERSEDED_MODEL"
+GRAPH_ENV = "SUPERSEDED_GRAPH"
 DEFAULT_TIMEOUT = 600
 KNOWN_PASSES: list[str] = list(get_args(PassName))
 
@@ -61,6 +63,15 @@ def resolve_agent(agent_flag: str | None, config: Config) -> str:
 
 def resolve_model(model_flag: str | None, config: Config) -> str | None:
     return os.environ.get(MODEL_ENV) or model_flag or config.model
+
+
+def resolve_graph(cli_value: bool | None, config: Config) -> bool:
+    env = os.environ.get(GRAPH_ENV)
+    if env is not None:
+        return env.strip().lower() in ("1", "true", "yes", "on")
+    if cli_value is not None:
+        return cli_value
+    return config.graph
 
 
 def _parse_passes(raw: str | None) -> list[str] | None:
@@ -172,6 +183,12 @@ def cli() -> None:
 @click.option("--no-usage", is_flag=True, help="Disable usage retrieval")
 @click.option("--no-conventions", is_flag=True, help="Disable project conventions injection")
 @click.option("--no-specs", is_flag=True, help="Disable design spec/plan retrieval")
+@click.option(
+    "--graph/--no-graph",
+    "graph",
+    default=None,
+    help="Toggle graph-grounded usage retrieval (default: from config)",
+)
 @click.argument("files", nargs=-1, type=click.Path(exists=True, dir_okay=False))
 def review(
     pr: int | None,
@@ -188,6 +205,7 @@ def review(
     no_usage: bool,
     no_conventions: bool,
     no_specs: bool,
+    graph: bool | None,
     files: tuple[str, ...],
 ) -> None:
     """Review code changes.
@@ -229,6 +247,7 @@ def review(
         no_usage=no_usage,
         no_conventions=no_conventions,
         no_specs=no_specs,
+        graph=graph,
         files=list(files) or None,
     )
 
@@ -249,6 +268,7 @@ def _run_review(
     no_usage: bool = False,
     no_conventions: bool = False,
     no_specs: bool = False,
+    graph: bool | None = None,
     files: list[str] | None = None,
 ) -> None:
     config = load_config(config_path)
@@ -286,6 +306,7 @@ def _run_review(
     enable_usage = config.usage_retrieval and not no_usage
     enable_conventions = config.conventions and not no_conventions
     enable_specs = config.spec_retrieval and not no_specs
+    enable_graph = resolve_graph(graph, config)
 
     pr_description = fetch_pr_description(pr) if pr is not None else None
 
@@ -296,6 +317,7 @@ def _run_review(
         usage_retrieval=enable_usage,
         conventions=enable_conventions,
         spec_retrieval=enable_specs,
+        graph=enable_graph,
     )
     file_context = context["file_context"]
     static_signals = context["static_signals"]
@@ -425,6 +447,15 @@ def _run_init(force: bool, agent_override: str | None, config_path: Path | None)
         _status("gh CLI: found")
     else:
         _status("gh CLI: not found (PR features will be disabled)")
+
+    if detect_code_review_graph(Path.cwd()):
+        _status("code-review-graph: found")
+    else:
+        _status(
+            "code-review-graph: not installed "
+            "(graph-grounded reviews disabled; install with: "
+            "uv add code-review-graph && code-review-graph build)"
+        )
 
     if agent_override is not None:
         if agent_override not in AGENT_MAP:

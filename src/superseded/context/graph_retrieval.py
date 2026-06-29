@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+import logging
+import subprocess
+from pathlib import Path
+
+from superseded.context.usage_retrieval import (
+    _LANG_MAP,
+    MAX_SYMBOLS,
+    USAGE_BUDGET,
+    extract_symbols,
+)
+from superseded.diff import parse_diff_files
+
+logger = logging.getLogger(__name__)
+
+_GRAPH_DIR = ".code-review-graph"
+_REFRESH_TIMEOUT = 30
+
+
+def is_available(root: Path) -> bool:
+    """True iff code_review_graph imports AND a built graph exists."""
+    try:
+        import code_review_graph  # noqa: F401
+    except ImportError:
+        return False
+    return (root / _GRAPH_DIR).is_dir()
+
+
+def ensure_graph_fresh(root: Path) -> None:
+    """Best-effort incremental graph refresh. Never raises."""
+    try:
+        subprocess.run(
+            ["code-review-graph", "update", "--brief"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=_REFRESH_TIMEOUT,
+        )
+    except FileNotFoundError:
+        logger.warning("code-review-graph CLI not on PATH; graph will be used as-is")
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            "code-review-graph update timed out after %ds; using stale graph",
+            _REFRESH_TIMEOUT,
+        )
+    except OSError as err:
+        logger.warning("code-review-graph update failed: %s", err)
+
+
+def _query_callers(symbol: str, root: Path) -> list[str]:
+    """Return a list of 'path:line: caller_name' strings, one per caller of `symbol`.
+
+    Uses CRG's in-process query_graph API. Never raises — returns [] on any
+    failure (not found, ambiguous, import error, query exception).
+    """
+    try:
+        from code_review_graph.tools.query import query_graph
+    except ImportError:
+        return []
+
+    try:
+        result = query_graph(pattern="callers_of", target=symbol, repo_root=str(root))
+    except ValueError as err:
+        logger.warning("query_graph callers_of %s raised: %s", symbol, err)
+        return []
+    except Exception as err:  # sqlite corruption, etc.
+        logger.warning("query_graph callers_of %s raised: %s", symbol, err)
+        return []
+
+    if result.get("status") != "ok":
+        return []
+
+    nodes = result.get("results") or []
+    edges = result.get("edges") or []
+    nodes_by_qn = {n.get("qualified_name"): n for n in nodes}
+
+    lines: list[str] = []
+    for edge in edges:
+        if edge.get("kind") != "CALLS":
+            continue
+        file_path = edge.get("file_path") or ""
+        line = edge.get("line") or ""
+        caller_qn = edge.get("source") or ""
+        node = nodes_by_qn.get(caller_qn)
+        if node is not None:
+            caller_name = node.get("name") or caller_qn
+        else:
+            caller_name = caller_qn.split("::")[-1] if "::" in caller_qn else caller_qn
+        lines.append(f"{file_path}:{line}: {caller_name}")
+    return lines
+
+
+def _line_targets_changed_file(line: str, changed: set[str]) -> bool:
+    """True if the leading path of a 'path:line: snippet' line is in `changed`."""
+    if ":" not in line:
+        return False
+    path = line.split(":", 1)[0]
+    return Path(path).as_posix() in changed
+
+
+def retrieve_usages_via_graph(
+    diff: str, root: Path, *, changed_files: list[str] | None = None
+) -> str | None:
+    """Graph-grounded drop-in replacement for usage_retrieval.retrieve_usages.
+
+    Reuses extract_symbols() so the symbol set is identical to the rg path.
+    Produces `### Usages of <symbol>` blocks under the same USAGE_BUDGET.
+    Returns None when no symbols or no caller data found.
+    """
+    entries = parse_diff_files(diff)
+    if entries:
+        if changed_files is None:
+            changed_files = [e["file"] for e in entries]
+        symbols: list[str] = []
+        seen: set[str] = set()
+        for entry in entries:
+            lang = _LANG_MAP.get(Path(entry["file"]).suffix)
+            for sym in extract_symbols(entry["diff"], lang):
+                if sym not in seen:
+                    seen.add(sym)
+                    symbols.append(sym)
+        symbols = symbols[-MAX_SYMBOLS:]
+    else:
+        changed_files = changed_files or []
+        symbols = extract_symbols(diff, None)
+
+    if not symbols:
+        return None
+
+    changed_set = {Path(f).as_posix() for f in changed_files}
+
+    blocks: list[str] = []
+    total_chars = 0
+    for sym in symbols:
+        all_lines = _query_callers(sym, root)
+        lines = [ln for ln in all_lines if not _line_targets_changed_file(ln, changed_set)]
+        if not lines:
+            continue
+        block = f"### Usages of `{sym}`\n" + "\n".join(lines)
+        if total_chars + len(block) > USAGE_BUDGET:
+            omitted = len(symbols) - len(blocks)
+            blocks.append(f"\u2026 ({omitted} more usages omitted by retrieval budget)")
+            break
+        blocks.append(block)
+        total_chars += len(block)
+
+    if not blocks:
+        return None
+    return "\n\n".join(blocks)
