@@ -105,3 +105,19 @@ def test_write_config_default_path(tmp_path, monkeypatch):
     assert (tmp_path / ".superseded.yaml").exists()
     loaded = load_config(None)
     assert loaded.agent == "codex"
+
+
+def test_config_graph_default_true():
+    from superseded.config import Config
+
+    assert Config().graph is True
+
+
+def test_config_graph_round_trip(tmp_path):
+    from superseded.config import Config, load_config, write_config
+
+    cfg = Config(graph=False)
+    target = tmp_path / ".superseded.yaml"
+    write_config(cfg, target)
+    loaded = load_config(target)
+    assert loaded.graph is False
