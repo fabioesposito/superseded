@@ -95,3 +95,144 @@ def test_ensure_graph_fresh_passes_cwd(monkeypatch):
     assert seen["cmd"] == ["code-review-graph", "update", "--brief"]
     assert seen["kwargs"]["cwd"] == Path("/repo")
     assert seen["kwargs"]["timeout"] == 30
+
+
+def _install_fake_query(monkeypatch, query_graph_impl):
+    """Inject a fake code_review_graph.tools.query.query_graph callable."""
+    fake_query_mod = ModuleType("code_review_graph.tools.query")
+    fake_query_mod.query_graph = query_graph_impl
+    fake_tools = ModuleType("code_review_graph.tools")
+    fake_tools.query = fake_query_mod
+    fake_module = ModuleType("code_review_graph")
+    fake_module.tools = fake_tools
+    monkeypatch.setitem(sys.modules, "code_review_graph", fake_module)
+    monkeypatch.setitem(sys.modules, "code_review_graph.tools", fake_tools)
+    monkeypatch.setitem(sys.modules, "code_review_graph.tools.query", fake_query_mod)
+
+
+def test_query_callers_formats_path_line_name(monkeypatch):
+    """Each caller becomes a 'path:line: caller_name' line (matches rg -n output)."""
+    fake_result = {
+        "status": "ok",
+        "results": [
+            {
+                "qualified_name": "src/caller.py::do_thing",
+                "name": "do_thing",
+                "file_path": "src/caller.py",
+                "line_start": 42,
+            }
+        ],
+        "edges": [
+            {
+                "kind": "CALLS",
+                "source": "src/caller.py::do_thing",
+                "target": "src/lib.py::foobar",
+                "file_path": "src/caller.py",
+                "line": 45,
+            }
+        ],
+    }
+    captured = {}
+
+    def fake_query_graph(pattern, target, repo_root):
+        captured.update(pattern=pattern, target=target, repo_root=repo_root)
+        return fake_result
+
+    _install_fake_query(monkeypatch, fake_query_graph)
+
+    from superseded.context.graph_retrieval import _query_callers
+
+    lines = _query_callers("foobar", Path("/repo"))
+    assert lines == ["src/caller.py:45: do_thing"]
+    assert captured == {"pattern": "callers_of", "target": "foobar", "repo_root": "/repo"}
+
+
+def test_query_callers_returns_empty_on_not_found(monkeypatch):
+    _install_fake_query(
+        monkeypatch,
+        lambda pattern, target, repo_root: {
+            "status": "not_found",
+            "results": [],
+            "edges": [],
+        },
+    )
+    from superseded.context.graph_retrieval import _query_callers
+
+    assert _query_callers("missing", Path("/repo")) == []
+
+
+def test_query_callers_returns_empty_on_ambiguous(monkeypatch):
+    _install_fake_query(
+        monkeypatch,
+        lambda pattern, target, repo_root: {
+            "status": "ambiguous",
+            "candidates": ["a.py::x", "b.py::x"],
+            "results": [],
+            "edges": [],
+        },
+    )
+    from superseded.context.graph_retrieval import _query_callers
+
+    assert _query_callers("x", Path("/repo")) == []
+
+
+def test_query_callers_swallows_value_error(monkeypatch, caplog):
+    """Bad repo_root raises ValueError inside CRG; we log and return []."""
+
+    def boom(pattern, target, repo_root):
+        raise ValueError("repo_root does not exist")
+
+    _install_fake_query(monkeypatch, boom)
+    from superseded.context.graph_retrieval import _query_callers
+
+    with caplog.at_level("WARNING"):
+        assert _query_callers("anything", Path("/repo")) == []
+    assert "raised" in caplog.text
+
+
+def test_query_callers_swallows_generic_exception(monkeypatch, caplog):
+    """sqlite3 corruption or anything else should never abort the review."""
+
+    def boom(pattern, target, repo_root):
+        raise RuntimeError("db corrupted")
+
+    _install_fake_query(monkeypatch, boom)
+    from superseded.context.graph_retrieval import _query_callers
+
+    with caplog.at_level("WARNING"):
+        assert _query_callers("anything", Path("/repo")) == []
+    assert "raised" in caplog.text
+
+
+def test_query_callers_skips_non_calls_edges(monkeypatch):
+    """Only CALLS edges count as caller relationships."""
+    fake_result = {
+        "status": "ok",
+        "results": [
+            {
+                "qualified_name": "src/c.py::caller",
+                "name": "caller",
+                "file_path": "src/c.py",
+                "line_start": 1,
+            }
+        ],
+        "edges": [
+            {
+                "kind": "TESTED_BY",
+                "source": "src/c.py::caller",
+                "file_path": "src/c.py",
+                "line": 2,
+            },
+            {
+                "kind": "CALLS",
+                "source": "src/c.py::caller",
+                "file_path": "src/c.py",
+                "line": 3,
+            },
+        ],
+    }
+    _install_fake_query(monkeypatch, lambda *a, **kw: fake_result)
+    from superseded.context.graph_retrieval import _query_callers
+
+    lines = _query_callers("sym", Path("/repo"))
+    assert lines == ["src/c.py:3: caller"]
