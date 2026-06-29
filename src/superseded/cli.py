@@ -16,6 +16,7 @@ from superseded.context.gathering import gather_context
 from superseded.detection import (
     default_model_for,
     detect_agents,
+    detect_code_review_graph,
     detect_gh,
     pick_agent,
 )
@@ -446,6 +447,15 @@ def _run_init(force: bool, agent_override: str | None, config_path: Path | None)
         _status("gh CLI: found")
     else:
         _status("gh CLI: not found (PR features will be disabled)")
+
+    if detect_code_review_graph(Path.cwd()):
+        _status("code-review-graph: found")
+    else:
+        _status(
+            "code-review-graph: not installed "
+            "(graph-grounded reviews disabled; install with: "
+            "uv add code-review-graph && code-review-graph build)"
+        )
 
     if agent_override is not None:
         if agent_override not in AGENT_MAP:
