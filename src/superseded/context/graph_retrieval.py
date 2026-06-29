@@ -4,13 +4,13 @@ import logging
 import subprocess
 from pathlib import Path
 
-from superseded.context.usage_retrieval import (  # noqa: F401
+from superseded.context.usage_retrieval import (
     _LANG_MAP,
     MAX_SYMBOLS,
     USAGE_BUDGET,
     extract_symbols,
 )
-from superseded.diff import parse_diff_files  # noqa: F401
+from superseded.diff import parse_diff_files
 
 logger = logging.getLogger(__name__)
 
@@ -89,3 +89,62 @@ def _query_callers(symbol: str, root: Path) -> list[str]:
             caller_name = caller_qn.split("::")[-1] if "::" in caller_qn else caller_qn
         lines.append(f"{file_path}:{line}: {caller_name}")
     return lines
+
+
+def _line_targets_changed_file(line: str, changed: set[str]) -> bool:
+    """True if the leading path of a 'path:line: snippet' line is in `changed`."""
+    if ":" not in line:
+        return False
+    path = line.split(":", 1)[0]
+    return Path(path).as_posix() in changed
+
+
+def retrieve_usages_via_graph(
+    diff: str, root: Path, *, changed_files: list[str] | None = None
+) -> str | None:
+    """Graph-grounded drop-in replacement for usage_retrieval.retrieve_usages.
+
+    Reuses extract_symbols() so the symbol set is identical to the rg path.
+    Produces `### Usages of <symbol>` blocks under the same USAGE_BUDGET.
+    Returns None when no symbols or no caller data found.
+    """
+    entries = parse_diff_files(diff)
+    if entries:
+        if changed_files is None:
+            changed_files = [e["file"] for e in entries]
+        symbols: list[str] = []
+        seen: set[str] = set()
+        for entry in entries:
+            lang = _LANG_MAP.get(Path(entry["file"]).suffix)
+            for sym in extract_symbols(entry["diff"], lang):
+                if sym not in seen:
+                    seen.add(sym)
+                    symbols.append(sym)
+        symbols = symbols[-MAX_SYMBOLS:]
+    else:
+        changed_files = changed_files or []
+        symbols = extract_symbols(diff, None)
+
+    if not symbols:
+        return None
+
+    changed_set = {Path(f).as_posix() for f in changed_files}
+
+    blocks: list[str] = []
+    total_chars = 0
+    for sym in symbols:
+        all_lines = _query_callers(sym, root)
+        lines = [ln for ln in all_lines if not _line_targets_changed_file(ln, changed_set)]
+        if not lines:
+            continue
+        block = f"### Usages of `{sym}`\n" + "\n".join(lines)
+        if total_chars + len(block) > USAGE_BUDGET:
+            omitted = len(symbols) - len(blocks)
+            blocks.append(f"\u2026 ({omitted} more usages omitted by retrieval budget)")
+            break
+        blocks.append(block)
+        total_chars += len(block)
+
+    if not blocks:
+        return None
+    return "\n\n".join(blocks)

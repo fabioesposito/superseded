@@ -236,3 +236,98 @@ def test_query_callers_skips_non_calls_edges(monkeypatch):
 
     lines = _query_callers("sym", Path("/repo"))
     assert lines == ["src/c.py:3: caller"]
+
+
+def test_retrieve_usages_via_graph_no_symbols_returns_none():
+    from superseded.context.graph_retrieval import retrieve_usages_via_graph
+
+    assert retrieve_usages_via_graph("@@ -1 +1 @@\n unchanged\n", Path("/repo")) is None
+
+
+def test_retrieve_usages_via_graph_formats_blocks(monkeypatch):
+    """For one symbol whose _query_callers returns lines, the output is a
+    ### Usages of `symbol` block."""
+    fake_result = {
+        "status": "ok",
+        "results": [
+            {
+                "qualified_name": "src/x.py::c0",
+                "name": "c0",
+                "file_path": "src/x.py",
+                "line_start": 1,
+            }
+        ],
+        "edges": [
+            {"kind": "CALLS", "source": "src/x.py::c0", "file_path": "src/x.py", "line": 10},
+            {"kind": "CALLS", "source": "src/x.py::c0", "file_path": "src/x.py", "line": 20},
+        ],
+    }
+    _install_fake_query(monkeypatch, lambda *a, **kw: fake_result)
+    from superseded.context.graph_retrieval import retrieve_usages_via_graph
+
+    result = retrieve_usages_via_graph("@@ -1 +1 @@\n+def foobar():\n+    pass\n", Path("/repo"))
+    assert result is not None
+    assert "### Usages of `foobar`" in result
+    assert "src/x.py:10" in result
+    assert "src/x.py:20" in result
+
+
+def test_retrieve_usages_via_graph_excludes_changed_files(monkeypatch):
+    """Callers inside changed files should be filtered out — mirrors rg's
+    --glob behavior."""
+    fake_result = {
+        "status": "ok",
+        "results": [],
+        "edges": [
+            {
+                "kind": "CALLS",
+                "source": "src/changed.py::local",
+                "file_path": "src/changed.py",
+                "line": 5,
+            },
+            {
+                "kind": "CALLS",
+                "source": "src/other.py::ext",
+                "file_path": "src/other.py",
+                "line": 7,
+            },
+        ],
+    }
+    _install_fake_query(monkeypatch, lambda *a, **kw: fake_result)
+    from superseded.context.graph_retrieval import retrieve_usages_via_graph
+
+    diff = "diff --git a/src/changed.py b/src/changed.py\n@@ -1 +1,2 @@\n+def foo():\n+    pass\n"
+    result = retrieve_usages_via_graph(diff, Path("/repo"))
+    assert result is not None
+    assert "src/other.py:7" in result
+    assert "src/changed.py:5" not in result
+
+
+def test_retrieve_usages_via_graph_budget_truncation(monkeypatch):
+    """When the running block size exceeds USAGE_BUDGET, the tail-truncation
+    marker is added."""
+    # Each symbol returns many callers so total output exceeds USAGE_BUDGET (6000).
+    edges = [
+        {"kind": "CALLS", "source": f"src/x.py::c{i}", "file_path": "src/x.py", "line": ln}
+        for i, ln in enumerate(range(1, 600))
+    ]
+    fake_result = {"status": "ok", "results": [], "edges": edges}
+    _install_fake_query(monkeypatch, lambda *a, **kw: fake_result)
+    from superseded.context.graph_retrieval import retrieve_usages_via_graph
+
+    diff = "@@ -1 +1,2 @@\n+def foobar():\n+def baz():\n"
+    result = retrieve_usages_via_graph(diff, Path("/repo"))
+    assert result is not None
+    assert "omitted" in result
+
+
+def test_retrieve_usages_via_graph_returns_none_when_no_callers(monkeypatch):
+    """All symbols yield empty caller lists -> None."""
+    _install_fake_query(
+        monkeypatch,
+        lambda *a, **kw: {"status": "ok", "results": [], "edges": []},
+    )
+    from superseded.context.graph_retrieval import retrieve_usages_via_graph
+
+    result = retrieve_usages_via_graph("@@ -1 +1 @@\n+def foo():\n+def bar():\n", Path("/repo"))
+    assert result is None
