@@ -17,6 +17,7 @@ class ServerConfig(BaseModel):
     temp_dir: Path = Path("/tmp/superseded")
     log_level: str = "info"
     health_token: str = ""
+    database_url: str | None = None
     tls_cert_path: Path | None = None
     tls_key_path: Path | None = None
 
@@ -105,6 +106,10 @@ class ServerConfig(BaseModel):
         health_token = os.environ.get("SUPERSEDED_HEALTH_TOKEN")
         if health_token:
             kwargs["health_token"] = health_token
+
+        database_url = os.environ.get("SUPERSEDED_DATABASE_URL")
+        if database_url:
+            kwargs["database_url"] = database_url
 
         return cls(**kwargs)
 
