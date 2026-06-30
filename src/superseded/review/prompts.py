@@ -55,6 +55,7 @@ def build_prompt(
     usage_signals: str | None = None,
     conventions_signals: str | None = None,
     spec_signals: str | None = None,
+    learned_context: str | None = None,
 ) -> str:
     instructions = PASS_INSTRUCTIONS.get(pass_name, "Review for issues.")
     pr_desc = pr_description or "No description provided."
@@ -64,6 +65,10 @@ def build_prompt(
     usage = usage_signals or "No usages retrieved."
     conv = conventions_signals or "No project conventions discovered."
     spec = spec_signals or "No relevant specs/plans found."
+    learned = (
+        learned_context
+        or "No learned guidelines yet. Guidelines form as feedback accumulates over multiple reviews."
+    )
 
     return f"""You are performing a {pass_name} code review.
 
@@ -87,6 +92,9 @@ def build_prompt(
 
 ### Relevant Design Specs & Plans
 {spec}
+
+### Learned Review Guidelines
+{learned}
 
 ### PR Description
 {pr_desc}

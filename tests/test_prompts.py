@@ -173,3 +173,44 @@ def test_old_sections_unchanged_when_new_kwargs_none():
     assert "some context" in prompt
     assert "### Past Feedback" in prompt
     assert "some memory" in prompt
+
+
+def test_learned_context_section_present_when_kwarg_non_empty():
+    prompt = build_prompt(
+        pass_name="security",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+        learned_context="## Learned\navoid style nits in tests",
+    )
+    assert "### Learned Review Guidelines" in prompt
+    assert "avoid style nits in tests" in prompt
+
+
+def test_learned_context_placeholder_when_none():
+    prompt = build_prompt(
+        pass_name="security",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+    )
+    assert "No learned guidelines yet" in prompt
+
+
+def test_learned_context_ordering():
+    prompt = build_prompt(
+        pass_name="architecture",
+        diff="x",
+        pr_description="my PR",
+        file_context=None,
+        memory_context=None,
+        conventions_signals="conv",
+        spec_signals="spec",
+        learned_context="learned stuff",
+    )
+    spec_pos = prompt.index("### Relevant Design Specs & Plans")
+    learned_pos = prompt.index("### Learned Review Guidelines")
+    pr_pos = prompt.index("### PR Description")
+    assert spec_pos < learned_pos < pr_pos
