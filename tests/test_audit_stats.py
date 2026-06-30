@@ -275,3 +275,43 @@ async def _test_get_stats_context_repo_isolation():
 
 def test_get_stats_context_repo_isolation():
     asyncio.run(_test_get_stats_context_repo_isolation())
+
+
+async def test_memory_store_refresh_review_stats(tmp_path):
+    from superseded.memory.store import MemoryStore
+
+    store = MemoryStore(Path(tmp_path) / "st.db")
+    await store.open()
+    try:
+        await store.record_finding("f1", "octo/r", "security", "critical", "a.py", 1, "t", "d")
+        await store.record_finding(
+            "f2", "octo/r", "security", "critical", "tests/b.py", 2, "t", "d"
+        )
+        await store.record_feedback("f1", "helpful")
+        await store.record_feedback("f2", "dismiss")
+        await store.refresh_review_stats("octo/r")
+        rows = await store.get_review_stats("octo/r", min_sample=1)
+        assert len(rows) == 2  # two file_patterns: '*' and 'test'
+        by_pat = {r["file_pattern"]: r for r in rows}
+        star = by_pat["*"]
+        assert star["total"] == 1 and star["accepted"] == 1 and star["dismissed"] == 0
+        test_pat = by_pat["test"]
+        assert test_pat["total"] == 1 and test_pat["dismissed"] == 1 and test_pat["accepted"] == 0
+    finally:
+        await store.close()
+
+
+async def test_memory_store_get_review_stats_respects_min_sample(tmp_path):
+    from superseded.memory.store import MemoryStore
+
+    store = MemoryStore(Path(tmp_path) / "st.db")
+    await store.open()
+    try:
+        await store.record_finding("f1", "octo/r", "security", "critical", "a.py", 1, "t", "d")
+        await store.record_feedback("f1", "helpful")
+        await store.refresh_review_stats("octo/r")
+        # total=1 < min_sample=5 → filtered out
+        assert await store.get_review_stats("octo/r", min_sample=5) == []
+        assert len(await store.get_review_stats("octo/r", min_sample=1)) == 1
+    finally:
+        await store.close()

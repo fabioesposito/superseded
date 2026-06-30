@@ -19,7 +19,7 @@ from superseded.review.engine import ReviewEngine
 from superseded.server.checkout import checkout_repo
 
 if TYPE_CHECKING:
-    from superseded.memory.store import MemoryStore
+    from superseded.memory.backend import Store
     from superseded.server.github import GitHubApp
     from superseded.server.repo_manager import RepoManager
 
@@ -62,7 +62,7 @@ class ReviewWorker:
         repo_manager: RepoManager,
         max_concurrent: int = 3,
         max_queue: int = 100,
-        store: MemoryStore | None = None,
+        store: Store | None = None,
     ) -> None:
         self.github = github
         self.repo_manager = repo_manager
@@ -264,7 +264,7 @@ async def _run_review_for_job(
     token: str,
     job: ReviewJob,
     correlation_id: str,
-    store: MemoryStore | None = None,
+    store: Store | None = None,
 ) -> ReviewOutcome:
     tmp_dir = repo_manager.job_dir(
         job.installation_id, job.owner, job.repo, job.pr_number, job.job_id

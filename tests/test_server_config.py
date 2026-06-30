@@ -112,3 +112,49 @@ def test_server_config_tls_defaults_to_none():
     config = ServerConfig()
     assert config.tls_cert_path is None
     assert config.tls_key_path is None
+
+
+def test_server_config_database_url_defaults_to_none():
+    from superseded.server.config import ServerConfig
+
+    assert ServerConfig().database_url is None
+
+
+def test_server_config_database_url_from_env(monkeypatch, tmp_path):
+    from superseded.server.config import ServerConfig
+
+    key = tmp_path / "key.pem"
+    key.write_text("x")
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "111")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "s")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(key))
+    monkeypatch.setenv("SUPERSEDED_DATABASE_URL", "postgres://u:p@h/db")
+    cfg = ServerConfig.from_env()
+    assert cfg.database_url == "postgres://u:p@h/db"
+
+
+def test_server_config_database_url_absent_from_env(monkeypatch, tmp_path):
+    from superseded.server.config import ServerConfig
+
+    key = tmp_path / "key.pem"
+    key.write_text("x")
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "111")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "s")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(key))
+    monkeypatch.delenv("SUPERSEDED_DATABASE_URL", raising=False)
+    cfg = ServerConfig.from_env()
+    assert cfg.database_url is None
+
+
+def test_server_config_database_url_from_yaml(tmp_path):
+    from superseded.server.config import ServerConfig
+
+    key = tmp_path / "key.pem"
+    key.write_text("x")
+    config_file = tmp_path / "server.yaml"
+    config_file.write_text(
+        f"app_id: 222\nwebhook_secret: s\nprivate_key_path: {key}\n"
+        f"database_url: postgresql://u:p@h/db\n"
+    )
+    cfg = ServerConfig.from_yaml(config_file)
+    assert cfg.database_url == "postgresql://u:p@h/db"
