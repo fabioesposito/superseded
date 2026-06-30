@@ -121,3 +121,17 @@ def test_config_graph_round_trip(tmp_path):
     write_config(cfg, target)
     loaded = load_config(target)
     assert loaded.graph is False
+
+
+def test_config_progressive_defaults_true():
+    from superseded.config import Config
+
+    cfg = Config()
+    assert cfg.progressive is True
+
+
+def test_config_progressive_can_be_disabled():
+    from superseded.config import Config
+
+    cfg = Config(progressive=False)
+    assert cfg.progressive is False
