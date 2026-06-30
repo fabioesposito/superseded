@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 
 if TYPE_CHECKING:
-    from superseded.memory.store import MemoryStore
+    from superseded.memory.backend import Store
     from superseded.server.config import ServerConfig
     from superseded.server.github import GitHubApp
     from superseded.server.repo_manager import RepoManager
@@ -68,7 +68,7 @@ def create_app(
     github: GitHubApp,
     worker: ReviewWorker,
     repo_manager: RepoManager,
-    store: MemoryStore,
+    store: Store,
     lifespan: Callable[[FastAPI], AsyncIterator[None]] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="Superseded", version="0.1.0", lifespan=lifespan)
@@ -134,7 +134,7 @@ async def _handle_pr_event(
     data: dict,
     github: GitHubApp,
     worker: ReviewWorker,
-    store: MemoryStore,
+    store: Store,
 ) -> None:
     action = data.get("action", "")
     if action not in ("opened", "synchronize", "reopened"):
@@ -192,7 +192,7 @@ async def _handle_pr_event(
 
 async def _handle_installation_event(
     data: dict,
-    store: MemoryStore,
+    store: Store,
 ) -> None:
     action = data.get("action", "")
     installation = data["installation"]

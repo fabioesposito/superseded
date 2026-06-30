@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import subprocess
@@ -682,6 +683,7 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
     """Start the Superseded review server."""
     from contextlib import asynccontextmanager
 
+    from superseded.memory.backend import make_store
     from superseded.server.config import ServerConfig
     from superseded.server.github import GitHubApp
     from superseded.server.repo_manager import RepoManager
@@ -706,11 +708,12 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
         webhook_secret=config.webhook_secret,
     )
     repo_manager = RepoManager(base_path=config.temp_dir)
+    store = make_store(config.database_url, max_size=config.max_concurrent_reviews + 2)
     worker = ReviewWorker(
         github=github,
         repo_manager=repo_manager,
         max_concurrent=config.max_concurrent_reviews,
-        store=MemoryStore(),
+        store=store,
     )
 
     import uvicorn
@@ -727,13 +730,15 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
             yield
         finally:
             await lifecycle.shutdown()
+            with contextlib.suppress(Exception):
+                await store.close()
 
     app = create_app(
         config=config,
         github=github,
         worker=worker,
         repo_manager=repo_manager,
-        store=MemoryStore(),
+        store=store,
         lifespan=lifespan,
     )
 
