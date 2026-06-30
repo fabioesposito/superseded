@@ -9,6 +9,8 @@ from pathlib import Path
 
 import aiosqlite
 
+from superseded.memory._stats_sql import STATS_FILE_PATTERN_CASE
+
 DEFAULT_DB_PATH = Path(".superseded/memory.db")
 
 SCHEMA = """
@@ -79,18 +81,6 @@ CREATE TABLE IF NOT EXISTS reflection_state (
     PRIMARY KEY (repo)
 );
 """
-
-_STATS_FILE_PATTERN_CASE = """\
-CASE
-    WHEN f.file LIKE 'test/%' OR f.file LIKE 'tests/%'
-         OR f.file LIKE '%_test.%' OR f.file LIKE 'test_%'
-         OR f.file LIKE '%__test__/%' THEN 'test'
-    WHEN f.file LIKE '%migrations/%' THEN 'migration'
-    WHEN f.file LIKE '%.yaml' OR f.file LIKE '%.yml'
-         OR f.file LIKE '%.toml' OR f.file LIKE '%.json'
-         OR f.file LIKE 'Dockerfile%' THEN 'config'
-    ELSE '*'
-END"""
 
 
 class MemoryStore:
@@ -379,7 +369,7 @@ class MemoryStore:
                 f"INSERT INTO review_stats "
                 f"(repo, pass, severity, file_pattern, total, accepted, dismissed) "
                 f"SELECT f.repo, f.pass, f.severity, "
-                f"{_STATS_FILE_PATTERN_CASE} AS file_pattern, "
+                f"{STATS_FILE_PATTERN_CASE} AS file_pattern, "
                 f"COUNT(*) AS total, "
                 f"COUNT(*) FILTER (WHERE fb.action = 'helpful') AS accepted, "
                 f"COUNT(*) FILTER (WHERE fb.action = 'dismiss') AS dismissed "

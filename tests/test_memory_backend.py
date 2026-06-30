@@ -59,3 +59,26 @@ def test_make_store_postgresql_scheme_also_works():
 def test_make_store_unsupported_scheme_raises():
     with pytest.raises(ValueError, match="Unsupported database scheme"):
         make_store("mysql://u:p@host/db")
+
+
+def test_memory_store_satisfies_store_protocol_including_dunders():
+    """Regression: worker.py does `async with store:` — both backends must
+    expose __aenter__/__aexit__. The runtime_checkable Protocol only checks
+    attribute existence, so verify the dunders explicitly."""
+    from superseded.memory.backend import Store
+    from superseded.memory.store import MemoryStore
+
+    s = MemoryStore()
+    assert isinstance(s, Store)
+    assert hasattr(s, "__aenter__") and hasattr(s, "__aexit__")
+
+
+def test_postgres_store_satisfies_store_protocol_including_dunders():
+    """Same regression guard for the Postgres backend (no DB connection needed:
+    PostgresStore('postgres://x') only stores the DSN, doesn't connect)."""
+    from superseded.memory.backend import Store
+    from superseded.memory.postgres import PostgresStore
+
+    s = PostgresStore("postgres://x")
+    assert isinstance(s, Store)
+    assert hasattr(s, "__aenter__") and hasattr(s, "__aexit__")

@@ -5,6 +5,8 @@ import logging
 
 import asyncpg
 
+from superseded.memory._stats_sql import STATS_FILE_PATTERN_CASE
+
 logger = logging.getLogger(__name__)
 
 SCHEMA = """
@@ -76,18 +78,6 @@ CREATE TABLE IF NOT EXISTS reflection_state (
 );
 """
 
-_STATS_FILE_PATTERN_CASE = """\
-CASE
-    WHEN f.file LIKE 'test/%' OR f.file LIKE 'tests/%'
-         OR f.file LIKE '%_test.%' OR f.file LIKE 'test_%'
-         OR f.file LIKE '%__test__/%' THEN 'test'
-    WHEN f.file LIKE '%migrations/%' THEN 'migration'
-    WHEN f.file LIKE '%.yaml' OR f.file LIKE '%.yml'
-         OR f.file LIKE '%.toml' OR f.file LIKE '%.json'
-         OR f.file LIKE 'Dockerfile%' THEN 'config'
-    ELSE '*'
-END"""
-
 
 def _row_to_dict(row: asyncpg.Record | None) -> dict | None:
     return dict(row) if row is not None else None
@@ -135,6 +125,16 @@ class PostgresStore:
 
     async def init(self) -> None:
         await self.open()
+
+    async def __aenter__(self) -> PostgresStore:
+        await self.open()
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        # Pool lifecycle is owned by the server lifespan (store.close()); the
+        # `async with store:` idiom in the worker only gates a batch of ops,
+        # it does not open/close the pool per batch.
+        return None
 
     def _conn(self) -> asyncpg.PoolAcquireContext:
         assert self._pool is not None, "PostgresStore.open() not called"
@@ -304,7 +304,7 @@ class PostgresStore:
                 f"INSERT INTO review_stats "
                 f"(repo, pass, severity, file_pattern, total, accepted, dismissed) "
                 f"SELECT f.repo, f.pass, f.severity, "
-                f"{_STATS_FILE_PATTERN_CASE} AS file_pattern, "
+                f"{STATS_FILE_PATTERN_CASE} AS file_pattern, "
                 f"COUNT(*) AS total, "
                 f"COUNT(*) FILTER (WHERE fb.action = 'helpful') AS accepted, "
                 f"COUNT(*) FILTER (WHERE fb.action = 'dismiss') AS dismissed "
