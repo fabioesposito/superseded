@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING
 
 import yaml
 
+from superseded.audit.guidelines import assemble_learned_context
+from superseded.audit.reflector import PatternReflector
+from superseded.audit.stats import StatsAggregator
 from superseded.config import Config
 from superseded.context.gathering import gather_context
 from superseded.models import ReviewResult
@@ -362,6 +365,11 @@ async def _run_review_for_job(
         conventions_signals = context["conventions_signals"]
         spec_signals = context["spec_signals"]
 
+        learned_context: str | None = None
+        if config.learned_review and store is not None:
+            all_rules = await store.get_learned_rules(repo_key, limit=config.max_learned_rules)
+            learned_context = assemble_learned_context(None, all_rules, config.max_learned_rules)
+
         engine = ReviewEngine.select(config.agent, model=config.model, config=config)
         result = await asyncio.to_thread(
             engine.review,
@@ -372,6 +380,7 @@ async def _run_review_for_job(
             usage_signals=usage_signals,
             conventions_signals=conventions_signals,
             spec_signals=spec_signals,
+            learned_context=learned_context,
             cwd=repo_path,
         )
 
@@ -406,6 +415,17 @@ async def _run_review_for_job(
                     if cid is not None:
                         await store.set_comment_id(finding.id, cid)
                 await store.set_watermark(repo_key, job.pr_number, job.head_sha)
+
+            if config.learned_review:
+                aggregator = StatsAggregator(store)
+                await aggregator._refresh(repo_key)
+                await aggregator.get_stats_context(repo_key)
+
+                engine_for_reflection = ReviewEngine.select(
+                    config.agent, model=config.model, config=config
+                )
+                reflector = PatternReflector(agent=engine_for_reflection.agent, store=store)
+                await reflector.maybe_reflect(repo_key, cwd=repo_path)
 
         conclusion = "success" if payload["event"] != "REQUEST_CHANGES" else "failure"
         title = build_check_run_title(result)
