@@ -16,6 +16,8 @@ class FakeStore:
         self.feedback = []
         self._dismissed = set()
         self.dismissed_calls = 0
+        self.watermarks = {}
+        self.set_watermark_calls = []
 
     async def __aenter__(self):
         return self
@@ -25,6 +27,13 @@ class FakeStore:
 
     async def init(self):
         pass
+
+    async def get_watermark(self, repo, pr_number):
+        return self.watermarks.get((repo, pr_number))
+
+    async def set_watermark(self, repo, pr_number, head_sha):
+        self.watermarks[(repo, pr_number)] = head_sha
+        self.set_watermark_calls.append((repo, pr_number, head_sha))
 
     async def get_dismissed_findings(self, repo):
         self.dismissed_calls += 1
@@ -82,6 +91,7 @@ def _make_finding():
     )
 
 
+@patch("superseded.cli._resolve_pr_review_diff")
 @patch("superseded.cli.post_review_to_pr")
 @patch("superseded.cli.MemoryStore")
 @patch("superseded.cli.current_repo")
@@ -90,9 +100,17 @@ def _make_finding():
 @patch("superseded.cli.fetch_pr_description")
 @patch("superseded.cli.fetch_diff")
 def test_review_wires_memory_persistence_and_comment_ids(
-    mock_fetch, mock_desc, mock_ctx, mock_engine_cls, mock_repo, mock_store_cls, mock_post
+    mock_fetch,
+    mock_desc,
+    mock_ctx,
+    mock_engine_cls,
+    mock_repo,
+    mock_store_cls,
+    mock_post,
+    mock_resolve,
 ):
     mock_fetch.return_value = "diff"
+    mock_resolve.return_value = ("diff", "full", None)
     mock_ctx.return_value = "ctx"
     mock_desc.return_value = "PR body"
     mock_engine = MagicMock()
@@ -118,14 +136,16 @@ def test_review_wires_memory_persistence_and_comment_ids(
     mock_post.assert_called_once()
 
 
+@patch("superseded.cli._resolve_pr_review_diff")
 @patch("superseded.cli.MemoryStore")
 @patch("superseded.cli.current_repo")
 @patch("superseded.cli.ReviewEngine")
 @patch("superseded.cli.fetch_diff")
 def test_review_injects_dismissed_findings_as_memory(
-    mock_fetch, mock_engine_cls, mock_repo, mock_store_cls
+    mock_fetch, mock_engine_cls, mock_repo, mock_store_cls, mock_resolve
 ):
     mock_fetch.return_value = "diff"
+    mock_resolve.return_value = ("diff", "full", None)
     mock_engine = MagicMock()
     mock_engine_cls.select.return_value = mock_engine
     mock_engine.review.return_value = ReviewResult(findings=[])
@@ -430,3 +450,124 @@ def test_no_conventions_flag_skips_discover(monkeypatch):
     call_kwargs = mock_engine.review.call_args
     assert call_kwargs[1].get("conventions_signals") is None
     assert call_kwargs[1].get("spec_signals") is None
+
+
+@patch("superseded.cli._resolve_pr_review_diff")
+@patch("superseded.cli.MemoryStore")
+@patch("superseded.cli.current_repo")
+@patch("superseded.cli.ReviewEngine")
+@patch("superseded.context.gathering.compute_file_context")
+@patch("superseded.cli.fetch_pr_description")
+def test_review_progressive_writes_watermark_after_success(
+    mock_desc, mock_ctx, mock_engine_cls, mock_repo, mock_store_cls, mock_resolve
+):
+    mock_desc.return_value = None
+    mock_ctx.return_value = "ctx"
+    mock_engine = MagicMock()
+    mock_engine_cls.select.return_value = mock_engine
+    mock_engine.review.return_value = ReviewResult(findings=[])
+    mock_engine.agent.is_available.return_value = True
+    mock_repo.return_value = "owner/repo"
+    store = FakeStore()
+    mock_store_cls.return_value = store
+    mock_resolve.return_value = ("DIFF", "incremental", "headsha")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--pr", "5"])
+
+    assert result.exit_code == 0, result.output
+    mock_resolve.assert_called_once()
+    assert ("owner/repo", 5, "headsha") in store.set_watermark_calls
+
+
+@patch("superseded.cli._resolve_pr_review_diff")
+@patch("superseded.cli.MemoryStore")
+@patch("superseded.cli.current_repo")
+@patch("superseded.cli.ReviewEngine")
+@patch("superseded.context.gathering.compute_file_context")
+@patch("superseded.cli.fetch_pr_description")
+def test_review_noop_when_identical(
+    mock_desc, mock_ctx, mock_engine_cls, mock_repo, mock_store_cls, mock_resolve
+):
+    mock_desc.return_value = None
+    mock_ctx.return_value = "ctx"
+    mock_engine = MagicMock()
+    mock_engine_cls.select.return_value = mock_engine
+    mock_engine.agent.is_available.return_value = True
+    mock_repo.return_value = "owner/repo"
+    store = FakeStore()
+    mock_store_cls.return_value = store
+    mock_resolve.return_value = (None, "noop", "headsha")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--pr", "5", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    mock_engine.review.assert_not_called()
+    assert store.set_watermark_calls == []
+
+
+@patch("superseded.cli._resolve_pr_review_diff")
+@patch("superseded.cli.MemoryStore")
+@patch("superseded.cli.current_repo")
+@patch("superseded.cli.ReviewEngine")
+@patch("superseded.context.gathering.compute_file_context")
+@patch("superseded.cli.fetch_pr_description")
+def test_review_engine_failure_does_not_advance_watermark(
+    mock_desc, mock_ctx, mock_engine_cls, mock_repo, mock_store_cls, mock_resolve
+):
+    mock_desc.return_value = None
+    mock_ctx.return_value = "ctx"
+    mock_engine = MagicMock()
+    mock_engine_cls.select.return_value = mock_engine
+    mock_engine.agent.is_available.return_value = True
+    mock_engine.review.side_effect = RuntimeError("agent crashed")
+    mock_repo.return_value = "owner/repo"
+    store = FakeStore()
+    mock_store_cls.return_value = store
+    mock_resolve.return_value = ("DIFF", "incremental", "headsha")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--pr", "5"])
+
+    assert result.exit_code == 1, result.output
+    assert store.set_watermark_calls == []
+
+
+@patch("superseded.cli.fetch_pr_head_sha")
+@patch("superseded.cli.fetch_incremental_diff")
+@patch("superseded.cli.fetch_diff")
+@patch("superseded.cli.MemoryStore")
+@patch("superseded.cli.current_repo")
+@patch("superseded.cli.ReviewEngine")
+@patch("superseded.context.gathering.compute_file_context")
+@patch("superseded.cli.fetch_pr_description")
+def test_review_full_flag_skips_resolve_and_advances(
+    mock_desc,
+    mock_ctx,
+    mock_engine_cls,
+    mock_repo,
+    mock_store_cls,
+    mock_fetch_diff,
+    mock_fetch_inc,
+    mock_fetch_head,
+):
+    mock_desc.return_value = None
+    mock_ctx.return_value = "ctx"
+    mock_engine = MagicMock()
+    mock_engine_cls.select.return_value = mock_engine
+    mock_engine.review.return_value = ReviewResult(findings=[])
+    mock_engine.agent.is_available.return_value = True
+    mock_repo.return_value = "owner/repo"
+    store = FakeStore()
+    mock_store_cls.return_value = store
+    mock_fetch_diff.return_value = "FULLDIFF"
+    mock_fetch_head.return_value = "headsha"
+    mock_fetch_inc.return_value = ("INCDIFF", "ahead")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--pr", "5", "--full"])
+
+    assert result.exit_code == 0, result.output
+    mock_fetch_inc.assert_not_called()
+    assert ("owner/repo", 5, "headsha") in store.set_watermark_calls
