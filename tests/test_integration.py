@@ -571,3 +571,44 @@ def test_review_full_flag_skips_resolve_and_advances(
     assert result.exit_code == 0, result.output
     mock_fetch_inc.assert_not_called()
     assert ("owner/repo", 5, "headsha") in store.set_watermark_calls
+
+
+@patch("superseded.cli.fetch_diff")
+@patch("superseded.cli.fetch_pr_head_sha")
+@patch("superseded.cli.MemoryStore")
+@patch("superseded.cli.current_repo")
+@patch("superseded.cli.ReviewEngine")
+@patch("superseded.context.gathering.compute_file_context")
+@patch("superseded.cli.fetch_pr_description")
+def test_review_init_real_store_before_progressive_read(
+    mock_desc, mock_ctx, mock_engine_cls, mock_repo, mock_store_cls, mock_head, mock_diff, tmp_path
+):
+    """Regression: the CLI must init the real MemoryStore so the watermark table
+    exists before the progressive path reads it (fresh-DB new-user flow).
+
+    Keeps ``_resolve_pr_review_diff`` UNmocked so the real
+    ``store.get_watermark`` runs against a fresh DB inside it — without the
+    ``store.init()`` call in ``_run_review`` this raises OperationalError.
+    """
+    from superseded.memory.store import MemoryStore
+
+    mock_desc.return_value = None
+    mock_ctx.return_value = "ctx"
+    mock_engine = MagicMock()
+    mock_engine_cls.select.return_value = mock_engine
+    mock_engine.review.return_value = ReviewResult(findings=[])
+    mock_engine.agent.is_available.return_value = True
+    mock_repo.return_value = "owner/repo"
+    mock_head.return_value = "headsha"
+    mock_diff.return_value = "DIFF"
+
+    real_store = MemoryStore(db_path=tmp_path / "fresh.db")
+    mock_store_cls.return_value = real_store
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--pr", "5"])
+
+    assert result.exit_code == 0, result.output
+    # The real store was initialized and the watermark row was written without
+    # raising OperationalError (the regression this test guards against).
+    assert asyncio.run(real_store.get_watermark("owner/repo", 5)) == "headsha"

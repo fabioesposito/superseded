@@ -350,6 +350,7 @@ def _run_review(
     store: MemoryStore | None = None
     if memory_enabled:
         store = MemoryStore()
+        asyncio.run(store.init())
 
     head_sha: str | None = None
 
