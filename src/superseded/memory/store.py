@@ -41,6 +41,14 @@ CREATE TABLE IF NOT EXISTS installations (
     repos TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS review_watermarks (
+    repo        TEXT    NOT NULL,
+    pr_number   INTEGER NOT NULL,
+    head_sha    TEXT    NOT NULL,
+    reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (repo, pr_number)
+);
 """
 
 
@@ -121,6 +129,14 @@ class MemoryStore:
             await db.execute("ALTER TABLE findings ADD COLUMN comment_id INTEGER")
         if "reasoning" not in columns:
             await db.execute("ALTER TABLE findings ADD COLUMN reasoning TEXT DEFAULT ''")
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS review_watermarks ("
+            "repo TEXT NOT NULL, "
+            "pr_number INTEGER NOT NULL, "
+            "head_sha TEXT NOT NULL, "
+            "reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "PRIMARY KEY (repo, pr_number))"
+        )
 
     async def record_finding(
         self,
@@ -222,5 +238,23 @@ class MemoryStore:
             await db.execute(
                 "DELETE FROM installations WHERE app_installation_id = ?",
                 (installation_id,),
+            )
+            await db.commit()
+
+    async def get_watermark(self, repo: str, pr_number: int) -> str | None:
+        async with self._db() as db:
+            cursor = await db.execute(
+                "SELECT head_sha FROM review_watermarks WHERE repo = ? AND pr_number = ?",
+                (repo, pr_number),
+            )
+            row = await cursor.fetchone()
+            return row[0] if row is not None else None
+
+    async def set_watermark(self, repo: str, pr_number: int, head_sha: str) -> None:
+        async with self._db() as db:
+            await db.execute(
+                "INSERT INTO review_watermarks (repo, pr_number, head_sha) VALUES (?, ?, ?) "
+                "ON CONFLICT(repo, pr_number) DO UPDATE SET head_sha = excluded.head_sha",
+                (repo, pr_number, head_sha),
             )
             await db.commit()
