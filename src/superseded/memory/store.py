@@ -80,6 +80,18 @@ CREATE TABLE IF NOT EXISTS reflection_state (
 );
 """
 
+_STATS_FILE_PATTERN_CASE = """\
+CASE
+    WHEN f.file LIKE 'test/%' OR f.file LIKE 'tests/%'
+         OR f.file LIKE '%_test.%' OR f.file LIKE 'test_%'
+         OR f.file LIKE '%__test__/%' THEN 'test'
+    WHEN f.file LIKE '%migrations/%' THEN 'migration'
+    WHEN f.file LIKE '%.yaml' OR f.file LIKE '%.yml'
+         OR f.file LIKE '%.toml' OR f.file LIKE '%.json'
+         OR f.file LIKE 'Dockerfile%' THEN 'config'
+    ELSE '*'
+END"""
+
 
 class MemoryStore:
     """SQLite-backed memory with an optional long-lived connection.
@@ -360,3 +372,36 @@ class MemoryStore:
                 (repo, last_feedback_id),
             )
             await db.commit()
+
+    async def refresh_review_stats(self, repo: str) -> None:
+        async with self._db() as db:
+            await db.execute(
+                f"INSERT INTO review_stats "
+                f"(repo, pass, severity, file_pattern, total, accepted, dismissed) "
+                f"SELECT f.repo, f.pass, f.severity, "
+                f"{_STATS_FILE_PATTERN_CASE} AS file_pattern, "
+                f"COUNT(*) AS total, "
+                f"COUNT(*) FILTER (WHERE fb.action = 'helpful') AS accepted, "
+                f"COUNT(*) FILTER (WHERE fb.action = 'dismiss') AS dismissed "
+                f"FROM findings f "
+                f"JOIN feedback fb ON fb.finding_id = f.id "
+                f"WHERE f.repo = ? "
+                f"GROUP BY f.repo, f.pass, f.severity, file_pattern "
+                f"ON CONFLICT(repo, pass, severity, file_pattern) DO UPDATE SET "
+                f"total = excluded.total, "
+                f"accepted = excluded.accepted, "
+                f"dismissed = excluded.dismissed, "
+                f"updated_at = CURRENT_TIMESTAMP",
+                (repo,),
+            )
+            await db.commit()
+
+    async def get_review_stats(self, repo: str, min_sample: int) -> list[dict]:
+        async with self._db() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM review_stats WHERE repo = ? AND total >= ?",
+                (repo, min_sample),
+            )
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]

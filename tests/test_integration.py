@@ -148,6 +148,12 @@ class FakeStore:
     async def set_reflection_state(self, repo, last_feedback_id):
         self._reflection_state[repo] = last_feedback_id
 
+    async def refresh_review_stats(self, repo):
+        pass
+
+    async def get_review_stats(self, repo, min_sample):
+        return []
+
 
 def _make_finding():
     return Finding(
