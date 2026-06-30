@@ -49,6 +49,35 @@ CREATE TABLE IF NOT EXISTS review_watermarks (
     reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (repo, pr_number)
 );
+
+CREATE TABLE IF NOT EXISTS review_stats (
+    repo         TEXT    NOT NULL,
+    pass         TEXT    NOT NULL,
+    severity     TEXT    NOT NULL,
+    file_pattern TEXT    NOT NULL DEFAULT '*',
+    total        INTEGER NOT NULL DEFAULT 0,
+    accepted     INTEGER NOT NULL DEFAULT 0,
+    dismissed    INTEGER NOT NULL DEFAULT 0,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (repo, pass, severity, file_pattern)
+);
+
+CREATE TABLE IF NOT EXISTS learned_rules (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo            TEXT    NOT NULL,
+    rule_text       TEXT    NOT NULL,
+    evidence_count  INTEGER NOT NULL DEFAULT 0,
+    confidence      REAL    NOT NULL DEFAULT 1.0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_applied_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS reflection_state (
+    repo               TEXT    NOT NULL,
+    last_feedback_id   INTEGER NOT NULL,
+    last_reflection_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (repo)
+);
 """
 
 
@@ -136,6 +165,35 @@ class MemoryStore:
             "head_sha TEXT NOT NULL, "
             "reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
             "PRIMARY KEY (repo, pr_number))"
+        )
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS review_stats ("
+            "repo TEXT NOT NULL, "
+            "pass TEXT NOT NULL, "
+            "severity TEXT NOT NULL, "
+            "file_pattern TEXT NOT NULL DEFAULT '*', "
+            "total INTEGER NOT NULL DEFAULT 0, "
+            "accepted INTEGER NOT NULL DEFAULT 0, "
+            "dismissed INTEGER NOT NULL DEFAULT 0, "
+            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "PRIMARY KEY (repo, pass, severity, file_pattern))"
+        )
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS learned_rules ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "repo TEXT NOT NULL, "
+            "rule_text TEXT NOT NULL, "
+            "evidence_count INTEGER NOT NULL DEFAULT 0, "
+            "confidence REAL NOT NULL DEFAULT 1.0, "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "last_applied_at TIMESTAMP)"
+        )
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS reflection_state ("
+            "repo TEXT NOT NULL, "
+            "last_feedback_id INTEGER NOT NULL, "
+            "last_reflection_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+            "PRIMARY KEY (repo))"
         )
 
     async def record_finding(
@@ -256,5 +314,49 @@ class MemoryStore:
                 "INSERT INTO review_watermarks (repo, pr_number, head_sha) VALUES (?, ?, ?) "
                 "ON CONFLICT(repo, pr_number) DO UPDATE SET head_sha = excluded.head_sha",
                 (repo, pr_number, head_sha),
+            )
+            await db.commit()
+
+    async def get_learned_rules(self, repo: str, limit: int = 5) -> list[dict]:
+        """Return top rules for repo, sorted by confidence desc, created_at desc.
+        Also updates last_applied_at for the returned rules. Filters out rules with confidence < 0.3."""
+        async with self._db() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM learned_rules "
+                "WHERE repo = ? AND confidence >= 0.3 "
+                "ORDER BY confidence DESC, created_at DESC "
+                "LIMIT ?",
+                (repo, limit),
+            )
+            rows = await cursor.fetchall()
+            rules = [dict(row) for row in rows]
+            if rules:
+                ids = [r["id"] for r in rules]
+                placeholders = ",".join("?" for _ in ids)
+                await db.execute(
+                    f"UPDATE learned_rules SET last_applied_at = CURRENT_TIMESTAMP "
+                    f"WHERE id IN ({placeholders})",
+                    ids,
+                )
+                await db.commit()
+            return rules
+
+    async def get_reflection_state(self, repo: str) -> int:
+        """Return last_feedback_id or 0 if no row exists."""
+        async with self._db() as db:
+            cursor = await db.execute(
+                "SELECT last_feedback_id FROM reflection_state WHERE repo = ?",
+                (repo,),
+            )
+            row = await cursor.fetchone()
+            return row[0] if row is not None else 0
+
+    async def set_reflection_state(self, repo: str, last_feedback_id: int) -> None:
+        """INSERT OR REPLACE INTO reflection_state."""
+        async with self._db() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO reflection_state (repo, last_feedback_id) VALUES (?, ?)",
+                (repo, last_feedback_id),
             )
             await db.commit()

@@ -7,6 +7,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import aiosqlite
+
 from superseded.memory.feedback import check_pr_feedback, check_resolved_threads
 from superseded.memory.store import MemoryStore
 
@@ -291,3 +293,116 @@ def test_check_pr_feedback_no_resolved_threads(mock_run, mock_resolved):
 
     assert len(feedback) == 1
     assert feedback[0].get("resolved") is not True
+
+
+async def _test_review_stats_schema():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        store = MemoryStore(db_path)
+        await store.init()
+
+        await store.record_finding(
+            finding_id="sec-abc",
+            repo="owner/repo",
+            pass_name="security",
+            severity="critical",
+            file="a.py",
+            line=42,
+            title="t",
+            description="d",
+        )
+        await store.set_comment_id("sec-abc", 1)
+        await store.record_feedback_by_comment_id(1, "dismiss")
+
+        async with store._db() as db:
+            await db.execute(
+                "INSERT INTO review_stats (repo, pass, severity, file_pattern, total, accepted, dismissed) "
+                "SELECT f.repo, f.pass, f.severity, '*', "
+                "COUNT(*), COUNT(*) FILTER (WHERE fb.action = 'helpful'), COUNT(*) FILTER (WHERE fb.action = 'dismiss') "
+                "FROM findings f JOIN feedback fb ON fb.finding_id = f.id "
+                "WHERE f.repo = 'owner/repo' GROUP BY f.repo, f.pass, f.severity "
+                "ON CONFLICT(repo, pass, severity, file_pattern) DO UPDATE SET "
+                "total = excluded.total, accepted = excluded.accepted, dismissed = excluded.dismissed"
+            )
+            await db.commit()
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM review_stats WHERE repo = ?", ("owner/repo",))
+            rows = await cursor.fetchall()
+            assert len(rows) == 1
+            assert dict(rows[0])["pass"] == "security"
+            assert dict(rows[0])["total"] == 1
+            assert dict(rows[0])["dismissed"] == 1
+
+
+def test_review_stats_schema():
+    asyncio.run(_test_review_stats_schema())
+
+
+async def _test_learned_rules_crud():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        store = MemoryStore(db_path)
+        await store.init()
+
+        assert await store.get_reflection_state("owner/repo") == 0
+        assert await store.get_learned_rules("owner/repo") == []
+
+        await store.open()
+        await store._conn.execute(
+            "INSERT INTO learned_rules (repo, rule_text, evidence_count, confidence) VALUES (?, ?, ?, ?)",
+            ("owner/repo", "Avoid flagging style issues in test files", 3, 0.9),
+        )
+        await store._conn.commit()
+
+        rules = await store.get_learned_rules("owner/repo", limit=5)
+        assert len(rules) == 1
+        assert rules[0]["rule_text"] == "Avoid flagging style issues in test files"
+        assert rules[0]["confidence"] == 0.9
+        assert await store.get_learned_rules("other/repo") == []
+
+
+def test_learned_rules_crud():
+    asyncio.run(_test_learned_rules_crud())
+
+
+async def _test_reflection_state_tracking():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        store = MemoryStore(db_path)
+        await store.init()
+
+        assert await store.get_reflection_state("owner/repo") == 0
+        await store.set_reflection_state("owner/repo", 42)
+        assert await store.get_reflection_state("owner/repo") == 42
+        await store.set_reflection_state("owner/repo", 99)
+        assert await store.get_reflection_state("owner/repo") == 99
+
+
+def test_reflection_state_tracking():
+    asyncio.run(_test_reflection_state_tracking())
+
+
+async def _test_learned_rules_respects_confidence_filter():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        store = MemoryStore(db_path)
+        await store.init()
+
+        await store.open()
+        await store._conn.execute(
+            "INSERT INTO learned_rules (repo, rule_text, evidence_count, confidence) VALUES (?, ?, ?, ?)",
+            ("owner/repo", "Good rule", 5, 0.8),
+        )
+        await store._conn.execute(
+            "INSERT INTO learned_rules (repo, rule_text, evidence_count, confidence) VALUES (?, ?, ?, ?)",
+            ("owner/repo", "Low confidence rule", 1, 0.2),
+        )
+        await store._conn.commit()
+
+        rules = await store.get_learned_rules("owner/repo", limit=5)
+        assert len(rules) == 1
+        assert rules[0]["rule_text"] == "Good rule"
+
+
+def test_learned_rules_confidence_filter():
+    asyncio.run(_test_learned_rules_respects_confidence_filter())
