@@ -284,7 +284,63 @@ async def _run_review_for_job(
 
         config = await _load_safe_config(github, token, job.owner, job.repo)
 
-        diff = await github.fetch_pr_diff(token, job.owner, job.repo, job.pr_number)
+        repo_key = f"{job.owner}/{job.repo}"
+        incremental: str | None = None
+        if config.progressive and store is not None:
+            watermark = await store.get_watermark(repo_key, job.pr_number)
+            if watermark is not None:
+                if watermark == job.head_sha:
+                    logger.info(
+                        "review_skipped_noop",
+                        extra={
+                            "correlation_id": correlation_id,
+                            "repo": repo_key,
+                            "pr": job.pr_number,
+                        },
+                    )
+                    return ReviewOutcome(
+                        conclusion="success",
+                        title="No new commits since last review",
+                        summary=f"Head {job.head_sha[:7]} unchanged since last review.",
+                    )
+                try:
+                    patch, status = await github.compare_diff(
+                        token, job.owner, job.repo, watermark, job.head_sha
+                    )
+                except Exception:
+                    logger.warning(
+                        "compare_failed",
+                        extra={
+                            "correlation_id": correlation_id,
+                            "repo": repo_key,
+                            "pr": job.pr_number,
+                        },
+                    )
+                    patch, status = None, "diverged"
+                if status == "ahead" and patch is not None:
+                    incremental = patch
+                    logger.info(
+                        "review_progressive",
+                        extra={
+                            "correlation_id": correlation_id,
+                            "mode": "incremental",
+                            "base_sha": watermark,
+                            "head_sha": job.head_sha,
+                        },
+                    )
+
+        if incremental is not None:
+            diff = incremental
+        else:
+            diff = await github.fetch_pr_diff(token, job.owner, job.repo, job.pr_number)
+            logger.info(
+                "review_progressive",
+                extra={
+                    "correlation_id": correlation_id,
+                    "mode": "full",
+                    "head_sha": job.head_sha,
+                },
+            )
         if len(diff) > MAX_DIFF_CHARS:
             diff = diff[:MAX_DIFF_CHARS] + (f"\n\n... (diff truncated at {MAX_DIFF_CHARS:,} chars)")
         pr_description = await github.fetch_pr_description(
@@ -349,6 +405,7 @@ async def _run_review_for_job(
                 for finding, cid in zip(result.findings, comment_ids, strict=True):
                     if cid is not None:
                         await store.set_comment_id(finding.id, cid)
+                await store.set_watermark(repo_key, job.pr_number, job.head_sha)
 
         conclusion = "success" if payload["event"] != "REQUEST_CHANGES" else "failure"
         title = build_check_run_title(result)

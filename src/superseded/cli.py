@@ -23,8 +23,10 @@ from superseded.detection import (
 from superseded.diff import (
     fetch_diff,
     fetch_pr_description,
+    fetch_pr_head_sha,
     repo_root,
 )
+from superseded.incremental import IncrementalDiffError, fetch_incremental_diff
 from superseded.memory.feedback import check_pr_feedback
 from superseded.memory.store import MemoryStore
 from superseded.models import PassName, ReviewResult
@@ -95,6 +97,46 @@ def _parse_passes(raw: str | None) -> list[str] | None:
         )
         sys.exit(2)
     return parts
+
+
+def _resolve_pr_review_diff(
+    pr: int,
+    repo: str,
+    store: MemoryStore,
+    full: bool,
+) -> tuple[str | None, str, str]:
+    """Resolve the diff for a ``--pr`` review, applying progressive logic.
+
+    Returns ``(diff, mode, head_sha)``:
+      mode "noop"        -> diff is None; no new commits; caller emits empty result
+      mode "full"        -> full PR diff (first review, --full, or no watermark)
+      mode "incremental" -> diff since the watermark
+      mode "fallback"    -> full diff after a stale watermark or compare-API error
+
+    The caller writes ``store.set_watermark(repo, pr, head_sha)`` after a
+    successful review for every mode except "noop".
+    """
+    head_sha = fetch_pr_head_sha(pr)
+    watermark = asyncio.run(store.get_watermark(repo, pr))
+
+    if watermark is None or full:
+        return fetch_diff(pr=pr), "full", head_sha
+
+    owner, _, name = repo.partition("/")
+    try:
+        patch, status = fetch_incremental_diff(owner, name, watermark, head_sha)
+    except IncrementalDiffError:
+        _status(f"watermark {watermark[:7]} unreachable; falling back to full review")
+        return fetch_diff(pr=pr), "fallback", head_sha
+
+    if status == "identical":
+        return None, "noop", head_sha
+    if status == "ahead":
+        _status(f"Reviewing new commits since {watermark[:7]}...")
+        return patch, "incremental", head_sha
+
+    _status(f"watermark {watermark[:7]} no longer an ancestor; falling back to full review")
+    return fetch_diff(pr=pr), "fallback", head_sha
 
 
 def _detect_current_pr() -> int | None:
@@ -179,6 +221,12 @@ def cli() -> None:
     help="Path to config file (default: .superseded.yaml in repo root)",
 )
 @click.option("--no-memory", is_flag=True, help="Disable memory feedback injection")
+@click.option(
+    "--full",
+    "full_review",
+    is_flag=True,
+    help="Force a full review (ignore progressive watermark)",
+)
 @click.option("--no-static", is_flag=True, help="Disable static analysis")
 @click.option("--no-usage", is_flag=True, help="Disable usage retrieval")
 @click.option("--no-conventions", is_flag=True, help="Disable project conventions injection")
@@ -201,6 +249,7 @@ def review(
     timeout: int | None,
     config_path: Path | None,
     no_memory: bool,
+    full_review: bool,
     no_static: bool,
     no_usage: bool,
     no_conventions: bool,
@@ -243,6 +292,7 @@ def review(
         timeout=timeout,
         config_path=config_path,
         no_memory=no_memory,
+        full=full_review,
         no_static=no_static,
         no_usage=no_usage,
         no_conventions=no_conventions,
@@ -264,6 +314,7 @@ def _run_review(
     timeout: int | None = None,
     config_path: Path | None = None,
     no_memory: bool = False,
+    full: bool = False,
     no_static: bool = False,
     no_usage: bool = False,
     no_conventions: bool = False,
@@ -292,14 +343,47 @@ def _run_review(
         )
         sys.exit(2)
 
-    _status("Fetching diff...")
-    try:
-        diff = fetch_diff(pr=pr, diff_range=diff_range, files=files)
-    except RuntimeError as err:
-        click.echo(f"Error: {err}", err=True)
-        sys.exit(1)
+    repo = current_repo()
+    memory_enabled = config.memory and not no_memory and repo is not None
+    progressive_active = memory_enabled and config.progressive and pr is not None
 
-    _status("Gathering context...")
+    store: MemoryStore | None = None
+    if memory_enabled:
+        store = MemoryStore()
+        asyncio.run(store.init())
+
+    head_sha: str | None = None
+
+    if progressive_active:
+        assert repo is not None
+        assert store is not None
+        try:
+            diff, mode, head_sha = _resolve_pr_review_diff(pr=pr, repo=repo, store=store, full=full)
+        except RuntimeError as err:
+            click.echo(f"Error: {err}", err=True)
+            sys.exit(1)
+        if mode == "noop":
+            _status("No new commits since last review.")
+            empty = ReviewResult(findings=[], warnings=[])
+            if fmt == "json":
+                click.echo(format_json(empty))
+            elif fmt == "markdown":
+                click.echo(format_markdown(empty))
+            else:
+                click.echo(format_table(empty))
+            return
+        _status("Gathering context...")
+    else:
+        if pr is not None and not memory_enabled:
+            _status("memory disabled; running full review (progressive review needs memory)")
+        _status("Fetching diff...")
+        try:
+            diff = fetch_diff(pr=pr, diff_range=diff_range, files=files)
+        except RuntimeError as err:
+            click.echo(f"Error: {err}", err=True)
+            sys.exit(1)
+        _status("Gathering context...")
+
     root = repo_root()
 
     enable_static = config.static_analysis and not no_static
@@ -325,11 +409,8 @@ def _run_review(
     conventions_signals = context["conventions_signals"]
     spec_signals = context["spec_signals"]
 
-    repo = current_repo()
     memory_context: str | None = None
-    store: MemoryStore | None = None
-    if config.memory and not no_memory and repo:
-        store = MemoryStore()
+    if store is not None and repo:
         dismissed = asyncio.run(_load_dismissed(store, repo))
         memory_context = format_memory_context(dismissed)
 
@@ -367,6 +448,9 @@ def _run_review(
     if store is not None and repo:
         asyncio.run(_persist_findings(store, result, repo))
 
+    if head_sha is not None and store is not None and repo is not None and pr is not None:
+        asyncio.run(_set_watermark(store, repo, pr, head_sha))
+
     if post and pr is not None:
         _status("Posting to GitHub PR...")
         comment_ids = post_review_to_pr(pr=pr, result=result, diff=diff)
@@ -394,6 +478,11 @@ async def _persist_findings(store: MemoryStore, result: ReviewResult, repo: str)
                 description=f.description,
                 reasoning=f.reasoning,
             )
+
+
+async def _set_watermark(store: MemoryStore, repo: str, pr: int, head_sha: str) -> None:
+    async with store:
+        await store.set_watermark(repo, pr, head_sha)
 
 
 async def _link_comment_ids(

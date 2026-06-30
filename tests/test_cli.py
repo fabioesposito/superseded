@@ -380,3 +380,105 @@ def test_review_passes_graph_to_gather_context(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert captured.get("graph") is True
+
+
+def _fake_store_with_watermark(wm: str | None):
+    store = MagicMock()
+
+    async def _get(repo, pr):
+        return wm
+
+    store.get_watermark = _get
+    return store
+
+
+def test_resolve_no_watermark_uses_full_diff(monkeypatch):
+    from superseded.cli import _resolve_pr_review_diff
+
+    monkeypatch.setattr("superseded.cli.fetch_pr_head_sha", lambda pr: "head")
+    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "FULLDIFF")
+    monkeypatch.setattr("superseded.cli.fetch_incremental_diff", lambda *a: ("", "ahead"))
+    store = _fake_store_with_watermark(None)
+
+    diff, mode, head = _resolve_pr_review_diff(pr=1, repo="o/r", store=store, full=False)
+    assert diff == "FULLDIFF"
+    assert mode == "full"
+    assert head == "head"
+
+
+def test_resolve_full_flag_skips_incremental(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from superseded.cli import _resolve_pr_review_diff
+
+    monkeypatch.setattr("superseded.cli.fetch_pr_head_sha", lambda pr: "head")
+    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "FULLDIFF")
+    inc = MagicMock()
+    monkeypatch.setattr("superseded.cli.fetch_incremental_diff", inc)
+    store = _fake_store_with_watermark("base")
+
+    diff, mode, _head = _resolve_pr_review_diff(pr=1, repo="o/r", store=store, full=True)
+    assert diff == "FULLDIFF"
+    assert mode == "full"
+    inc.assert_not_called()
+
+
+def test_resolve_ahead_uses_incremental(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from superseded.cli import _resolve_pr_review_diff
+
+    monkeypatch.setattr("superseded.cli.fetch_pr_head_sha", lambda pr: "head")
+    full = MagicMock()
+    monkeypatch.setattr("superseded.cli.fetch_diff", full)
+    monkeypatch.setattr("superseded.cli.fetch_incremental_diff", lambda *a: ("INCDIFF", "ahead"))
+    store = _fake_store_with_watermark("base")
+
+    diff, mode, _head = _resolve_pr_review_diff(pr=1, repo="o/r", store=store, full=False)
+    assert diff == "INCDIFF"
+    assert mode == "incremental"
+    full.assert_not_called()
+
+
+def test_resolve_identical_returns_noop(monkeypatch):
+    from superseded.cli import _resolve_pr_review_diff
+
+    monkeypatch.setattr("superseded.cli.fetch_pr_head_sha", lambda pr: "head")
+    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "FULLDIFF")
+    monkeypatch.setattr("superseded.cli.fetch_incremental_diff", lambda *a: (None, "identical"))
+    store = _fake_store_with_watermark("base")
+
+    diff, mode, _head = _resolve_pr_review_diff(pr=1, repo="o/r", store=store, full=False)
+    assert diff is None
+    assert mode == "noop"
+
+
+def test_resolve_diverged_falls_back_to_full(monkeypatch):
+    from superseded.cli import _resolve_pr_review_diff
+
+    monkeypatch.setattr("superseded.cli.fetch_pr_head_sha", lambda pr: "head")
+    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "FULLDIFF")
+    monkeypatch.setattr("superseded.cli.fetch_incremental_diff", lambda *a: (None, "diverged"))
+    store = _fake_store_with_watermark("base")
+
+    diff, mode, _head = _resolve_pr_review_diff(pr=1, repo="o/r", store=store, full=False)
+    assert diff == "FULLDIFF"
+    assert mode == "fallback"
+
+
+def test_resolve_incremental_error_falls_back(monkeypatch):
+    from superseded.cli import _resolve_pr_review_diff
+    from superseded.incremental import IncrementalDiffError
+
+    monkeypatch.setattr("superseded.cli.fetch_pr_head_sha", lambda pr: "head")
+    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "FULLDIFF")
+
+    def _boom(*a):
+        raise IncrementalDiffError("nope")
+
+    monkeypatch.setattr("superseded.cli.fetch_incremental_diff", _boom)
+    store = _fake_store_with_watermark("base")
+
+    diff, mode, _head = _resolve_pr_review_diff(pr=1, repo="o/r", store=store, full=False)
+    assert diff == "FULLDIFF"
+    assert mode == "fallback"

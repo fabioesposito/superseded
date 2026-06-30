@@ -301,3 +301,54 @@ async def test_aenter_aexit_round_trip(tmp_path):
     async with store:
         assert store._conn is not None
     assert store._conn is None
+
+
+async def test_get_watermark_returns_none_when_absent(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "m.db")
+    await store.init()
+    assert await store.get_watermark("owner/repo", 7) is None
+
+
+async def test_set_then_get_watermark(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "m.db")
+    await store.init()
+    await store.set_watermark("owner/repo", 7, "abc123")
+    assert await store.get_watermark("owner/repo", 7) == "abc123"
+
+
+async def test_set_watermark_replaces_existing(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "m.db")
+    await store.init()
+    await store.set_watermark("owner/repo", 7, "abc123")
+    await store.set_watermark("owner/repo", 7, "def456")
+    assert await store.get_watermark("owner/repo", 7) == "def456"
+
+
+async def test_watermark_keys_per_repo_and_pr(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "m.db")
+    await store.init()
+    await store.set_watermark("owner/repo", 7, "aaa")
+    await store.set_watermark("owner/repo", 8, "bbb")
+    await store.set_watermark("other/repo", 7, "ccc")
+    assert await store.get_watermark("owner/repo", 7) == "aaa"
+    assert await store.get_watermark("owner/repo", 8) == "bbb"
+    assert await store.get_watermark("other/repo", 7) == "ccc"
+
+
+async def test_watermark_table_added_by_migration(tmp_path):
+    """An existing DB (created without the watermark table) must gain it via _migrate."""
+    import aiosqlite
+
+    db_path = tmp_path / "old.db"
+    async with aiosqlite.connect(db_path) as db:
+        await db.executescript(
+            "CREATE TABLE findings (id TEXT PRIMARY KEY);"
+            "CREATE TABLE feedback (id INTEGER PRIMARY KEY AUTOINCREMENT);"
+            "CREATE TABLE installations (id INTEGER PRIMARY KEY AUTOINCREMENT);"
+        )
+        await db.commit()
+
+    store = MemoryStore(db_path=db_path)
+    await store.init()
+    await store.set_watermark("owner/repo", 1, "deadbeef")
+    assert await store.get_watermark("owner/repo", 1) == "deadbeef"

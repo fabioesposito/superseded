@@ -314,3 +314,36 @@ def test_repo_root_forward_timeout(monkeypatch):
     monkeypatch.setattr("subprocess.run", fake_run)
     repo_root()
     assert captured.get("timeout") is not None and captured["timeout"] > 0
+
+
+@pytest.fixture
+def patch_subprocess(monkeypatch):
+    mock = MagicMock()
+    monkeypatch.setattr("superseded.diff.subprocess.run", mock)
+    return mock
+
+
+def test_fetch_pr_head_sha_returns_oid(patch_subprocess):
+    from superseded import diff as diff_mod
+
+    patch_subprocess.return_value = MagicMock(stdout="abc123deadbeef\n", returncode=0)
+    sha = diff_mod.fetch_pr_head_sha(42)
+    assert sha == "abc123deadbeef"
+    patch_subprocess.assert_called_once()
+    cmd = patch_subprocess.call_args.args[0]
+    assert cmd[:5] == ["gh", "pr", "view", "42", "--json"]
+
+
+def test_fetch_pr_head_sha_strips_whitespace(patch_subprocess):
+    from superseded import diff as diff_mod
+
+    patch_subprocess.return_value = MagicMock(stdout="  abc123  \n", returncode=0)
+    assert diff_mod.fetch_pr_head_sha(1) == "abc123"
+
+
+def test_fetch_pr_head_sha_raises_on_gh_failure(patch_subprocess):
+    from superseded import diff as diff_mod
+
+    patch_subprocess.side_effect = subprocess.CalledProcessError(1, "gh", stderr="not found")
+    with pytest.raises(RuntimeError, match=r"gh pr view 9.*exit 1.*not found"):
+        diff_mod.fetch_pr_head_sha(9)

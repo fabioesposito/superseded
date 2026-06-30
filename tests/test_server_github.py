@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from unittest.mock import patch
 
+import httpx
 import pytest
 
 from superseded.server.github import GitHubApp
@@ -181,3 +183,102 @@ async def test_update_check_run_uses_patch(app, monkeypatch):
     assert captured["json"]["status"] == "completed"
     assert captured["json"]["conclusion"] == "success"
     assert captured["json"]["output"] == {"title": "ok", "summary": "all good"}
+
+
+def _transport(routes):
+    def handler(request):
+        for predicate, response in routes:
+            if predicate(request):
+                return response
+        return httpx.Response(404)
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.mark.asyncio
+async def test_compare_diff_ahead_returns_patch(app):
+    routes = []
+
+    def is_json(req):
+        return req.url.path == "/repos/o/r/compare/a...b" and req.headers.get(
+            "accept", ""
+        ).startswith("application/vnd.github+json")
+
+    def is_diff(req):
+        return req.url.path == "/repos/o/r/compare/a...b" and "v3.diff" in req.headers.get(
+            "accept", ""
+        )
+
+    routes.append((is_json, httpx.Response(200, json={"status": "ahead"})))
+    routes.append((is_diff, httpx.Response(200, text="PATCH")))
+    original = httpx.AsyncClient
+
+    def _client(*a, **kw):
+        kw["transport"] = _transport(routes)
+        return original(*a, **kw)
+
+    with patch("superseded.server.github.httpx.AsyncClient", side_effect=_client):
+        patch_text, status = await app.compare_diff("tok", "o", "r", "a", "b")
+    assert status == "ahead"
+    assert patch_text == "PATCH"
+
+
+@pytest.mark.asyncio
+async def test_compare_diff_identical_returns_none(app):
+    routes = [
+        (
+            lambda req: req.url.path == "/repos/o/r/compare/a...b",
+            httpx.Response(200, json={"status": "identical"}),
+        )
+    ]
+    original = httpx.AsyncClient
+
+    def _client(*a, **kw):
+        kw["transport"] = _transport(routes)
+        return original(*a, **kw)
+
+    with patch("superseded.server.github.httpx.AsyncClient", side_effect=_client):
+        patch_text, status = await app.compare_diff("tok", "o", "r", "a", "b")
+    assert status == "identical"
+    assert patch_text is None
+
+
+@pytest.mark.asyncio
+async def test_compare_diff_behind_normalized_to_diverged(app):
+    routes = [
+        (
+            lambda req: req.url.path == "/repos/o/r/compare/a...b",
+            httpx.Response(200, json={"status": "behind"}),
+        )
+    ]
+    original = httpx.AsyncClient
+
+    def _client(*a, **kw):
+        kw["transport"] = _transport(routes)
+        return original(*a, **kw)
+
+    with patch("superseded.server.github.httpx.AsyncClient", side_effect=_client):
+        patch_text, status = await app.compare_diff("tok", "o", "r", "a", "b")
+    assert status == "diverged"
+    assert patch_text is None
+
+
+@pytest.mark.asyncio
+async def test_compare_diff_http_error_raises(app):
+    routes = [
+        (
+            lambda req: req.url.path == "/repos/o/r/compare/a...b",
+            httpx.Response(500),
+        )
+    ]
+    original = httpx.AsyncClient
+
+    def _client(*a, **kw):
+        kw["transport"] = _transport(routes)
+        return original(*a, **kw)
+
+    with (
+        patch("superseded.server.github.httpx.AsyncClient", side_effect=_client),
+        pytest.raises(httpx.HTTPStatusError),
+    ):
+        await app.compare_diff("tok", "o", "r", "a", "b")

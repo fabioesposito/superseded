@@ -31,6 +31,9 @@ class FakeGitHubApp:
         default_factory=lambda: AsyncMock(return_value="PR desc")
     )
     fetch_repo_file: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=None))
+    compare_diff: AsyncMock = field(
+        default_factory=lambda: AsyncMock(return_value=(None, "identical"))
+    )
     post_review: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=[1, 2]))
     create_check_run: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=42))
     update_check_run: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=42))
@@ -495,6 +498,7 @@ async def test_worker_persists_findings_and_comment_ids(tmp_path):
     from superseded.server.worker import _run_review_for_job
 
     store = MemoryStore(db_path=tmp_path / "mem.db")
+    await store.init()
 
     finding = Finding(
         pass_name="security",
@@ -649,3 +653,254 @@ async def test_enqueue_rejects_overflow():
         await task
 
     assert worker.active_count == 0
+
+
+def _progressive_job(head_sha: str = "abc123") -> ReviewJob:
+    return ReviewJob(
+        installation_id=123,
+        owner="octocat",
+        repo="hello-world",
+        pr_number=42,
+        head_sha=head_sha,
+        base_sha="def456",
+    )
+
+
+@pytest.mark.asyncio
+async def test_worker_progressive_incremental_skips_full_diff(tmp_path):
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    github.compare_diff = AsyncMock(return_value=("INCREMENTAL", "ahead"))
+    github.post_review = AsyncMock(return_value=[])
+    repo_manager = FakeRepoManager()
+    store = MemoryStore(db_path=tmp_path / "s.db")
+    await store.init()
+    await store.set_watermark("octocat/hello-world", 42, "oldbase")
+    job = _progressive_job(head_sha="newhead")
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[], summary={})
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
+        patch(
+            "superseded.server.worker.build_review_payload",
+            return_value={"body": "", "comments": [], "event": "COMMENT"},
+        ),
+    ):
+        mock_checkout.return_value = tmp_path
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="tok",
+            job=job,
+            correlation_id="c",
+            store=store,
+        )
+
+    github.compare_diff.assert_awaited_once_with(
+        "tok", "octocat", "hello-world", "oldbase", "newhead"
+    )
+    github.fetch_pr_diff.assert_not_awaited()
+    assert await store.get_watermark("octocat/hello-world", 42) == "newhead"
+
+
+@pytest.mark.asyncio
+async def test_worker_progressive_noop_returns_success_without_review(tmp_path):
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    github.compare_diff = AsyncMock(return_value=(None, "identical"))
+    repo_manager = FakeRepoManager()
+    store = MemoryStore(db_path=tmp_path / "s.db")
+    await store.init()
+    await store.set_watermark("octocat/hello-world", 42, "samehead")
+    job = _progressive_job(head_sha="samehead")
+
+    with patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout:
+        mock_checkout.return_value = tmp_path
+        outcome = await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="tok",
+            job=job,
+            correlation_id="c",
+            store=store,
+        )
+
+    assert outcome.conclusion == "success"
+    assert "No new commits" in outcome.title
+    github.fetch_pr_diff.assert_not_awaited()
+    github.post_review.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_worker_progressive_diverged_falls_back_to_full(tmp_path):
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    github.compare_diff = AsyncMock(return_value=(None, "diverged"))
+    github.fetch_pr_diff = AsyncMock(return_value="FULLDIFF")
+    github.post_review = AsyncMock(return_value=[])
+    repo_manager = FakeRepoManager()
+    store = MemoryStore(db_path=tmp_path / "s.db")
+    await store.init()
+    await store.set_watermark("octocat/hello-world", 42, "oldbase")
+    job = _progressive_job(head_sha="newhead")
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[], summary={})
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
+        patch(
+            "superseded.server.worker.build_review_payload",
+            return_value={"body": "", "comments": [], "event": "COMMENT"},
+        ),
+    ):
+        mock_checkout.return_value = tmp_path
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="tok",
+            job=job,
+            correlation_id="c",
+            store=store,
+        )
+
+    github.fetch_pr_diff.assert_awaited_once()
+    assert await store.get_watermark("octocat/hello-world", 42) == "newhead"
+
+
+@pytest.mark.asyncio
+async def test_worker_progressive_disabled_uses_full_diff(tmp_path):
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    github.compare_diff = AsyncMock(return_value=("SHOULD_NOT_BE_USED", "ahead"))
+    repo_manager = FakeRepoManager()
+    store = MemoryStore(db_path=tmp_path / "s.db")
+    await store.init()
+    await store.set_watermark("octocat/hello-world", 42, "oldbase")
+    job = _progressive_job(head_sha="newhead")
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[], summary={})
+
+    # Force progressive off via repo config YAML from the default branch.
+    fake_config_yaml = "progressive: false\nagent: claude-code\n"
+    github.fetch_repo_file = AsyncMock(return_value=fake_config_yaml)
+    github.post_review = AsyncMock(return_value=[])
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
+        patch(
+            "superseded.server.worker.build_review_payload",
+            return_value={"body": "", "comments": [], "event": "COMMENT"},
+        ),
+    ):
+        mock_checkout.return_value = tmp_path
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="tok",
+            job=job,
+            correlation_id="c",
+            store=store,
+        )
+
+    github.compare_diff.assert_not_awaited()
+    github.fetch_pr_diff.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_worker_progressive_no_store_uses_full_diff(tmp_path):
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    github.compare_diff = AsyncMock(return_value=("SHOULD_NOT_BE_USED", "ahead"))
+    repo_manager = FakeRepoManager()
+    job = _progressive_job(head_sha="newhead")
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[], summary={})
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
+        patch(
+            "superseded.server.worker.build_review_payload",
+            return_value={"body": "", "comments": [], "event": "COMMENT"},
+        ),
+    ):
+        mock_checkout.return_value = tmp_path
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="tok",
+            job=job,
+            correlation_id="c",
+            store=None,
+        )
+
+    github.compare_diff.assert_not_awaited()
+    github.fetch_pr_diff.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_worker_progressive_compare_diff_error_falls_back_to_full(tmp_path):
+    import httpx
+
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    github.compare_diff = AsyncMock(
+        side_effect=httpx.HTTPStatusError(
+            "boom", request=httpx.Request("GET", "http://x"), response=httpx.Response(500)
+        )
+    )
+    github.fetch_pr_diff = AsyncMock(return_value="FULLDIFF")
+    github.post_review = AsyncMock(return_value=[])
+    repo_manager = FakeRepoManager()
+    store = MemoryStore(db_path=tmp_path / "s.db")
+    await store.init()
+    await store.set_watermark("octocat/hello-world", 42, "oldbase")
+    job = _progressive_job(head_sha="newhead")
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[], summary={})
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
+        patch(
+            "superseded.server.worker.build_review_payload",
+            return_value={"body": "", "comments": [], "event": "COMMENT"},
+        ),
+    ):
+        mock_checkout.return_value = tmp_path
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="tok",
+            job=job,
+            correlation_id="c",
+            store=store,
+        )
+
+    github.fetch_pr_diff.assert_awaited_once()
+    assert await store.get_watermark("octocat/hello-world", 42) == "newhead"
