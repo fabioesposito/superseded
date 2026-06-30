@@ -87,6 +87,29 @@ def fetch_pr_description(pr: int) -> str | None:
     return body or None
 
 
+def fetch_pr_head_sha(pr: int) -> str:
+    """Return the current HEAD SHA of PR ``pr`` via ``gh pr view``."""
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", str(pr), "--json", "headRefOid", "-q", ".headRefOid"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=DEFAULT_GH_TIMEOUT,
+        )
+    except FileNotFoundError as err:
+        raise RuntimeError(
+            "'gh' CLI not found on PATH. Install it: https://cli.github.com/"
+        ) from err
+    except subprocess.CalledProcessError as err:
+        detail = (err.stderr or "").strip()
+        msg = f"'gh pr view {pr}' failed (exit {err.returncode})"
+        if detail:
+            msg += f": {detail}"
+        raise RuntimeError(msg) from err
+    return result.stdout.strip()
+
+
 _PLUS_RE = re.compile(r"^\+\+\+ b/(.+?)\s*$", re.MULTILINE)
 _PLUS_QUOTED_RE = re.compile(r'^\+\+\+ "b/(.+?)"\s*$', re.MULTILINE)
 _MINUS_RE = re.compile(r"^--- a/(.+?)\s*$", re.MULTILINE)
