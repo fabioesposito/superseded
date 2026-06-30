@@ -120,6 +120,32 @@ class GitHubApp:
             body = data.get("body", "")
             return body if body else None
 
+    async def compare_diff(
+        self, token: str, owner: str, repo: str, base: str, head: str
+    ) -> tuple[str | None, str]:
+        """Fetch the incremental diff between two commits via the compare API.
+
+        Returns ``(patch_or_none, status)`` with ``status`` ∈ ``{"ahead",
+        "identical", "diverged"}``. ``"behind"`` is normalized to
+        ``"diverged"``. Raises ``httpx.HTTPStatusError`` on a non-2xx response;
+        callers fall back to a full review.
+        """
+        url = f"https://api.github.com/repos/{owner}/{repo}/compare/{base}...{head}"
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=self._api_headers(token))
+            response.raise_for_status()
+            status = response.json().get("status", "diverged")
+            if status == "behind":
+                status = "diverged"
+            if status != "ahead":
+                return None, status
+            diff_response = await client.get(
+                url,
+                headers=self._api_headers(token, accept="application/vnd.github.v3.diff"),
+            )
+            diff_response.raise_for_status()
+            return diff_response.text, "ahead"
+
     async def post_review(
         self,
         token: str,
