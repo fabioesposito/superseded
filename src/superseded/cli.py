@@ -11,6 +11,9 @@ from typing import get_args
 
 import click
 
+from superseded.audit.guidelines import assemble_learned_context
+from superseded.audit.reflector import PatternReflector
+from superseded.audit.stats import StatsAggregator
 from superseded.config import Config, load_config, write_config
 from superseded.context.gathering import gather_context
 from superseded.detection import (
@@ -414,6 +417,10 @@ def _run_review(
         dismissed = asyncio.run(_load_dismissed(store, repo))
         memory_context = format_memory_context(dismissed)
 
+    learned_context: str | None = None
+    if config.learned_review and store is not None and repo:
+        learned_context = asyncio.run(_build_learned_context(store, engine, repo, config, root))
+
     pass_timeout = timeout if timeout is not None else DEFAULT_TIMEOUT
     _status(f"Running review with {agent_name} (timeout {pass_timeout}s per pass)...")
     try:
@@ -426,6 +433,7 @@ def _run_review(
             usage_signals=usage_signals,
             conventions_signals=conventions_signals,
             spec_signals=spec_signals,
+            learned_context=learned_context,
             passes=passes,
             timeout=pass_timeout,
             progress=_progress,
@@ -492,6 +500,24 @@ async def _link_comment_ids(
         for finding, comment_id in zip(result.findings, comment_ids, strict=True):
             if comment_id is not None:
                 await store.set_comment_id(finding.id, comment_id)
+
+
+async def _build_learned_context(
+    store: MemoryStore,
+    engine: ReviewEngine,
+    repo: str,
+    config: Config,
+    root: Path,
+) -> str | None:
+    aggregator = StatsAggregator(store)
+    await aggregator._refresh(repo)
+    stats_text = await aggregator.get_stats_context(repo)
+
+    reflector = PatternReflector(agent=engine.agent, store=store)
+    await reflector.maybe_reflect(repo, cwd=root)
+
+    all_rules = await store.get_learned_rules(repo, limit=config.max_learned_rules)
+    return assemble_learned_context(stats_text, all_rules, config.max_learned_rules)
 
 
 @cli.command()

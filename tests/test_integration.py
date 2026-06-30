@@ -1,12 +1,60 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from unittest.mock import MagicMock, patch
 
+import aiosqlite
 from click.testing import CliRunner
 
 from superseded.cli import _run_review, cli
 from superseded.models import Finding, ReviewResult
+
+_SCHEMA = """\
+CREATE TABLE IF NOT EXISTS review_stats (
+    repo         TEXT    NOT NULL,
+    pass         TEXT    NOT NULL,
+    severity     TEXT    NOT NULL,
+    file_pattern TEXT    NOT NULL DEFAULT '*',
+    total        INTEGER NOT NULL DEFAULT 0,
+    accepted     INTEGER NOT NULL DEFAULT 0,
+    dismissed    INTEGER NOT NULL DEFAULT 0,
+    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (repo, pass, severity, file_pattern)
+);
+CREATE TABLE IF NOT EXISTS learned_rules (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo            TEXT    NOT NULL,
+    rule_text       TEXT    NOT NULL,
+    evidence_count  INTEGER NOT NULL DEFAULT 0,
+    confidence      REAL    NOT NULL DEFAULT 1.0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_applied_at TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS reflection_state (
+    repo               TEXT    NOT NULL,
+    last_feedback_id   INTEGER NOT NULL,
+    last_reflection_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (repo)
+);
+CREATE TABLE IF NOT EXISTS findings (
+    id          TEXT PRIMARY KEY,
+    repo        TEXT    NOT NULL,
+    pass        TEXT    NOT NULL,
+    severity    TEXT    NOT NULL,
+    file        TEXT    NOT NULL,
+    line        INTEGER,
+    title       TEXT    NOT NULL,
+    description TEXT    NOT NULL,
+    reasoning   TEXT    DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS feedback (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id TEXT    NOT NULL REFERENCES findings(id),
+    action     TEXT    NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
 
 
 class FakeStore:
@@ -18,6 +66,16 @@ class FakeStore:
         self.dismissed_calls = 0
         self.watermarks = {}
         self.set_watermark_calls = []
+        self._learned_rules: list[dict] = []
+        self._reflection_state: dict[str, int] = {}
+        self._db_conn: aiosqlite.Connection | None = None
+
+    @asynccontextmanager
+    async def _db(self):
+        if self._db_conn is None:
+            self._db_conn = await aiosqlite.connect(":memory:")
+            await self._db_conn.executescript(_SCHEMA)
+        yield self._db_conn
 
     async def __aenter__(self):
         return self
@@ -76,6 +134,19 @@ class FakeStore:
         if action == "dismiss":
             self._dismissed.add(fid)
         return True
+
+    async def get_learned_rules(self, repo, limit=5):
+        return [
+            r
+            for r in self._learned_rules
+            if r.get("repo", "") == repo and r.get("confidence", 1.0) >= 0.3
+        ][:limit]
+
+    async def get_reflection_state(self, repo):
+        return self._reflection_state.get(repo, 0)
+
+    async def set_reflection_state(self, repo, last_feedback_id):
+        self._reflection_state[repo] = last_feedback_id
 
 
 def _make_finding():
@@ -612,3 +683,102 @@ def test_review_init_real_store_before_progressive_read(
     # The real store was initialized and the watermark row was written without
     # raising OperationalError (the regression this test guards against).
     assert asyncio.run(real_store.get_watermark("owner/repo", 5)) == "headsha"
+
+
+@patch("superseded.cli._resolve_pr_review_diff")
+@patch("superseded.cli.MemoryStore")
+@patch("superseded.cli.current_repo")
+@patch("superseded.cli.ReviewEngine")
+@patch("superseded.context.gathering.compute_file_context")
+@patch("superseded.cli.fetch_pr_description")
+@patch("superseded.cli.fetch_diff")
+def test_learned_context_injected_when_enabled(
+    mock_fetch, mock_desc, mock_ctx, mock_engine_cls, mock_repo, mock_store_cls, mock_resolve
+):
+    from superseded.config import Config
+
+    mock_fetch.return_value = "diff"
+    mock_resolve.return_value = ("diff", "full", None)
+    mock_ctx.return_value = "ctx"
+    mock_desc.return_value = "PR body"
+    mock_engine = MagicMock()
+    mock_engine_cls.select.return_value = mock_engine
+    mock_engine.review.return_value = ReviewResult(findings=[])
+    mock_engine.agent.is_available.return_value = True
+    mock_repo.return_value = "owner/repo"
+
+    store = FakeStore()
+    store._learned_rules = [
+        {
+            "rule_text": "Inferred rule",
+            "confidence": 0.9,
+            "evidence_count": 3,
+            "repo": "owner/repo",
+            "created_at": "2025-01-01T00:00:00",
+        }
+    ]
+    mock_store_cls.return_value = store
+
+    with patch("superseded.cli.load_config", return_value=Config(learned_review=True)):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["review", "--pr", "1"])
+
+    assert result.exit_code == 0, result.output
+    kwargs = mock_engine.review.call_args.kwargs
+    learned = kwargs.get("learned_context")
+    assert learned is not None
+    assert "Inferred rule" in learned
+
+
+@patch("superseded.cli._resolve_pr_review_diff")
+@patch("superseded.cli.MemoryStore")
+@patch("superseded.cli.current_repo")
+@patch("superseded.cli.ReviewEngine")
+@patch("superseded.context.gathering.compute_file_context")
+@patch("superseded.cli.fetch_pr_description")
+@patch("superseded.cli.fetch_diff")
+def test_learned_context_is_none_when_disabled(
+    mock_fetch, mock_desc, mock_ctx, mock_engine_cls, mock_repo, mock_store_cls, mock_resolve
+):
+    from superseded.config import Config
+
+    mock_fetch.return_value = "diff"
+    mock_resolve.return_value = ("diff", "full", None)
+    mock_ctx.return_value = "ctx"
+    mock_desc.return_value = "PR body"
+    mock_engine = MagicMock()
+    mock_engine_cls.select.return_value = mock_engine
+    mock_engine.review.return_value = ReviewResult(findings=[])
+    mock_engine.agent.is_available.return_value = True
+    mock_repo.return_value = "owner/repo"
+    mock_store_cls.return_value = FakeStore()
+
+    with patch("superseded.cli.load_config", return_value=Config(learned_review=False)):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["review", "--pr", "1"])
+
+    assert result.exit_code == 0, result.output
+    kwargs = mock_engine.review.call_args.kwargs
+    assert kwargs.get("learned_context") is None
+
+
+@patch("superseded.cli.fetch_diff")
+@patch("superseded.cli.ReviewEngine")
+@patch("superseded.context.gathering.compute_file_context")
+@patch("superseded.cli.fetch_pr_description")
+def test_learned_context_none_when_no_memory(mock_desc, mock_ctx, mock_engine_cls, mock_fetch):
+    mock_fetch.return_value = "diff"
+    mock_ctx.return_value = "ctx"
+    mock_desc.return_value = "PR body"
+    mock_engine = MagicMock()
+    mock_engine_cls.select.return_value = mock_engine
+    mock_engine.review.return_value = ReviewResult(findings=[])
+    mock_engine.agent.is_available.return_value = True
+
+    with patch("superseded.cli.current_repo", return_value=None):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["review", "--pr", "5", "--no-memory"])
+
+    assert result.exit_code == 0, result.output
+    kwargs = mock_engine.review.call_args.kwargs
+    assert kwargs.get("learned_context") is None

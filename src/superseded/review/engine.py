@@ -106,6 +106,7 @@ class ReviewEngine:
         usage_signals: str | None = None,
         conventions_signals: str | None = None,
         spec_signals: str | None = None,
+        learned_context: str | None = None,
         passes: list[str] | None = None,
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
@@ -139,6 +140,7 @@ class ReviewEngine:
                     usage_signals=usage_signals,
                     conventions_signals=conventions_signals,
                     spec_signals=spec_signals,
+                    learned_context=learned_context,
                 )
                 future = executor.submit(self.run_pass, pass_name, prompt, timeout, progress, cwd)
                 future_to_pass[future] = pass_name
