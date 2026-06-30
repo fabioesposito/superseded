@@ -189,7 +189,7 @@ class PostgresStore:
             return _row_to_dict(row)
 
     async def record_feedback(self, finding_id: str, action: str) -> None:
-        async with self._conn() as conn:
+        async with self._conn() as conn, conn.transaction():
             await conn.execute(
                 "INSERT INTO feedback (finding_id, action) VALUES ($1, $2)",
                 finding_id,
@@ -260,7 +260,7 @@ class PostgresStore:
             )
 
     async def get_learned_rules(self, repo: str, limit: int = 5) -> list[dict]:
-        async with self._conn() as conn:
+        async with self._conn() as conn, conn.transaction():
             rows = await conn.fetch(
                 "SELECT * FROM learned_rules "
                 "WHERE repo = $1 AND confidence >= 0.3 "
