@@ -28,6 +28,9 @@ class Config(BaseModel):
     spec_retrieval: bool = True
     graph: bool = True
     progressive: bool = True
+    learned_review: bool = True
+    reflection_threshold: int = 5
+    max_learned_rules: int = 5
 
     def is_pass_enabled(self, name: str) -> bool:
         return getattr(self.passes, name, False)
