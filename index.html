@@ -269,6 +269,8 @@
         .problem-icon.red { background: var(--red-soft); color: var(--red); }
         .problem-icon.amber { background: var(--amber-soft); color: var(--amber); }
         .problem-icon.violet { background: var(--violet-soft); color: var(--violet); }
+        .problem-icon.green { background: var(--green-soft); color: var(--green); }
+        .problem-icon.blue { background: var(--accent-soft); color: var(--accent); }
         .problem-card h3 {
             font-size: 16px; font-weight: 600; color: var(--ink);
             margin-bottom: 10px; letter-spacing: -0.2px;
@@ -610,23 +612,23 @@
     <section class="problem-section" id="problem">
         <div class="container">
             <div class="section-label reveal">Why Superseded</div>
-            <h2 class="reveal">Other AI reviewers don't<br>learn from your feedback</h2>
-            <p class="section-sub reveal">They treat every review as if it's the first. Superseded remembers every decision and gets sharper over time.</p>
+            <h2 class="reveal">Code review that gets<br>smarter with every PR</h2>
+            <p class="section-sub reveal">Superseded remembers every decision, avoids repeated noise, and tailors each review to your codebase.</p>
             <div class="problem-grid reveal">
                 <div class="problem-card">
-                    <div class="problem-icon red">&#x2717;</div>
-                    <h3>Repetitive findings</h3>
-                    <p>Other tools surface the same noise on every PR. Engineers stop reading. Real issues get buried.</p>
+                    <div class="problem-icon green">&#x2713;</div>
+                    <h3>No more repetitive findings</h3>
+                    <p>Dismiss once and it's gone. Superseded tracks every decision so the same noise never resurfaces.</p>
                 </div>
                 <div class="problem-card">
-                    <div class="problem-icon amber">&#x26a0;</div>
-                    <h3>No memory</h3>
-                    <p>Dismiss a finding today, see it again tomorrow. Other tools never learn from your team's decisions.</p>
+                    <div class="problem-icon blue">&#x25c9;</div>
+                    <h3>Memory-optimized</h3>
+                    <p>SQLite-backed feedback memory scoped to your repo. Every dismissed finding sharpens the next review.</p>
                 </div>
                 <div class="problem-card">
-                    <div class="problem-icon violet">&#x25cb;</div>
-                    <h3>Generic prompts</h3>
-                    <p>One prompt for every codebase. No context, no conventions, no domain-specific signals — until now.</p>
+                    <div class="problem-icon violet">&#x25cf;</div>
+                    <h3>Specialized prompts</h3>
+                    <p>5 domain-specific passes — security, correctness, performance, style, architecture — each with targeted context.</p>
                 </div>
             </div>
         </div>
@@ -660,7 +662,7 @@
                 </div>
             </div>
             <div class="loop-stat reveal">
-                <div class="loop-stat-icon">&#x2191;</div>
+                <div class="loop-stat-icon">&#x2193;</div>
                 <div class="loop-stat-text">
                     <strong>Fewer false positives over time</strong>
                     <span>Teams see significantly less noise after two weeks of feedback</span>
