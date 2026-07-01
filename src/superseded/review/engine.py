@@ -55,6 +55,8 @@ class ReviewEngine:
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
         cwd: str | Path | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> list[Finding]:
         cmd = self.agent.build_command()
         if progress is not None:
@@ -67,6 +69,7 @@ class ReviewEngine:
                 text=True,
                 timeout=timeout,
                 cwd=str(cwd) if cwd is not None else None,
+                env=env,
             )
         except FileNotFoundError as err:
             raise RuntimeError(
@@ -111,6 +114,8 @@ class ReviewEngine:
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
         cwd: str | Path | None = None,
+        *,
+        env: dict[str, str] | None = None,
     ) -> ReviewResult:
         if not self.agent.is_available():
             raise RuntimeError(
@@ -142,7 +147,9 @@ class ReviewEngine:
                     spec_signals=spec_signals,
                     learned_context=learned_context,
                 )
-                future = executor.submit(self.run_pass, pass_name, prompt, timeout, progress, cwd)
+                future = executor.submit(
+                    self.run_pass, pass_name, prompt, timeout, progress, cwd, env=env
+                )
                 future_to_pass[future] = pass_name
 
             for future in as_completed(future_to_pass):

@@ -20,6 +20,8 @@ class ServerConfig(BaseModel):
     database_url: str | None = None
     tls_cert_path: Path | None = None
     tls_key_path: Path | None = None
+    agent: str | None = None
+    model: str | None = None
 
     @property
     def is_configured(self) -> bool:
@@ -110,6 +112,14 @@ class ServerConfig(BaseModel):
         database_url = os.environ.get("SUPERSEDED_DATABASE_URL")
         if database_url:
             kwargs["database_url"] = database_url
+
+        agent = os.environ.get("SUPERSEDED_SERVER_AGENT")
+        if agent:
+            kwargs["agent"] = agent
+
+        model = os.environ.get("SUPERSEDED_SERVER_MODEL")
+        if model:
+            kwargs["model"] = model
 
         return cls(**kwargs)
 

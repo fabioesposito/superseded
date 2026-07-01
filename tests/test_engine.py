@@ -128,7 +128,7 @@ def test_review_continues_when_one_pass_fails():
 
     good_finding = make_finding(severity="critical", line=5)
 
-    def fake_run_pass(pass_name, prompt, timeout=300, progress=None, cwd=None):
+    def fake_run_pass(pass_name, prompt, timeout=300, progress=None, cwd=None, *, env=None):
         if pass_name == "correctness":
             raise RuntimeError("boom")
         return [good_finding]

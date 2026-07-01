@@ -247,7 +247,7 @@ def _run_tool(
         return None
     cmd = tool.build_command(changed_files, root)
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=str(root))
     except FileNotFoundError:
         logger.warning("Static tool %s not on PATH, skipping", tool.name)
         return None

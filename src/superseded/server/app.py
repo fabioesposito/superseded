@@ -34,9 +34,7 @@ class ReplayProtector:
         now = time.time()
         cutoff = now - self._window
         self._recent = {k: v for k, v in self._recent.items() if v > cutoff}
-        sig_hash = hashlib.sha256(
-            (signature + payload.decode(errors="replace")).encode()
-        ).hexdigest()
+        sig_hash = hashlib.sha256(signature.encode()).hexdigest()
         if sig_hash in self._recent:
             return True
         self._recent[sig_hash] = now
@@ -44,7 +42,13 @@ class ReplayProtector:
 
 
 class RateLimiter:
-    """Simple in-memory sliding-window rate limiter per client IP."""
+    """Simple in-memory sliding-window rate limiter per client IP.
+
+    NOTE: keyed on client IP only. When running behind a load balancer or
+    reverse proxy, all requests share one IP and the limiter becomes global.
+    For routed deployments, consider trusting ``X-Forwarded-For`` or limiting
+    per verified installation instead.
+    """
 
     def __init__(self, max_requests: int, window: float) -> None:
         self.max_requests = max_requests
@@ -140,11 +144,15 @@ async def _handle_pr_event(
     if action not in ("opened", "synchronize", "reopened"):
         return
 
-    pr = data["pull_request"]
-    repo = data["repository"]
-    owner = repo["owner"]["login"]
-    repo_name = repo["name"]
-    installation_id = data["installation"]["id"]
+    try:
+        pr = data["pull_request"]
+        repo = data["repository"]
+        owner = repo["owner"]["login"]
+        repo_name = repo["name"]
+        installation_id = data["installation"]["id"]
+    except (KeyError, TypeError) as err:
+        logger.warning("webhook_pr_event_missing_field", extra={"error": str(err)})
+        return
 
     await store.init()
     installation = await store.get_installation(installation_id)
@@ -162,7 +170,7 @@ async def _handle_pr_event(
 
     authorized_repos = json.loads(installation.get("repos", "[]"))
     full_name = f"{owner}/{repo_name}"
-    if authorized_repos and full_name not in authorized_repos and repo_name not in authorized_repos:
+    if full_name not in authorized_repos and repo_name not in authorized_repos:
         logger.warning(
             "webhook_pr_repo_not_authorized",
             extra={

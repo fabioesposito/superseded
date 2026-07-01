@@ -198,7 +198,7 @@ def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, mo
 
     invoked: list[str] = []
 
-    def fake_run_pass(self, pass_name, prompt, timeout=300, progress=None, cwd=None):
+    def fake_run_pass(self, pass_name, prompt, timeout=300, progress=None, cwd=None, *, env=None):
         invoked.append(pass_name)
         if progress is not None:
             progress(pass_name, "done")

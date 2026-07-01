@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -63,6 +64,8 @@ class ReviewWorker:
         max_concurrent: int = 3,
         max_queue: int = 100,
         store: Store | None = None,
+        server_agent: str | None = None,
+        server_model: str | None = None,
     ) -> None:
         self.github = github
         self.repo_manager = repo_manager
@@ -74,6 +77,8 @@ class ReviewWorker:
         self._active_count = 0
         self._tasks: set[asyncio.Task] = set()
         self.store = store
+        self.server_agent = server_agent
+        self.server_model = server_model
 
     @property
     def active_count(self) -> int:
@@ -96,6 +101,14 @@ class ReviewWorker:
             )
             raise
 
+    def _log_task_done(self, task: asyncio.Task) -> None:
+        try:
+            _ = task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("worker_task_unhandled_error")
+
     async def run(self) -> None:
         """Consumer loop: spawn a bounded task for each queued job."""
         while True:
@@ -103,6 +116,7 @@ class ReviewWorker:
             task = asyncio.create_task(self._run_task(job))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
+            task.add_done_callback(self._log_task_done)
             task.add_done_callback(lambda _: self.queue.task_done())
 
     async def _run_task(self, job: ReviewJob) -> None:
@@ -178,6 +192,8 @@ class ReviewWorker:
                 job=job,
                 correlation_id=correlation_id,
                 store=self.store,
+                server_agent=self.server_agent,
+                server_model=self.server_model,
             )
 
             await self.github.update_check_run(
@@ -231,14 +247,23 @@ class ReviewWorker:
                     logger.exception("Failed to update check run on error")
 
 
-async def _load_safe_config(github: GitHubApp, token: str, owner: str, repo: str) -> Config:
+async def _load_safe_config(
+    github: GitHubApp,
+    token: str,
+    owner: str,
+    repo: str,
+    server_agent: str | None = None,
+    server_model: str | None = None,
+) -> Config:
     """Load repo config from the default branch (trusted), not the PR head.
 
     A PR can commit a malicious ``.superseded.yaml`` that disables
     ``static_analysis`` (suppressing gitleaks) or forces an expensive
     ``agent``/``model``. Reading from the default branch avoids this.
     ``static_analysis`` is forced on regardless, so secret scanning
-    cannot be suppressed by repo config in server mode.
+    cannot be suppressed by repo config in server mode.  The server
+    operator can also pin a specific agent/model, overriding any
+    repo-level choice.
     """
     try:
         raw = await github.fetch_repo_file(token, owner, repo, ".superseded.yaml")
@@ -255,6 +280,11 @@ async def _load_safe_config(github: GitHubApp, token: str, owner: str, repo: str
     else:
         config = Config()
     config.static_analysis = True
+    config.passes.security = True
+    if server_agent is not None:
+        config.agent = server_agent
+    if server_model is not None:
+        config.model = server_model
     return config
 
 
@@ -265,6 +295,8 @@ async def _run_review_for_job(
     job: ReviewJob,
     correlation_id: str,
     store: Store | None = None,
+    server_agent: str | None = None,
+    server_model: str | None = None,
 ) -> ReviewOutcome:
     tmp_dir = repo_manager.job_dir(
         job.installation_id, job.owner, job.repo, job.pr_number, job.job_id
@@ -285,7 +317,14 @@ async def _run_review_for_job(
             tmp_dir=str(tmp_dir),
         )
 
-        config = await _load_safe_config(github, token, job.owner, job.repo)
+        config = await _load_safe_config(
+            github,
+            token,
+            job.owner,
+            job.repo,
+            server_agent=server_agent,
+            server_model=server_model,
+        )
 
         repo_key = f"{job.owner}/{job.repo}"
         incremental: str | None = None
@@ -371,6 +410,7 @@ async def _run_review_for_job(
             learned_context = assemble_learned_context(None, all_rules, config.max_learned_rules)
 
         engine = ReviewEngine.select(config.agent, model=config.model, config=config)
+        _server_env = {k: v for k, v in os.environ.items() if not k.startswith("SUPERSEDED_")}
         result = await asyncio.to_thread(
             engine.review,
             diff=diff,
@@ -382,6 +422,7 @@ async def _run_review_for_job(
             spec_signals=spec_signals,
             learned_context=learned_context,
             cwd=repo_path,
+            env=_server_env,
         )
 
         payload = build_review_payload(result)

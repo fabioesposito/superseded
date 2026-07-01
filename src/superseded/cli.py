@@ -714,6 +714,8 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
         repo_manager=repo_manager,
         max_concurrent=config.max_concurrent_reviews,
         store=store,
+        server_agent=config.agent,
+        server_model=config.model,
     )
 
     import uvicorn

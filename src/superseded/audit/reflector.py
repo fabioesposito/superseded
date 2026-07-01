@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -114,6 +115,7 @@ class PatternReflector:
 
         try:
             cmd = self._agent.build_command()
+            _server_env = {k: v for k, v in os.environ.items() if not k.startswith("SUPERSEDED_")}
             result = subprocess.run(
                 cmd,
                 input=prompt,
@@ -121,6 +123,7 @@ class PatternReflector:
                 text=True,
                 timeout=120,
                 cwd=cwd,
+                env=_server_env,
             )
         except FileNotFoundError:
             logger.warning("Agent binary not found: %s", cmd[0] if cmd else "?")
@@ -160,7 +163,10 @@ class PatternReflector:
             rule_text = item.get("rule")
             if not rule_text or not isinstance(rule_text, str):
                 continue
-            evidence = item.get("evidence", "")
+            rule_text = rule_text.strip()
+            if len(rule_text) < 10 or len(rule_text) > 300:
+                continue
+            evidence = str(item.get("evidence", ""))[:500]
             confidence = item.get("confidence", 1.0)
             if not isinstance(confidence, (int, float)):
                 confidence = 1.0
