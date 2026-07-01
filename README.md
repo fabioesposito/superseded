@@ -39,6 +39,13 @@ superseded review --diff HEAD~3..HEAD
 # Review a branch
 superseded review --diff main..feature-branch
 
+# Review uncommitted changes (no args = git diff HEAD; --staged = index only)
+superseded review
+superseded review --staged
+
+# Structured JSON logs on stderr (also: --log-level INFO)
+superseded --log-format json review --pr 123
+
 # Choose agent + model
 superseded review --pr 123 --agent claude-code --model claude-sonnet-4-6
 

@@ -33,6 +33,9 @@ superseded review --diff HEAD~3..HEAD
 
 # 5. Review specific files
 superseded review src/auth.py src/models.py
+
+# 6. Review uncommitted changes (no args = git diff HEAD; --staged = index only)
+superseded review
 ```
 
 ## How it works

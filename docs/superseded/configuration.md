@@ -29,6 +29,8 @@ model: deepseek-v4-pro                  # Model ID (can be null)
 # --- Output ---
 format: table                           # table | json | markdown
 post_to_pr: false                       # Always post to PR (overridable by --post)
+log_format: text                        # text | json — CLI log output format
+log_level: WARNING                      # DEBUG | INFO | WARNING | ERROR | CRITICAL
 
 # --- Passes ---
 passes:
@@ -71,6 +73,14 @@ environment variable > --agent/--model flag > config file
 SUPERSEDED_GRAPH env var > --graph/--no-graph flag > config file
 ```
 
+### Logging
+
+`SUPERSEDED_LOG_FORMAT` (`text` | `json`) and `SUPERSEDED_LOG_LEVEL` (any standard level name) env vars override the CLI flags, which override the config file. Server mode defaults to JSON regardless.
+
+```
+SUPERSEDED_LOG_FORMAT / SUPERSEDED_LOG_LEVEL env var > --log-format / --log-level flag > config file
+```
+
 ## Config Fields Explained
 
 ### `agent`
@@ -90,6 +100,14 @@ The model ID passed to the agent CLI. Set to `null` to use the agent's own defau
 ### `format`
 
 Output format for findings. `table` is the most human-readable. Use `json` for scripting and piping to `jq`. `markdown` is suitable for pasting into issues or PR bodies.
+
+### `log_format`
+
+Format for **log** output on stderr (separate from `format`, which controls review-findings output on stdout). `text` (default) emits human-readable `LEVEL logger: message` lines; `json` emits one JSON object per line (`event`, `level`, `time`, plus any extra fields). Server mode always uses JSON. Override with `--log-format` or `SUPERSEDED_LOG_FORMAT`.
+
+### `log_level`
+
+Lowest severity of log records that surface on stderr. Defaults to `WARNING`, which keeps the CLI quiet (only progress messages and warnings appear). Lower to `INFO` or `DEBUG` to see what each pass and context source is doing. Override with `--log-level` or `SUPERSEDED_LOG_LEVEL`.
 
 ### `post_to_pr`
 

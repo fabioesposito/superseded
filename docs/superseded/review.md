@@ -2,9 +2,13 @@
 
 ## Input Modes
 
-Pick exactly one per invocation:
-
 ```bash
+# Auto-detect mode (no args) — diff the working tree against HEAD
+superseded review
+
+# Staged-only mode — review the index (git diff --cached)
+superseded review --staged
+
 # PR mode — fetch diff via GitHub API
 superseded review --pr 123
 
@@ -16,11 +20,15 @@ superseded review --diff HEAD~3..HEAD
 superseded review src/auth.py src/models.py
 ```
 
+With no arguments, `review` runs `git diff HEAD` (everything uncommitted: staged + unstaged). `--staged` scopes it to staged changes only (`git diff --cached`). If there are no changes to review, the command exits cleanly with a message instead of running an empty review.
+
 You can combine `--diff` with file arguments to scope the diff:
 
 ```bash
 superseded review --diff main..feature src/auth.py
 ```
+
+`--staged` only takes effect on the no-args branch; combining it with `--diff` or file arguments is allowed but has no effect (the explicit diff wins).
 
 ## Output Formats
 
@@ -120,6 +128,26 @@ superseded review --pr 123
 ```
 
 Precedence: **env vars > CLI flags > config file**.
+
+## Logging
+
+By default the CLI is quiet at the `WARNING` level with human-formatted log lines on stderr (progress messages via `--format` output are untouched on stdout). For structured/machine-readable logs — useful when piping stderr to a log shipper — switch to JSON:
+
+```bash
+# Structured JSON logs on stderr
+superseded --log-format json review --diff HEAD~3..HEAD
+
+# Raise verbosity
+superseded --log-level INFO review --pr 123
+```
+
+`--log-format` accepts `text` (default) or `json`; `--log-level` accepts any standard level name (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`). Server mode defaults to JSON logging. Precedence is **env vars > CLI flags > config file**, same as agent/model:
+
+```bash
+export SUPERSEDED_LOG_FORMAT=json
+export SUPERSEDED_LOG_LEVEL=INFO
+superseded review
+```
 
 ## Timeout
 
