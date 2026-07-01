@@ -63,6 +63,8 @@ Long-form design lives under `docs/superseded/`:
 
 When implementing a plan, follow its checkbox ordering. `index.html` at repo root is leftover scaffolding and is not part of the Python tool; leave it unless a task says otherwise.
 
+**CRITICAL — superseded ≠ superpowers:** These are two completely separate projects. `docs/superseded/` is for this repo's design docs (the AI code-review tool). `docs/superpowers/` is for an unrelated project and MUST NOT be created or committed here. If you see `docs/superpowers/` or any file referencing "superpowers" skills/landing-pages/logos, delete it immediately. Likewise, do not copy superseded docs into the superpowers repo.
+
 ## Gitignore gotchas
 
 `.superseded/` (runtime memory dir), `*.db`/`*.sqlite3`, `.code-review-graph/`, `.ruff_cache/`, `.pytest_cache/`, and `.venv/` are all gitignored. Don't add these to commits. `.code-review-graph/` (CRG's local SQLite graph DB and artifacts) is gitignored. Don't commit it.
