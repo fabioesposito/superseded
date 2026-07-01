@@ -154,6 +154,24 @@ class FakeStore:
     async def get_review_stats(self, repo, min_sample):
         return []
 
+    async def prune_stale_rules(self, repo, max_age_days=30):
+        return 0
+
+    async def dismiss_learned_rule(self, rule_id):
+        return True
+
+    async def reinforce_learned_rule(self, rule_id):
+        return True
+
+    async def get_all_learned_rules(self, repo):
+        return self._learned_rules
+
+    async def get_installation_config(self, installation_id):
+        return {}
+
+    async def set_installation_config(self, installation_id, key, value):
+        pass
+
 
 def _make_finding():
     return Finding(

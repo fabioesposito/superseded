@@ -517,6 +517,7 @@ async def _build_learned_context(
     reflector = PatternReflector(agent=engine.agent, store=store)
     await reflector.maybe_reflect(repo, cwd=root)
 
+    await store.prune_stale_rules(repo)
     all_rules = await store.get_learned_rules(repo, limit=config.max_learned_rules)
     return assemble_learned_context(stats_text, all_rules, config.max_learned_rules)
 
@@ -605,6 +606,9 @@ def _run_init(force: bool, agent_override: str | None, config_path: Path | None)
     default=None,
     help="PR number to check for feedback (auto-detected from current branch if omitted)",
 )
+@click.option("--rules", is_flag=True, help="List learned review rules")
+@click.option("--dismiss-rule", type=int, default=None, help="Dismiss a learned rule by ID")
+@click.option("--helpful-rule", type=int, default=None, help="Reinforce a learned rule by ID")
 @click.argument("comment_id", required=False)
 @click.option("--helpful", is_flag=True)
 @click.option("--dismiss", is_flag=True)
@@ -613,11 +617,26 @@ def feedback(
     ctx: click.Context,
     check: bool,
     pr: int | None,
+    rules: bool,
+    dismiss_rule: int | None,
+    helpful_rule: int | None,
     comment_id: str | None,
     helpful: bool,
     dismiss: bool,
 ) -> None:
     """Manage review feedback."""
+    if rules:
+        _run_feedback_rules()
+        return
+
+    if dismiss_rule is not None:
+        _run_rule_action("dismiss", dismiss_rule)
+        return
+
+    if helpful_rule is not None:
+        _run_rule_action("helpful", helpful_rule)
+        return
+
     if check:
         pr_number = pr if pr is not None else _detect_current_pr()
         if pr_number is None:
@@ -790,3 +809,37 @@ def _run_feedback_manual(comment_id: str, action: str) -> None:
         )
         sys.exit(1)
     click.echo(f"Recorded {action} for comment {cid}.")
+
+
+def _run_feedback_rules() -> None:
+    repo = current_repo()
+    if repo is None:
+        click.echo("Error: could not resolve current repository (is gh authenticated?).", err=True)
+        sys.exit(1)
+    store = MemoryStore()
+    asyncio.run(store.init())
+    rules = asyncio.run(store.get_all_learned_rules(repo))
+    if not rules:
+        click.echo("No learned rules found for this repository.")
+        return
+    for r in rules:
+        applied = r.get("last_applied_at")
+        applied_str = applied if applied else "never"
+        click.echo(
+            f"#{r['id']:>3d}  conf={r['confidence']:.2f}  applied={applied_str}"
+            f"  evidence={r['evidence_count']}\n"
+            f"      {r['rule_text']}"
+        )
+
+
+def _run_rule_action(action: str, rule_id: int) -> None:
+    store = MemoryStore()
+    asyncio.run(store.init())
+    if action == "dismiss":
+        ok = asyncio.run(store.dismiss_learned_rule(rule_id))
+    else:
+        ok = asyncio.run(store.reinforce_learned_rule(rule_id))
+    if not ok:
+        click.echo(f"Error: no learned rule found with id {rule_id}.", err=True)
+        sys.exit(1)
+    click.echo(f"Recorded {action} for rule {rule_id}.")

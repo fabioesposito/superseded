@@ -76,6 +76,13 @@ CREATE TABLE IF NOT EXISTS reflection_state (
     last_reflection_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (repo)
 );
+
+CREATE TABLE IF NOT EXISTS installation_config (
+    installation_id BIGINT NOT NULL,
+    key             TEXT NOT NULL,
+    value           TEXT NOT NULL,
+    PRIMARY KEY (installation_id, key)
+);
 """
 
 
@@ -326,5 +333,65 @@ class PostgresStore:
                 "SELECT * FROM review_stats WHERE repo = $1 AND total >= $2",
                 repo,
                 min_sample,
+            )
+            return [dict(r) for r in rows]
+
+    async def get_installation_config(self, installation_id: int) -> dict[str, str]:
+        async with self._conn() as conn:
+            rows = await conn.fetch(
+                "SELECT key, value FROM installation_config WHERE installation_id = $1",
+                installation_id,
+            )
+            return {row["key"]: row["value"] for row in rows}
+
+    async def set_installation_config(self, installation_id: int, key: str, value: str) -> None:
+        async with self._conn() as conn:
+            await conn.execute(
+                "INSERT INTO installation_config (installation_id, key, value) "
+                "VALUES ($1, $2, $3) "
+                "ON CONFLICT (installation_id, key) DO UPDATE SET value = EXCLUDED.value",
+                installation_id,
+                key,
+                value,
+            )
+
+    async def prune_stale_rules(self, repo: str, max_age_days: int = 30) -> int:
+        """Delete learned rules not applied within ``max_age_days``."""
+        async with self._conn() as conn:
+            result = await conn.execute(
+                "DELETE FROM learned_rules "
+                "WHERE repo = $1 "
+                "AND (last_applied_at IS NULL OR "
+                "last_applied_at < NOW() - INTERVAL '1 day' * $2)",
+                repo,
+                max_age_days,
+            )
+            count = int(result.split()[-1]) if result else 0
+            return count
+
+    async def dismiss_learned_rule(self, rule_id: int) -> bool:
+        async with self._conn() as conn:
+            result = await conn.execute(
+                "UPDATE learned_rules SET confidence = confidence * 0.5 WHERE id = $1",
+                rule_id,
+            )
+            count = int(result.split()[-1]) if result else 0
+            return count > 0
+
+    async def reinforce_learned_rule(self, rule_id: int) -> bool:
+        async with self._conn() as conn:
+            result = await conn.execute(
+                "UPDATE learned_rules SET confidence = LEAST(1.0, confidence + 0.1) WHERE id = $1",
+                rule_id,
+            )
+            count = int(result.split()[-1]) if result else 0
+            return count > 0
+
+    async def get_all_learned_rules(self, repo: str) -> list[dict]:
+        async with self._conn() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM learned_rules WHERE repo = $1 "
+                "ORDER BY confidence DESC, created_at DESC",
+                repo,
             )
             return [dict(r) for r in rows]

@@ -26,3 +26,10 @@ All issues from the code review (commit `9e494c9`) have been resolved.
 - [x] **GitHub review comments can fail silently** if `f.line`/`f.end_line` fall outside the PR diff hunk (`output/github_pr.py:16-23`). Catch `CalledProcessError` and retry out-of-range comments as top-level review body.
 - [x] **`test_review_continues_when_one_pass_fails`** is marked `@pytest.mark.asyncio` (`tests/test_engine.py:73`) but the body is synchronous. Harmless under `asyncio_mode=auto` but misleading.
 - [x] **`checkout.py:8-14` accepts `base_ref` but never uses it** (dead parameter). Either use it for a local `git diff base..head` (drops the `fetch_pr_diff` API call) or drop it from the signature + spec.
+
+## Feature gaps for future work
+
+- [ ] **Native git diff auto-detect.** `superseded review` with no arguments should auto-detect staged/unstaged changes or diff against the tracking branch. Currently requires explicit `--diff` range or `FILES`. Add a `--staged` flag and auto-detect `git diff HEAD` when nothing specified.
+- [ ] **Review comparison / trends.** No way to compare findings across review runs to track improvement or regression over time. A `superseded feedback --history` command could show per-pass severity trends, dismissal rates over time, and top recurring findings.
+- [ ] **Redis queue for crash recovery.** Server mode uses in-memory `asyncio.Queue` — jobs are lost on restart. Add an optional Redis-backed queue (via `SUPERSEDED_REDIS_URL`) that persists jobs and supports crash recovery. Keep the in-memory queue as the default for single-instance deployments.
+- [ ] **Structured logging in CLI.** Only server mode uses JSON-formatted logging (`JsonFormatter` in `server/lifecycle.py`). The CLI review path uses plain `logging.info`. Add a `--log-format json` flag to unify on structured logging for both paths.

@@ -150,9 +150,77 @@ def test_health_with_token_requires_auth(tmp_path):
     assert "disk_usage" in data
 
 
-def test_review_endpoint_not_implemented(client):
+def test_review_endpoint_returns_501_when_no_api_key_configured(client):
     response = client.post("/review")
     assert response.status_code == 501
+
+
+def test_review_endpoint_returns_401_when_api_key_missing(tmp_path):
+    key_file = tmp_path / "key.pem"
+    key_file.write_text("fake-key")
+    config = ServerConfig(
+        app_id=12345,
+        webhook_secret="whsec_test",
+        private_key_path=key_file,
+        temp_dir=tmp_path / "repos",
+        api_key="test-api-key",
+    )
+    github = GitHubApp(
+        app_id=config.app_id,
+        private_key_path=config.private_key_path,
+        webhook_secret=config.webhook_secret,
+    )
+    repo_manager = RepoManager(base_path=config.temp_dir)
+    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    store = __import__("superseded.memory.store", fromlist=["MemoryStore"]).MemoryStore(
+        tmp_path / "mem.db"
+    )
+    app = create_app(
+        config=config,
+        github=github,
+        worker=worker,
+        repo_manager=repo_manager,
+        store=store,
+    )
+    test_client = TestClient(app)
+    response = test_client.post("/review")
+    assert response.status_code == 401
+
+
+def test_review_endpoint_returns_422_when_authenticated_but_body_invalid(tmp_path):
+    key_file = tmp_path / "key.pem"
+    key_file.write_text("fake-key")
+    config = ServerConfig(
+        app_id=12345,
+        webhook_secret="whsec_test",
+        private_key_path=key_file,
+        temp_dir=tmp_path / "repos",
+        api_key="test-api-key",
+    )
+    github = GitHubApp(
+        app_id=config.app_id,
+        private_key_path=config.private_key_path,
+        webhook_secret=config.webhook_secret,
+    )
+    repo_manager = RepoManager(base_path=config.temp_dir)
+    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    store = __import__("superseded.memory.store", fromlist=["MemoryStore"]).MemoryStore(
+        tmp_path / "mem2.db"
+    )
+    app = create_app(
+        config=config,
+        github=github,
+        worker=worker,
+        repo_manager=repo_manager,
+        store=store,
+    )
+    test_client = TestClient(app)
+    response = test_client.post(
+        "/review",
+        json={"owner": "test"},
+        headers={"Authorization": "Bearer test-api-key"},
+    )
+    assert response.status_code == 422
 
 
 def test_webhook_accepts_push_event(client):

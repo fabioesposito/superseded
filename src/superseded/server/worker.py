@@ -252,6 +252,8 @@ async def _load_safe_config(
     token: str,
     owner: str,
     repo: str,
+    installation_id: int | None = None,
+    store: Store | None = None,
     server_agent: str | None = None,
     server_model: str | None = None,
 ) -> Config:
@@ -264,6 +266,10 @@ async def _load_safe_config(
     cannot be suppressed by repo config in server mode.  The server
     operator can also pin a specific agent/model, overriding any
     repo-level choice.
+
+    Per-installation config overrides from ``installation_config`` take
+    precedence over the repo's ``.superseded.yaml`` but are overridden by
+    server-level settings.
     """
     try:
         raw = await github.fetch_repo_file(token, owner, repo, ".superseded.yaml")
@@ -279,6 +285,19 @@ async def _load_safe_config(
         config = Config(**data)
     else:
         config = Config()
+
+    if installation_id is not None and store is not None:
+        try:
+            overrides = await store.get_installation_config(installation_id)
+            for key, value in overrides.items():
+                if hasattr(config, key):
+                    try:
+                        setattr(config, key, type(getattr(config, key))(value))
+                    except ValueError, TypeError:
+                        setattr(config, key, value)
+        except Exception:
+            logger.warning("Failed to load installation config overrides for %d", installation_id)
+
     config.static_analysis = True
     config.passes.security = True
     if server_agent is not None:
@@ -322,6 +341,8 @@ async def _run_review_for_job(
             token,
             job.owner,
             job.repo,
+            installation_id=job.installation_id,
+            store=store,
             server_agent=server_agent,
             server_model=server_model,
         )
@@ -406,6 +427,7 @@ async def _run_review_for_job(
 
         learned_context: str | None = None
         if config.learned_review and store is not None:
+            await store.prune_stale_rules(repo_key)
             all_rules = await store.get_learned_rules(repo_key, limit=config.max_learned_rules)
             learned_context = assemble_learned_context(None, all_rules, config.max_learned_rules)
 
@@ -461,6 +483,8 @@ async def _run_review_for_job(
                 aggregator = StatsAggregator(store)
                 await aggregator._refresh(repo_key)
                 await aggregator.get_stats_context(repo_key)
+
+                await store.prune_stale_rules(repo_key)
 
                 engine_for_reflection = ReviewEngine.select(
                     config.agent, model=config.model, config=config

@@ -80,6 +80,14 @@ CREATE TABLE IF NOT EXISTS reflection_state (
     last_reflection_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (repo)
 );
+
+CREATE TABLE IF NOT EXISTS installation_config (
+    installation_id INTEGER NOT NULL,
+    key             TEXT    NOT NULL,
+    value           TEXT    NOT NULL,
+    PRIMARY KEY (installation_id, key),
+    FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE CASCADE
+);
 """
 
 
@@ -196,6 +204,14 @@ class MemoryStore:
             "last_feedback_id INTEGER NOT NULL, "
             "last_reflection_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
             "PRIMARY KEY (repo))"
+        )
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS installation_config ("
+            "installation_id INTEGER NOT NULL, "
+            "key TEXT NOT NULL, "
+            "value TEXT NOT NULL, "
+            "PRIMARY KEY (installation_id, key), "
+            "FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE CASCADE)"
         )
 
     async def record_finding(
@@ -392,6 +408,70 @@ class MemoryStore:
             cursor = await db.execute(
                 "SELECT * FROM review_stats WHERE repo = ? AND total >= ?",
                 (repo, min_sample),
+            )
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def get_installation_config(self, installation_id: int) -> dict[str, str]:
+        async with self._db() as db:
+            rows = await db.execute_fetchall(
+                "SELECT key, value FROM installation_config WHERE installation_id = ?",
+                (installation_id,),
+            )
+            return {row[0]: row[1] for row in rows}
+
+    async def set_installation_config(self, installation_id: int, key: str, value: str) -> None:
+        async with self._db() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO installation_config (installation_id, key, value) "
+                "VALUES (?, ?, ?)",
+                (installation_id, key, value),
+            )
+            await db.commit()
+
+    async def prune_stale_rules(self, repo: str, max_age_days: int = 30) -> int:
+        """Delete learned rules not applied within ``max_age_days``.
+
+        Returns the number of deleted rules.
+        """
+        async with self._db() as db:
+            cursor = await db.execute(
+                "DELETE FROM learned_rules "
+                "WHERE repo = ? "
+                "AND (last_applied_at IS NULL OR "
+                "last_applied_at < datetime('now', '-' || ? || ' days'))",
+                (repo, max_age_days),
+            )
+            await db.commit()
+            return cursor.rowcount
+
+    async def dismiss_learned_rule(self, rule_id: int) -> bool:
+        """Halve the confidence of a learned rule. Returns False if not found."""
+        async with self._db() as db:
+            cursor = await db.execute(
+                "UPDATE learned_rules SET confidence = confidence * 0.5 WHERE id = ?",
+                (rule_id,),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def reinforce_learned_rule(self, rule_id: int) -> bool:
+        """Increment confidence by 0.1 (capped at 1.0). Returns False if not found."""
+        async with self._db() as db:
+            cursor = await db.execute(
+                "UPDATE learned_rules SET confidence = MIN(1.0, confidence + 0.1) WHERE id = ?",
+                (rule_id,),
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def get_all_learned_rules(self, repo: str) -> list[dict]:
+        """Return all learned rules for a repo (including stale/low-confidence)."""
+        async with self._db() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM learned_rules WHERE repo = ? ORDER BY confidence DESC, created_at DESC",
+                (repo,),
             )
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]

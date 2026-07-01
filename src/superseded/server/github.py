@@ -120,6 +120,24 @@ class GitHubApp:
             body = data.get("body", "")
             return body if body else None
 
+    async def fetch_pr_info(self, token: str, owner: str, repo: str, pr_number: int) -> dict:
+        """Fetch head/base SHA and installation info for a PR.
+
+        Used by the manual /review endpoint to build a ReviewJob.
+        """
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}",
+                headers=self._api_headers(token),
+            )
+            response.raise_for_status()
+            data = response.json()
+            return {
+                "head_sha": data["head"]["sha"],
+                "base_sha": data["base"]["sha"],
+                "title": data.get("title", ""),
+            }
+
     async def compare_diff(
         self, token: str, owner: str, repo: str, base: str, head: str
     ) -> tuple[str | None, str]:

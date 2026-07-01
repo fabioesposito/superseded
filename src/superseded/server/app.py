@@ -98,11 +98,58 @@ def create_app(
         return {"status": "ok"}
 
     @app.post("/review")
-    async def manual_review() -> Response:
-        return Response(
-            status_code=501,
-            content="Manual review trigger is not yet implemented (API-key auth is future work).",
+    async def manual_review(request: Request) -> Response:
+        if not config.api_key:
+            return Response(status_code=501, content="API key not configured on this server.")
+        auth = request.headers.get("Authorization", "")
+        expected = f"Bearer {config.api_key}"
+        if not hmac.compare_digest(auth, expected):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        from superseded.server.worker import ReviewJob
+
+        body = await request.json()
+        try:
+            owner = body["owner"]
+            repo = body["repo"]
+            pr_number = int(body["pr_number"])
+            installation_id = int(body["installation_id"])
+        except (KeyError, ValueError) as err:
+            raise HTTPException(status_code=422, detail=f"Missing or invalid field: {err}") from err
+
+        await store.init()
+        installation = await store.get_installation(installation_id)
+        if installation is None:
+            raise HTTPException(status_code=404, detail="Installation not found")
+
+        try:
+            pr_info = await github.fetch_pr_info(
+                token=await github.get_installation_token(installation_id),
+                owner=owner,
+                repo=repo,
+                pr_number=pr_number,
+            )
+        except Exception as err:
+            raise HTTPException(status_code=502, detail=f"Failed to fetch PR info: {err}") from err
+
+        job = ReviewJob(
+            installation_id=installation_id,
+            owner=owner,
+            repo=repo,
+            pr_number=pr_number,
+            head_sha=pr_info["head_sha"],
+            base_sha=pr_info["base_sha"],
         )
+        await worker.enqueue(job)
+        logger.info(
+            "manual_review_enqueued",
+            extra={
+                "repo": f"{owner}/{repo}",
+                "pr": pr_number,
+                "job_id": job.job_id,
+            },
+        )
+        return {"status": "enqueued", "job_id": job.job_id}
 
     @app.post("/webhook")
     async def webhook(request: Request, background_tasks: BackgroundTasks) -> Response:
