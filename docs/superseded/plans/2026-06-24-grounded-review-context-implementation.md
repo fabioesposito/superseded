@@ -33,7 +33,7 @@
 **Files:**
 - Modify: `src/superseded/output/github_pr.py:74`
 
-- [ ] **Step 1: Fix the except clause**
+- [x] **Step 1: Fix the except clause**
 
 ```python
 # src/superseded/output/github_pr.py:74
@@ -45,12 +45,12 @@ except subprocess.CalledProcessError, FileNotFoundError:
 except (subprocess.CalledProcessError, FileNotFoundError):
 ```
 
-- [ ] **Step 2: Run existing tests to confirm no regressions**
+- [x] **Step 2: Run existing tests to confirm no regressions**
 
 Run: `uv run pytest tests/ -v`
 Expected: ALL PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/superseded/output/github_pr.py
@@ -65,7 +65,7 @@ git commit -m "fix: catch exception tuple correctly in github_pr.current_repo"
 - Modify: `src/superseded/diff.py`
 - Modify: `tests/test_diff.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_diff.py — append to existing file
@@ -92,12 +92,12 @@ def test_repo_root_falls_back_to_cwd(monkeypatch):
     assert result == Path.cwd()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_diff.py::test_repo_root_returns_path tests/test_diff.py::test_repo_root_falls_back_to_cwd -v`
 Expected: FAIL — `ImportError: cannot import name 'repo_root'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/superseded/diff.py — append after compute_file_context (after line 92)
@@ -116,12 +116,12 @@ def repo_root() -> Path:
         return Path.cwd()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_diff.py::test_repo_root_returns_path tests/test_diff.py::test_repo_root_falls_back_to_cwd -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/diff.py tests/test_diff.py
@@ -136,7 +136,7 @@ git commit -m "feat: add repo_root() helper to diff.py"
 - Modify: `src/superseded/config.py`
 - Modify: `tests/test_config.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_config.py — append to existing file
@@ -158,12 +158,12 @@ def test_load_config_with_enrichment_flags(tmp_path):
     assert c.usage_retrieval is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_config.py::test_config_defaults tests/test_config.py::test_load_config_with_enrichment_flags -v`
 Expected: FAIL — `Config.__init__() got unexpected keyword argument 'static_analysis'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/superseded/config.py — add two fields to Config class after memory
@@ -179,12 +179,12 @@ class Config(BaseModel):
     usage_retrieval: bool = True      # <-- NEW
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_config.py::test_config_defaults tests/test_config.py::test_load_config_with_enrichment_flags -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/config.py tests/test_config.py
@@ -200,7 +200,7 @@ git commit -m "feat: add static_analysis and usage_retrieval config flags"
 - Create: `src/superseded/context/static_analysis.py`
 - Create: `tests/test_context_static.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_context_static.py — new file
@@ -293,12 +293,12 @@ def test_no_tools_detected_returns_none(monkeypatch):
     assert result is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_context_static.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'superseded.context'`
 
-- [ ] **Step 3: Create package and implement**
+- [x] **Step 3: Create package and implement**
 
 Create `src/superseded/context/__init__.py` (empty file):
 ```python
@@ -589,12 +589,12 @@ def run_static_analysis(
     return aggregate
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_context_static.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/ tests/test_context_static.py
@@ -609,7 +609,7 @@ git commit -m "feat: add static analysis pre-pass with pluggable Tool protocol"
 - Create: `src/superseded/context/usage_retrieval.py`
 - Create: `tests/test_context_usage.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_context_usage.py — new file
@@ -762,12 +762,12 @@ def test_changed_file_excluded_from_rg(monkeypatch):
     assert "--glob" in calls[0]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_context_usage.py -v`
 Expected: FAIL with `ModuleNotFoundError`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # src/superseded/context/usage_retrieval.py — new file
@@ -911,12 +911,12 @@ def retrieve_usages(diff: str, root: Path) -> str | None:
     return "\n\n".join(blocks)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_context_usage.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/usage_retrieval.py tests/test_context_usage.py
@@ -931,7 +931,7 @@ git commit -m "feat: add cross-file usage retrieval via ripgrep"
 - Modify: `src/superseded/review/prompts.py`
 - Create: `tests/test_prompts.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_prompts.py — new file
@@ -1020,12 +1020,12 @@ def test_existing_sections_unchanged():
     assert "some memory" in prompt
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_prompts.py -v`
 Expected: FAIL — `build_prompt() got an unexpected keyword argument 'static_signals'`
 
-- [ ] **Step 3: Update prompts.py**
+- [x] **Step 3: Update prompts.py**
 
 Replace the full content of `src/superseded/review/prompts.py`:
 
@@ -1129,12 +1129,12 @@ def build_prompt(
 {JSON_FORMAT_INSTRUCTIONS}"""
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_prompts.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/review/prompts.py tests/test_prompts.py
@@ -1149,7 +1149,7 @@ git commit -m "feat: add static_signals/usage_signals kwargs and reasoning to pr
 - Modify: `src/superseded/cli.py`
 - Modify: `tests/test_integration.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_integration.py — append
@@ -1228,12 +1228,12 @@ def test_context_disabled_skips_enrichment(monkeypatch):
     assert not called
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_integration.py::test_context_enrichment_called -v`
 Expected: FAIL — `_run_review()` got unexpected keyword arguments `static_signals` / `usage_signals`
 
-- [ ] **Step 3: Update cli.py**
+- [x] **Step 3: Update cli.py**
 
 Update imports (line 11):
 ```python
@@ -1272,12 +1272,12 @@ Update the `engine.review` call to pass new kwargs:
     )
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_integration.py::test_context_enrichment_called tests/test_integration.py::test_context_disabled_skips_enrichment -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/cli.py tests/test_integration.py
@@ -1288,17 +1288,17 @@ git commit -m "feat: wire static analysis and usage retrieval into review pipeli
 
 ### Task 7: Final integration pass
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run: `uv run pytest tests/ -v`
 Expected: ALL PASS
 
-- [ ] **Step 2: Run lint and format**
+- [x] **Step 2: Run lint and format**
 
 Run: `uv run ruff check src/ tests/ && uv run ruff format src/ tests/`
 Expected: PASS (no errors, no reformatting needed)
 
-- [ ] **Step 3: Commit any lint fixes if needed**
+- [x] **Step 3: Commit any lint fixes if needed**
 
 ```bash
 git add -A

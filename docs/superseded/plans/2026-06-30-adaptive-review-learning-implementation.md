@@ -15,7 +15,7 @@
 **Files:**
 - Modify: `src/superseded/config.py:18-31`
 
-- [ ] **Step 1: Add three new fields with defaults**
+- [x] **Step 1: Add three new fields with defaults**
 
 ```python
 class Config(BaseModel):
@@ -36,12 +36,12 @@ class Config(BaseModel):
     max_learned_rules: int = 5
 ```
 
-- [ ] **Step 2: Verify existing tests still pass**
+- [x] **Step 2: Verify existing tests still pass**
 
 Run: `uv run pytest tests/ -v -k "config" -x`
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/superseded/config.py
@@ -56,7 +56,7 @@ git commit -m "feat(config): add learned_review, reflection_threshold, max_learn
 - Modify: `src/superseded/memory/store.py:14-52,125-139`
 - Test: `tests/test_memory.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `tests/test_memory.py`:
 
@@ -184,12 +184,12 @@ def test_learned_rules_confidence_filter():
     asyncio.run(_test_learned_rules_respects_confidence_filter())
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_memory.py::test_review_stats_schema -v`
 Expected: FAIL with "no such table: review_stats"
 
-- [ ] **Step 3: Add tables to SCHEMA and _migrate()**
+- [x] **Step 3: Add tables to SCHEMA and _migrate()**
 
 In `src/superseded/memory/store.py`, add to the `SCHEMA` string:
 
@@ -274,12 +274,12 @@ await db.execute(
 )
 ```
 
-- [ ] **Step 4: Run tests to verify table creation works**
+- [x] **Step 4: Run tests to verify table creation works**
 
 Run: `uv run pytest tests/test_memory.py::test_review_stats_schema -v`
 Expected: PASS (table exists, inserts work)
 
-- [ ] **Step 5: Implement new MemoryStore methods**
+- [x] **Step 5: Implement new MemoryStore methods**
 
 Add below existing methods in `store.py`:
 
@@ -327,17 +327,17 @@ async def set_reflection_state(self, repo: str, last_feedback_id: int) -> None:
         await db.commit()
 ```
 
-- [ ] **Step 6: Run all new tests**
+- [x] **Step 6: Run all new tests**
 
 Run: `uv run pytest tests/test_memory.py -v -k "test_review_stats or test_learned_rules or test_reflection_state" -x`
 Expected: ALL PASS
 
-- [ ] **Step 7: Run existing tests to check for regressions**
+- [x] **Step 7: Run existing tests to check for regressions**
 
 Run: `uv run pytest tests/test_memory.py -v -x`
 Expected: ALL PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/superseded/memory/store.py tests/test_memory.py
@@ -353,7 +353,7 @@ git commit -m "feat(memory): add review_stats, learned_rules, reflection_state t
 - Create: `src/superseded/audit/stats.py`
 - Test: `tests/test_audit_stats.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_audit_stats.py`:
 
@@ -563,18 +563,18 @@ def test_get_stats_context_repo_isolation():
     asyncio.run(_test_get_stats_context_different_repo_isolation())
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_audit_stats.py -v`
 Expected: FAIL with "No module named 'superseded.audit'"
 
-- [ ] **Step 3: Create `audit/__init__.py`**
+- [x] **Step 3: Create `audit/__init__.py`**
 
 ```python
 from __future__ import annotations
 ```
 
-- [ ] **Step 4: Implement `audit/stats.py`**
+- [x] **Step 4: Implement `audit/stats.py`**
 
 ```python
 from __future__ import annotations
@@ -685,12 +685,12 @@ class StatsAggregator:
             await self._store._conn.commit()
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `uv run pytest tests/test_audit_stats.py -v -x`
 Expected: ALL PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/audit/__init__.py src/superseded/audit/stats.py tests/test_audit_stats.py
@@ -705,7 +705,7 @@ git commit -m "feat(audit): add StatsAggregator with refresh and get_stats_conte
 - Create: `src/superseded/audit/guidelines.py`
 - Test: `tests/test_audit_guidelines.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_audit_guidelines.py`:
 
@@ -802,12 +802,12 @@ def test_with_created_at_sort_break_ties():
     assert newer_pos < older_pos
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_audit_guidelines.py -v`
 Expected: FAIL with "No module named 'superseded.audit.guidelines'"
 
-- [ ] **Step 3: Implement `audit/guidelines.py`**
+- [x] **Step 3: Implement `audit/guidelines.py`**
 
 ```python
 from __future__ import annotations
@@ -857,12 +857,12 @@ def assemble_learned_context(
     return "\n".join(sections)
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `uv run pytest tests/test_audit_guidelines.py -v -x`
 Expected: ALL PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/audit/guidelines.py tests/test_audit_guidelines.py
@@ -877,7 +877,7 @@ git commit -m "feat(audit): add assemble_learned_context for prompt integration"
 - Create: `src/superseded/audit/reflector.py`
 - Test: `tests/test_audit_reflector.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_audit_reflector.py`:
 
@@ -1046,12 +1046,12 @@ def test_prompt_includes_both():
     asyncio.run(_test_maybe_reflect_prompt_includes_accepted_and_dismissed())
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_audit_reflector.py -v`
 Expected: FAIL with import error
 
-- [ ] **Step 3: Implement `audit/reflector.py`**
+- [x] **Step 3: Implement `audit/reflector.py`**
 
 ```python
 from __future__ import annotations
@@ -1206,12 +1206,12 @@ def _build_reflection_prompt(
     )
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `uv run pytest tests/test_audit_reflector.py -v -x`
 Expected: ALL PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/audit/reflector.py tests/test_audit_reflector.py
@@ -1226,7 +1226,7 @@ git commit -m "feat(audit): add PatternReflector for LLM-driven rule inference"
 - Modify: `src/superseded/review/prompts.py:48-109`
 - Test: `tests/test_prompts.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `tests/test_prompts.py`:
 
@@ -1272,12 +1272,12 @@ def test_learned_context_ordering():
     assert spec_pos < learned_pos < pr_pos
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_prompts.py::test_learned_context_section_present_when_kwarg_non_empty -v`
 Expected: FAIL (assertion error — section not found)
 
-- [ ] **Step 3: Modify `build_prompt()` in `prompts.py`**
+- [x] **Step 3: Modify `build_prompt()` in `prompts.py`**
 
 Add `learned_context: str | None = None` to the signature after `spec_signals`, and add the new section after the Specs section in the return string.
 
@@ -1310,12 +1310,12 @@ Add the section in the return f-string between `### Relevant Design Specs & Plan
 {learned}
 ```
 
-- [ ] **Step 4: Run all new prompt tests**
+- [x] **Step 4: Run all new prompt tests**
 
 Run: `uv run pytest tests/test_prompts.py -v -x`
 Expected: ALL PASS (including existing tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/review/prompts.py tests/test_prompts.py
@@ -1330,7 +1330,7 @@ git commit -m "feat(prompts): add learned_context kwarg and Learned Review Guide
 - Modify: `src/superseded/cli.py:305-453`
 - Test: `tests/test_integration.py`
 
-- [ ] **Step 1: Write the integration tests**
+- [x] **Step 1: Write the integration tests**
 
 Add to `tests/test_integration.py`:
 
@@ -1440,7 +1440,7 @@ def test_learned_context_none_when_no_memory(
     assert kwargs.get("learned_context") is None
 ```
 
-- [ ] **Step 2: Update FakeStore to support audit methods**
+- [x] **Step 2: Update FakeStore to support audit methods**
 
 Add to `FakeStore` in `tests/test_integration.py`:
 
@@ -1464,12 +1464,12 @@ async def set_reflection_state(self, repo, last_feedback_id):
     self._reflection_state[repo] = last_feedback_id
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_integration.py::test_learned_context_injected_when_enabled -v`
 Expected: FAIL (learned_context is None or missing)
 
-- [ ] **Step 4: Wire the audit pipeline in `_run_review`**
+- [x] **Step 4: Wire the audit pipeline in `_run_review`**
 
 In `src/superseded/cli.py`, add import at top:
 
@@ -1530,17 +1530,17 @@ if config.learned_review and store is not None and repo:
     )
 ```
 
-- [ ] **Step 5: Run integration tests**
+- [x] **Step 5: Run integration tests**
 
 Run: `uv run pytest tests/test_integration.py -v -k "learned" -x`
 Expected: ALL PASS
 
-- [ ] **Step 6: Run full integration test suite for regressions**
+- [x] **Step 6: Run full integration test suite for regressions**
 
 Run: `uv run pytest tests/test_integration.py -v -x`
 Expected: ALL PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/superseded/cli.py tests/test_integration.py
@@ -1554,7 +1554,7 @@ git commit -m "feat(cli): wire audit pipeline (stats + reflection + guidelines) 
 **Files:**
 - Modify: `src/superseded/server/worker.py:258-428`
 
-- [ ] **Step 1: Add imports to worker.py**
+- [x] **Step 1: Add imports to worker.py**
 
 Add at top of `worker.py`:
 
@@ -1564,7 +1564,7 @@ from superseded.audit.reflector import PatternReflector
 from superseded.audit.stats import StatsAggregator
 ```
 
-- [ ] **Step 2: Wire audit pipeline in `_run_review_for_job`**
+- [x] **Step 2: Wire audit pipeline in `_run_review_for_job`**
 
 After the existing `await store.set_watermark(...)` line (line 408), add:
 
@@ -1598,12 +1598,12 @@ if config.learned_review and store is not None:
 
 Then add `learned_context=learned_context` to `engine.review()` call.
 
-- [ ] **Step 3: Run server tests**
+- [x] **Step 3: Run server tests**
 
 Run: `uv run pytest tests/test_server_worker.py -v -x`
 Expected: ALL PASS (with potential test updates for the new kwargs)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/superseded/server/worker.py
@@ -1616,28 +1616,28 @@ git commit -m "feat(server): wire audit pipeline into server worker review cycle
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Run ruff format**
+- [x] **Step 1: Run ruff format**
 
 ```bash
 uv run ruff format src/ tests/
 ```
 Expected: No changes or clean output
 
-- [ ] **Step 2: Run ruff check**
+- [x] **Step 2: Run ruff check**
 
 ```bash
 uv run ruff check src/ tests/
 ```
 Expected: All clear
 
-- [ ] **Step 3: Run full test suite**
+- [x] **Step 3: Run full test suite**
 
 ```bash
 uv run pytest tests/ -v
 ```
 Expected: ALL PASS
 
-- [ ] **Step 4: Commit any lint/format fixes**
+- [x] **Step 4: Commit any lint/format fixes**
 
 ```bash
 git add -u

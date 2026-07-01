@@ -29,7 +29,7 @@ No new files. `extract_symbols` itself is unchanged — its `else` branch alread
 
 **Context:** `retrieve_usages` iterates diff entries and does `lang = _LANG_MAP.get(Path(entry["file"]).suffix)`. For an unknown extension like `.rs`, `lang` is `None`, and `if not lang: continue` skips the entry entirely. When *all* entries are unknown-language, `symbols` stays empty and `retrieve_usages` returns `None` early — ripgrep is never invoked, so the AI gets zero caller-context for Rust/Java/Ruby/etc. diffs. The fix is to drop the skip guard so `lang=None` flows into `extract_symbols`, whose `else` branch already selects `_GENERIC_RE`.
 
-- [ ] **Step 1: Write the failing test (end-to-end via retrieve_usages)**
+- [x] **Step 1: Write the failing test (end-to-end via retrieve_usages)**
 
 First, add a direct contract test that locks the pre-existing behavior Task 1 relies on — that `extract_symbols` with `lang=None` selects `_GENERIC_RE`. Add to `tests/test_context_usage.py` near the other `test_extract_symbols_*` tests:
 
@@ -79,12 +79,12 @@ def test_unknown_language_uses_generic_symbol_extraction(monkeypatch):
     assert "process_request" in result
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_context_usage.py::test_unknown_language_uses_generic_symbol_extraction -v`
 Expected: FAIL — `assert calls` fails because the `.rs` entry is skipped, no symbols are extracted, and `retrieve_usages` returns `None` without calling ripgrep.
 
-- [ ] **Step 3: Remove the skip guard**
+- [x] **Step 3: Remove the skip guard**
 
 In `src/superseded/context/usage_retrieval.py`, find this block inside `retrieve_usages`:
 
@@ -106,17 +106,17 @@ Remove the two guard lines so it becomes:
 
 Now `lang` is `None` for unknown extensions, and `extract_symbols`'s `else` branch selects `_GENERIC_RE`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_context_usage.py::test_unknown_language_uses_generic_symbol_extraction -v`
 Expected: PASS.
 
-- [ ] **Step 5: Run the full usage-retrieval test suite to confirm no regression**
+- [x] **Step 5: Run the full usage-retrieval test suite to confirm no regression**
 
 Run: `uv run pytest tests/test_context_usage.py tests/test_usage_retrieval.py -v`
 Expected: all PASS (curated Python/JS/TS/Go behavior is untouched).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/test_context_usage.py src/superseded/context/usage_retrieval.py
@@ -138,7 +138,7 @@ langs to the generic identifier regex."
 
 **Context:** When `parse_diff_files` returns no entries (a raw hunk with no `diff --git` header), `retrieve_usages` hits an `else` branch that hardcodes `extract_symbols(diff, "python")`. That arbitrarily applies Python's symbol regex (and its `case_insensitive=True` dedup) to non-Python content. Changing it to `extract_symbols(diff, None)` routes it through the same generic fallback as Task 1. This is observable: with `"python"`, `case_insensitive=True` dedupes identifiers that differ only by case (`Widget` and `widget` collapse to one); with `None`, `case_insensitive=False` keeps both, so ripgrep searches for both.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/test_context_usage.py`:
 
@@ -167,12 +167,12 @@ def test_no_entries_fallback_is_language_agnostic(monkeypatch):
     assert "widget" in pattern
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_context_usage.py::test_no_entries_fallback_is_language_agnostic -v`
 Expected: FAIL — under the current `"python"` fallback, `case_insensitive=True` dedupes `Widget`/`widget` to a single symbol, so only one of them appears in the rg pattern. The assertion on the missing casing fails.
 
-- [ ] **Step 3: Switch the fallback to generic**
+- [x] **Step 3: Switch the fallback to generic**
 
 In `src/superseded/context/usage_retrieval.py`, find the `else` branch in `retrieve_usages`:
 
@@ -190,17 +190,17 @@ Change `"python"` to `None`:
         symbols = extract_symbols(diff, None)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_context_usage.py::test_no_entries_fallback_is_language_agnostic -v`
 Expected: PASS.
 
-- [ ] **Step 5: Run the full test file to confirm no regression**
+- [x] **Step 5: Run the full test file to confirm no regression**
 
 Run: `uv run pytest tests/test_context_usage.py tests/test_usage_retrieval.py -v`
 Expected: all PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/test_context_usage.py src/superseded/context/usage_retrieval.py
@@ -217,22 +217,22 @@ fallback is language-agnostic."
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Lint**
+- [x] **Step 1: Lint**
 
 Run: `uv run ruff check src/ tests/`
 Expected: no errors. (If `usage_retrieval.py` now has an unused name after removing the guard — e.g. a now-unused import — fix it; the only change was deleting two lines, so no new unused imports are expected.)
 
-- [ ] **Step 2: Format check / apply**
+- [x] **Step 2: Format check / apply**
 
 Run: `uv run ruff format src/ tests/`
 Expected: no changes (or auto-formatted in place).
 
-- [ ] **Step 3: Full test suite**
+- [x] **Step 3: Full test suite**
 
 Run: `uv run pytest tests/ -v`
 Expected: all PASS.
 
-- [ ] **Step 4: (Optional) Manual smoke test**
+- [x] **Step 4: (Optional) Manual smoke test**
 
 Run: `uv run superseded review --diff HEAD~1..HEAD --format json`
 Expected: runs without error. (Context-augmentation modules are best-effort and failures are logged-and-skipped, not fatal.)

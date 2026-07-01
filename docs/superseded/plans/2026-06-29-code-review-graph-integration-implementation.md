@@ -38,7 +38,7 @@
 - Modify: `src/superseded/config.py:18-28`
 - Test: `tests/test_config.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_config.py`:
 
@@ -59,12 +59,12 @@ def test_config_graph_round_trip(tmp_path):
     assert loaded.graph is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_config.py::test_config_graph_default_true -v`
 Expected: FAIL with `AttributeError: 'Config' object has no attribute 'graph'` (or pydantic validation error).
 
-- [ ] **Step 3: Add the field**
+- [x] **Step 3: Add the field**
 
 Edit `src/superseded/config.py` — extend the `Config` class so the boolean fields are grouped at the end:
 
@@ -86,12 +86,12 @@ class Config(BaseModel):
         return getattr(self.passes, name, False)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_config.py -v`
 Expected: PASS including both new tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/config.py tests/test_config.py
@@ -106,7 +106,7 @@ git commit -m "feat(config): add graph toggle (default true)"
 - Modify: `src/superseded/detection.py:34` (after `detect_gh`)
 - Test: `tests/test_detection.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_detection.py`:
 
@@ -157,12 +157,12 @@ def test_detect_code_review_graph_true(tmp_path, monkeypatch):
 
 Make sure `from pathlib import Path` is present at the top of `tests/test_detection.py`; if not, add it.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_detection.py::detect_code_review_graph -v`
 Expected: FAIL with `ImportError: cannot import name 'detect_code_review_graph'`.
 
-- [ ] **Step 3: Implement the helper**
+- [x] **Step 3: Implement the helper**
 
 Edit `src/superseded/detection.py` — add to the end of the file:
 
@@ -178,12 +178,12 @@ def detect_code_review_graph(root: Path) -> bool:
 
 Also add `from pathlib import Path` at the top of `detection.py` (currently missing — the file imports `shutil` and `dataclass` but not `Path`).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_detection.py -v`
 Expected: PASS including the three new tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/detection.py tests/test_detection.py
@@ -198,7 +198,7 @@ git commit -m "feat(detection): add detect_code_review_graph"
 - Create: `src/superseded/context/graph_retrieval.py`
 - Test: `tests/test_graph_retrieval.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_graph_retrieval.py`:
 
@@ -242,12 +242,12 @@ def test_is_available_true(tmp_path, monkeypatch):
     assert is_available(tmp_path) is True
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_graph_retrieval.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'superseded.context.graph_retrieval'`.
 
-- [ ] **Step 3: Implement `is_available`**
+- [x] **Step 3: Implement `is_available`**
 
 Create `src/superseded/context/graph_retrieval.py`:
 
@@ -281,12 +281,12 @@ def is_available(root: Path) -> bool:
     return (root / _GRAPH_DIR).is_dir()
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_graph_retrieval.py -v`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/graph_retrieval.py tests/test_graph_retrieval.py
@@ -301,7 +301,7 @@ git commit -m "feat(graph_retrieval): add is_available probe"
 - Modify: `src/superseded/context/graph_retrieval.py`
 - Test: `tests/test_graph_retrieval.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_graph_retrieval.py`:
 
@@ -366,12 +366,12 @@ def test_ensure_graph_fresh_passes_cwd(monkeypatch):
     assert seen["kwargs"]["timeout"] == 30
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_graph_retrieval.py::test_ensure_graph_fresh_passes_cwd -v`
 Expected: FAIL with `AttributeError: ... has no attribute 'ensure_graph_fresh'`.
 
-- [ ] **Step 3: Implement `ensure_graph_fresh`**
+- [x] **Step 3: Implement `ensure_graph_fresh`**
 
 Append to `src/superseded/context/graph_retrieval.py`:
 
@@ -399,12 +399,12 @@ def ensure_graph_fresh(root: Path) -> None:
         logger.warning("code-review-graph update failed: %s", err)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_graph_retrieval.py -v`
 Expected: PASS (7 tests total now).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/graph_retrieval.py tests/test_graph_retrieval.py
@@ -421,7 +421,7 @@ git commit -m "feat(graph_retrieval): add ensure_graph_fresh"
 
 The CRG API contract (verified by reading installed source): `query_graph(pattern="callers_of", target="sym", repo_root=None)` returns a dict `{"status": "ok"|"not_found"|"ambiguous"|"error", "results": [...nodes...], "edges": [...edges...]}`. Each node carries `file_path`, `line_start`, `name`, `qualified_name`. Each edge carries `kind`, `source` (caller qualified name), `file_path`, `line` (call-site line). No exceptions on not-found; `ValueError` only on bad explicit `repo_root`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_graph_retrieval.py`:
 
@@ -604,12 +604,12 @@ def test_query_callers_skips_non_calls_edges(monkeypatch):
     assert lines == ["src/c.py:3: caller"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_graph_retrieval.py::test_query_callers_formats_path_line_name -v`
 Expected: FAIL with `AttributeError: module ... has no attribute '_query_callers'`.
 
-- [ ] **Step 3: Implement `_query_callers`**
+- [x] **Step 3: Implement `_query_callers`**
 
 Append to `src/superseded/context/graph_retrieval.py`:
 
@@ -659,12 +659,12 @@ def _query_callers(symbol: str, root: Path) -> list[str]:
     return lines
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_graph_retrieval.py -v`
 Expected: PASS (13 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/graph_retrieval.py tests/test_graph_retrieval.py
@@ -679,7 +679,7 @@ git commit -m "feat(graph_retrieval): add _query_callers wrapping CRG query_grap
 - Modify: `src/superseded/context/graph_retrieval.py`
 - Test: `tests/test_graph_retrieval.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_graph_retrieval.py`:
 
@@ -782,12 +782,12 @@ def test_retrieve_usages_via_graph_returns_none_when_no_callers(monkeypatch):
     assert result is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_graph_retrieval.py::test_retrieve_usages_via_graph_no_symbols_returns_none -v`
 Expected: FAIL with `AttributeError: ... has no attribute 'retrieve_usages_via_graph'`.
 
-- [ ] **Step 3: Implement `retrieve_usages_via_graph`**
+- [x] **Step 3: Implement `retrieve_usages_via_graph`**
 
 Append to `src/superseded/context/graph_retrieval.py`:
 
@@ -853,12 +853,12 @@ def retrieve_usages_via_graph(
     return "\n\n".join(blocks)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_graph_retrieval.py -v`
 Expected: PASS (18 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/graph_retrieval.py tests/test_graph_retrieval.py
@@ -873,7 +873,7 @@ git commit -m "feat(graph_retrieval): add retrieve_usages_via_graph"
 - Modify: `src/superseded/context/gathering.py`
 - Test: `tests/test_gathering_graph.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_gathering_graph.py`:
 
@@ -979,12 +979,12 @@ def test_gather_context_graph_true_unavailable_falls_back(monkeypatch):
     assert result["usage_signals"] == "rg-result"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_gathering_graph.py -v`
 Expected: FAIL — `gather_context()` rejects the unknown `graph=True` keyword (TypeError) or returns the rg result regardless.
 
-- [ ] **Step 3: Implement the `graph` flag**
+- [x] **Step 3: Implement the `graph` flag**
 
 Edit `src/superseded/context/gathering.py`. Add the `graph_retrieval` import near the existing imports, add the `graph` parameter, and create a `_refresh_then_retrieve` helper that runs sequentially in one worker thread:
 
@@ -1086,12 +1086,12 @@ def submit_pr_description(
     return executor.submit(fetch_fn, pr)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_gathering_graph.py tests/test_context_usage.py -v`
 Expected: PASS for all (the new tests plus the existing usage tests, which don't pass `graph=`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/gathering.py tests/test_gathering_graph.py
@@ -1106,7 +1106,7 @@ git commit -m "feat(gathering): add graph flag routing usage to CRG when availab
 - Modify: `src/superseded/cli.py`
 - Test: `tests/test_cli.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_cli.py`:
 
@@ -1208,12 +1208,12 @@ def test_review_passes_graph_to_gather_context(monkeypatch):
 
 If `from pathlib import Path` and `from unittest.mock import MagicMock` are not already imported at the top of `tests/test_cli.py`, add them.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_cli.py::test_resolve_graph_defaults_true -v`
 Expected: FAIL with `ImportError: cannot import name 'resolve_graph'`.
 
-- [ ] **Step 3: Implement the flag and resolver**
+- [x] **Step 3: Implement the flag and resolver**
 
 Edit `src/superseded/cli.py`:
 
@@ -1312,12 +1312,12 @@ And modify the `gather_context` call to pass `graph=enable_graph`:
     )
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_cli.py -v`
 Expected: PASS including the 6 new tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/cli.py tests/test_cli.py
@@ -1333,7 +1333,7 @@ git commit -m "feat(cli): add --graph/--no-graph flag and SUPERSEDED_GRAPH env v
 - Modify: `src/superseded/cli.py` (`_run_init` only)
 - Test: `tests/test_init.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_init.py`:
 
@@ -1371,12 +1371,12 @@ def test_init_crg_present_prints_found(tmp_path, monkeypatch):
     assert "code-review-graph: found" in result.output
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_init.py::test_init_crg_missing_prints_instruction -v`
 Expected: FAIL — the `code-review-graph` line isn't printed yet.
 
-- [ ] **Step 3: Wire the probe into `_run_init`**
+- [x] **Step 3: Wire the probe into `_run_init`**
 
 Edit `src/superseded/cli.py`:
 
@@ -1406,12 +1406,12 @@ from superseded.detection import (
         )
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_init.py -v`
 Expected: PASS including the 2 new tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/cli.py tests/test_init.py
@@ -1427,7 +1427,7 @@ git commit -m "feat(init): report code-review-graph availability"
 
 This task has no automated test — it's a packaging change. We verify by re-locking.
 
-- [ ] **Step 1: Add the optional-dependency group**
+- [x] **Step 1: Add the optional-dependency group**
 
 Edit `pyproject.toml`, inserting the `[project.optional-dependencies]` table after the `[dependency-groups]` block (after line 22):
 
@@ -1436,7 +1436,7 @@ Edit `pyproject.toml`, inserting the `[project.optional-dependencies]` table aft
 graph = ["code-review-graph"]
 ```
 
-- [ ] **Step 2: Re-lock and verify**
+- [x] **Step 2: Re-lock and verify**
 
 Run: `uv lock`
 Expected: success (uv updates `uv.lock` to record the optional group without installing it).
@@ -1449,7 +1449,7 @@ Expected: prints the start of the `query_graph` docstring (verification that the
 
 If the install or import fails, do NOT proceed. Investigate the upstream package or pin a version in `pyproject.toml` (e.g. `"code-review-graph>=2.3"`).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add pyproject.toml uv.lock
@@ -1465,7 +1465,7 @@ git commit -m "build(deps): add optional 'graph' extra (code-review-graph)"
 
 No test — docs.
 
-- [ ] **Step 1: Document the new behavior**
+- [x] **Step 1: Document the new behavior**
 
 Edit `AGENTS.md`. In the **Conventions** section, extend the paragraph to mention the new toggle. Find the existing sentence ending with `... or \`--no-conventions\` / \`--no-specs\`.` and extend it:
 
@@ -1486,7 +1486,7 @@ In **Gitignore gotchas**, append one line:
 - `.code-review-graph/` (CRG's local SQLite graph DB and artifacts) is gitignored. Don't commit it.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add AGENTS.md
@@ -1499,12 +1499,12 @@ git commit -m "docs(agents): document graph integration"
 
 **Files:** None (verification only)
 
-- [ ] **Step 1: Run the full test suite**
+- [x] **Step 1: Run the full test suite**
 
 Run: `uv run pytest tests/ -v`
 Expected: ALL tests pass. No skips related to CRG (the graph path is exercised via mocks; CRG being installed is incidental).
 
-- [ ] **Step 2: Run lint + format checks**
+- [x] **Step 2: Run lint + format checks**
 
 Run: `uv run ruff check src/ tests/`
 Expected: clean.
@@ -1512,7 +1512,7 @@ Expected: clean.
 Run: `uv run ruff format --check src/ tests/`
 Expected: clean. If not, run `uv run ruff format src/ tests/` and re-stage any changes.
 
-- [ ] **Step 3: Smoke-test the CLI locally**
+- [x] **Step 3: Smoke-test the CLI locally**
 
 Run: `uv run superseded review --help | rg graph`
 Expected: the `--graph/--no-graph` line appears in the help text.
@@ -1523,7 +1523,7 @@ Expected: the existing init help is unchanged (no new init flags).
 Run: `uv run superseded review --diff HEAD~1..HEAD --no-graph --format json | head -5`
 Expected: review runs (or fails on missing agent — that's fine, the point is it accepted `--no-graph`).
 
-- [ ] **Step 4: Commit any format/lint fixes**
+- [x] **Step 4: Commit any format/lint fixes**
 
 ```bash
 git status

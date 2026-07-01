@@ -20,7 +20,7 @@ Two files use Python 2 `except X, Y:` syntax which means `except X as Y:` in Pyt
 - Test: `tests/test_static_analysis.py` (new)
 - Test: `tests/test_github_pr.py` (new)
 
-- [ ] **Step 1: Write failing tests for both bugs**
+- [x] **Step 1: Write failing tests for both bugs**
 
 ```python
 # tests/test_static_analysis.py
@@ -59,12 +59,12 @@ def test_current_repo_returns_none_on_error():
         assert current_repo() is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_static_analysis.py tests/test_github_pr.py -v`
 Expected: FAIL with `SyntaxError` (Python 3 cannot parse `except X, Y:`)
 
-- [ ] **Step 3: Fix static_analysis.py exception syntax**
+- [x] **Step 3: Fix static_analysis.py exception syntax**
 
 ```python
 # src/superseded/context/static_analysis.py:199
@@ -74,7 +74,7 @@ except json.JSONDecodeError, ValueError:
 except (json.JSONDecodeError, ValueError):
 ```
 
-- [ ] **Step 4: Fix github_pr.py exception syntax**
+- [x] **Step 4: Fix github_pr.py exception syntax**
 
 ```python
 # src/superseded/output/github_pr.py:80
@@ -84,16 +84,16 @@ except subprocess.CalledProcessError, FileNotFoundError:
 except (subprocess.CalledProcessError, FileNotFoundError):
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_static_analysis.py tests/test_github_pr.py -v`
 Expected: PASS
 
-- [ ] **Step 6: Lint and format**
+- [x] **Step 6: Lint and format**
 
 Run: `uv run ruff check src/ tests/ && uv run ruff format src/ tests/`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/superseded/context/static_analysis.py src/superseded/output/github_pr.py tests/test_static_analysis.py tests/test_github_pr.py
@@ -108,7 +108,7 @@ git commit -m "fix: correct Python 2 exception syntax to tuple form"
 - Modify: `src/superseded/context/usage_retrieval.py:43-94`
 - Test: `tests/test_usage_retrieval.py` (new)
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_usage_retrieval.py
@@ -125,12 +125,12 @@ def test_keywords_include_all_python_keywords():
         assert kw in _KEYWORDS, f"Missing Python keyword: {kw}"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_usage_retrieval.py::test_keywords_include_all_python_keywords -v`
 Expected: FAIL (missing `match`, `case`, `del`, `nonlocal`, `assert`, `global`)
 
-- [ ] **Step 3: Replace hardcoded blocklist with `keyword.kwlist` union**
+- [x] **Step 3: Replace hardcoded blocklist with `keyword.kwlist` union**
 
 ```python
 # src/superseded/context/usage_retrieval.py:43-94
@@ -156,16 +156,16 @@ _KEYWORDS = frozenset(
 )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_usage_retrieval.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Lint and format**
+- [x] **Step 5: Lint and format**
 
 Run: `uv run ruff check src/ tests/ && uv run ruff format src/ tests/`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/context/usage_retrieval.py tests/test_usage_retrieval.py
@@ -181,7 +181,7 @@ git commit -m "fix: use keyword.kwlist for symbol blocklist per spec"
 - Modify: `src/superseded/context/usage_retrieval.py:148-168` (retrieve_usages)
 - Test: `tests/test_usage_retrieval.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_usage_retrieval.py (append)
@@ -198,12 +198,12 @@ def test_extract_symbols_keeps_most_recent():
     assert "func_0" not in symbols
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_usage_retrieval.py::test_extract_symbols_keeps_most_recent -v`
 Expected: FAIL (currently keeps first-added)
 
-- [ ] **Step 3: Fix extract_symbols to keep most-recently-added**
+- [x] **Step 3: Fix extract_symbols to keep most-recently-added**
 
 ```python
 # src/superseded/context/usage_retrieval.py:108-145
@@ -245,7 +245,7 @@ def extract_symbols(diff: str, lang: str) -> list[str]:
     return symbols[-MAX_SYMBOLS:] if len(symbols) > MAX_SYMBOLS else symbols
 ```
 
-- [ ] **Step 4: Fix retrieve_usages to also reverse retention**
+- [x] **Step 4: Fix retrieve_usages to also reverse retention**
 
 ```python
 # src/superseded/context/usage_retrieval.py:148-168
@@ -273,16 +273,16 @@ def retrieve_usages(diff: str, root: Path) -> str | None:
         symbols = extract_symbols(diff, "python")
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_usage_retrieval.py -v`
 Expected: PASS
 
-- [ ] **Step 6: Lint and format**
+- [x] **Step 6: Lint and format**
 
 Run: `uv run ruff check src/ tests/ && uv run ruff format src/ tests/`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/superseded/context/usage_retrieval.py tests/test_usage_retrieval.py
@@ -297,7 +297,7 @@ git commit -m "fix: retain most-recently-added symbols per spec"
 - Modify: `src/superseded/context/usage_retrieval.py:192-214`
 - Test: `tests/test_usage_retrieval.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_usage_retrieval.py (append)
@@ -320,12 +320,12 @@ def test_retrieve_usages_single_rg_call():
         assert "bar" in cmd[-1] or "bar" in str(cmd)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_usage_retrieval.py::test_retrieve_usages_single_rg_call -v`
 Expected: FAIL (currently calls rg once per symbol)
 
-- [ ] **Step 3: Implement batched ripgrep**
+- [x] **Step 3: Implement batched ripgrep**
 
 ```python
 # src/superseded/context/usage_retrieval.py:192-214
@@ -394,16 +394,16 @@ Expected: FAIL (currently calls rg once per symbol)
     return "\n\n".join(blocks)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_usage_retrieval.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Lint and format**
+- [x] **Step 5: Lint and format**
 
 Run: `uv run ruff check src/ tests/ && uv run ruff format src/ tests/`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/context/usage_retrieval.py tests/test_usage_retrieval.py
@@ -418,7 +418,7 @@ git commit -m "perf: batch ripgrep into single call with alternation regex"
 - Modify: `src/superseded/context/static_analysis.py:213-223`
 - Test: `tests/test_static_analysis.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_static_analysis.py (append)
@@ -431,12 +431,12 @@ def test_tools_sorted_alphabetically():
     assert names == sorted(names)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_static_analysis.py::test_tools_sorted_alphabetically -v`
 Expected: FAIL (currently: ruff, mypy, bandit, eslint, tsc, gofmt, go vet, staticcheck, gitleaks)
 
-- [ ] **Step 3: Sort TOOLS alphabetically**
+- [x] **Step 3: Sort TOOLS alphabetically**
 
 ```python
 # src/superseded/context/static_analysis.py:213-223
@@ -456,12 +456,12 @@ TOOLS: list[Tool] = sorted(
 )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_static_analysis.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/static_analysis.py tests/test_static_analysis.py
@@ -476,7 +476,7 @@ git commit -m "fix: sort TOOLS alphabetically per spec"
 - Modify: `src/superseded/context/static_analysis.py:275-291`
 - Test: `tests/test_static_analysis.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_static_analysis.py (append)
@@ -511,12 +511,12 @@ def test_budget_truncation_per_finding_not_per_tool():
     assert "omitted" in result.lower()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_static_analysis.py::test_budget_truncation_per_finding_not_per_tool -v`
 Expected: FAIL (currently drops entire tool block)
 
-- [ ] **Step 3: Implement per-finding truncation**
+- [x] **Step 3: Implement per-finding truncation**
 
 ```python
 # src/superseded/context/static_analysis.py:275-291
@@ -566,12 +566,12 @@ Expected: FAIL (currently drops entire tool block)
     return aggregate
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_static_analysis.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/static_analysis.py tests/test_static_analysis.py
@@ -586,7 +586,7 @@ git commit -m "fix: per-finding truncation for static budget per spec"
 - Modify: `src/superseded/context/usage_retrieval.py:125-133` (extract_symbols)
 - Test: `tests/test_usage_retrieval.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_usage_retrieval.py (append)
@@ -598,12 +598,12 @@ def test_extract_symbols_case_insensitive_dedupe_for_python():
     assert len([s for s in symbols if s.lower() == "myclass"]) == 1
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_usage_retrieval.py::test_extract_symbols_case_insensitive_dedupe_for_python -v`
 Expected: FAIL (currently case-sensitive dedupe)
 
-- [ ] **Step 3: Implement language-aware case-insensitive dedupe**
+- [x] **Step 3: Implement language-aware case-insensitive dedupe**
 
 ```python
 # src/superseded/context/usage_retrieval.py:108-145
@@ -650,12 +650,12 @@ def extract_symbols(diff: str, lang: str) -> list[str]:
     return symbols[-MAX_SYMBOLS:] if len(symbols) > MAX_SYMBOLS else symbols
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_usage_retrieval.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/context/usage_retrieval.py tests/test_usage_retrieval.py
@@ -670,7 +670,7 @@ git commit -m "fix: case-insensitive dedupe for Python/JS/TS symbols"
 - Modify: `src/superseded/server/github.py:32-49`
 - Test: `tests/test_github.py` (new)
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_github.py
@@ -712,12 +712,12 @@ def test_sign_jwt_cached(tmp_path):
         assert jwt3 != jwt1
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_github.py::test_sign_jwt_cached -v`
 Expected: FAIL (currently re-signs every call)
 
-- [ ] **Step 3: Implement JWT caching**
+- [x] **Step 3: Implement JWT caching**
 
 ```python
 # src/superseded/server/github.py:32-49
@@ -748,12 +748,12 @@ class GitHubApp:
         return jwt_token
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_github.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/server/github.py tests/test_github.py
@@ -768,7 +768,7 @@ git commit -m "perf: cache JWT for 9 minutes to reduce signing overhead"
 - Modify: `src/superseded/server/worker.py:83-87`
 - Test: `tests/test_worker.py` (new)
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_worker.py
@@ -830,12 +830,12 @@ async def test_semaphore_acquired_after_token_fetch():
     )
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_worker.py::test_semaphore_acquired_after_token_fetch -v`
 Expected: FAIL (currently semaphore acquired before token fetch)
 
-- [ ] **Step 3: Restructure _process to move semaphore after token fetch**
+- [x] **Step 3: Restructure _process to move semaphore after token fetch**
 
 ```python
 # src/superseded/server/worker.py:72-141
@@ -922,12 +922,12 @@ Expected: FAIL (currently semaphore acquired before token fetch)
                 self._active_count -= 1
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_worker.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/server/worker.py tests/test_worker.py
@@ -943,7 +943,7 @@ git commit -m "perf: move semaphore acquisition after token fetch"
 - Modify: `src/superseded/server/worker.py:165-172`
 - Test: `tests/test_checkout.py` (new)
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_checkout.py
@@ -966,12 +966,12 @@ async def test_checkout_repo_no_base_ref_param():
     assert "base_ref" not in sig.parameters, "base_ref should be removed"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_checkout.py::test_checkout_repo_no_base_ref_param -v`
 Expected: FAIL (currently has base_ref in signature)
 
-- [ ] **Step 3: Remove base_ref from checkout_repo**
+- [x] **Step 3: Remove base_ref from checkout_repo**
 
 ```python
 # src/superseded/server/checkout.py:8-14
@@ -984,7 +984,7 @@ async def checkout_repo(
 ) -> Path:
 ```
 
-- [ ] **Step 4: Update caller in worker.py**
+- [x] **Step 4: Update caller in worker.py**
 
 ```python
 # src/superseded/server/worker.py:165-172
@@ -997,12 +997,12 @@ async def checkout_repo(
         )
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_checkout.py -v`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/server/checkout.py src/superseded/server/worker.py tests/test_checkout.py
@@ -1016,7 +1016,7 @@ git commit -m "refactor: remove dead base_ref parameter from checkout_repo"
 **Files:**
 - Modify: `tests/test_engine.py:84-100`
 
-- [ ] **Step 1: Remove async/await and decorator**
+- [x] **Step 1: Remove async/await and decorator**
 
 ```python
 # tests/test_engine.py:84-100
@@ -1038,12 +1038,12 @@ def test_review_continues_when_one_pass_fails():
     assert result.findings[0] is good_finding
 ```
 
-- [ ] **Step 2: Run test to verify it passes**
+- [x] **Step 2: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_engine.py::test_review_continues_when_one_pass_fails -v`
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/test_engine.py
@@ -1057,7 +1057,7 @@ git commit -m "test: remove misleading async marker from sync test"
 **Files:**
 - Create: `docs/superseded/specs/2026-06-24-reasoning-trail-design.md`
 
-- [ ] **Step 1: Write the spec based on existing implementation**
+- [x] **Step 1: Write the spec based on existing implementation**
 
 ```markdown
 # Reasoning Trail Design Spec
@@ -1144,7 +1144,7 @@ Past dismissed findings (with reasoning) are injected into future review prompts
 - `src/superseded/review/prompts.py` — reasoning instructions in prompt
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/superseded/specs/2026-06-24-reasoning-trail-design.md
@@ -1158,11 +1158,11 @@ git commit -m "docs: add retroactive reasoning trail design spec"
 **Files:**
 - Modify: `docs/superseded/plans/2026-06-24-todo-fixes.md` (this file)
 
-- [ ] **Step 1: Add note to server-mode plan**
+- [x] **Step 1: Add note to server-mode plan**
 
 The `installation_config` table from `server-mode-design.md:321-330` is marked "optional, for future use". Document this as intentional omission — not a gap, just future work.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add docs/superseded/plans/
@@ -1177,14 +1177,14 @@ git commit -m "docs: note installation_config table is optional/future"
 - Modify: `src/superseded/server/config.py:20-30`
 - Modify: `tests/test_server.py`
 
-- [ ] **Step 1: Decide on behavior**
+- [x] **Step 1: Decide on behavior**
 
 Option A: Make `app_id=0` an error (strict) — breaks `test_server_config_defaults` and fixture pattern.
 Option B: Keep `app_id=0` bypass but add explicit `is_configured` property — non-breaking.
 
 Recommendation: Option B — add `is_configured` property for callers to check, keep backward compat.
 
-- [ ] **Step 2: Add is_configured property**
+- [x] **Step 2: Add is_configured property**
 
 ```python
 # src/superseded/server/config.py
@@ -1197,7 +1197,7 @@ class ServerConfig(BaseModel):
         return self.app_id != 0
 ```
 
-- [ ] **Step 3: Add test**
+- [x] **Step 3: Add test**
 
 ```python
 # tests/test_server.py
@@ -1209,7 +1209,7 @@ def test_server_config_is_configured():
     assert config.is_configured
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/superseded/server/config.py tests/test_server.py
@@ -1223,7 +1223,7 @@ git commit -m "feat: add ServerConfig.is_configured property"
 **Files:**
 - Modify: `src/superseded/memory/store.py:73-80`
 
-- [ ] **Step 1: Decide on behavior**
+- [x] **Step 1: Decide on behavior**
 
 Option A: Keep `INSERT OR IGNORE` (stability) — re-review never overwrites.
 Option B: Switch to `INSERT OR REPLACE` (freshness) — re-review updates severity/description.
@@ -1231,7 +1231,7 @@ Option C: Switch to `INSERT ... ON CONFLICT UPDATE` — update only if changed.
 
 Recommendation: Option C — update severity/description/reasoning if they changed, preserve comment_id.
 
-- [ ] **Step 2: Implement UPSERT**
+- [x] **Step 2: Implement UPSERT**
 
 ```python
 # src/superseded/memory/store.py:73-80
@@ -1264,7 +1264,7 @@ Recommendation: Option C — update severity/description/reasoning if they chang
             await db.commit()
 ```
 
-- [ ] **Step 3: Add test**
+- [x] **Step 3: Add test**
 
 ```python
 # tests/test_store.py
@@ -1280,7 +1280,7 @@ async def test_record_finding_upserts_on_change(tmp_path):
     # Verify severity updated
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/superseded/memory/store.py tests/test_store.py
@@ -1301,7 +1301,7 @@ This is the largest remaining feature. It requires:
 3. Pagination for PR review threads
 4. Extracting `isResolved` from `PullRequestReviewThread`
 
-- [ ] **Step 1: Write the GraphQL query**
+- [x] **Step 1: Write the GraphQL query**
 
 ```graphql
 query($owner: String!, $repo: String!, $pr: Int!, $cursor: String) {
@@ -1329,7 +1329,7 @@ query($owner: String!, $repo: String!, $pr: Int!, $cursor: String) {
 }
 ```
 
-- [ ] **Step 2: Implement GraphQL client in feedback.py**
+- [x] **Step 2: Implement GraphQL client in feedback.py**
 
 ```python
 # src/superseded/memory/feedback.py
@@ -1405,13 +1405,13 @@ async def check_resolved_threads(
     return resolved_comments
 ```
 
-- [ ] **Step 3: Integrate into feedback check flow**
+- [x] **Step 3: Integrate into feedback check flow**
 
 Update the review start flow to call `check_resolved_threads` and mark findings as resolved in the memory store.
 
-- [ ] **Step 4: Add tests (mocked GraphQL responses)**
+- [x] **Step 4: Add tests (mocked GraphQL responses)**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/memory/feedback.py tests/test_feedback.py
@@ -1425,7 +1425,7 @@ git commit -m "feat: detect resolved review threads via GraphQL"
 **Files:**
 - Modify: `src/superseded/output/github_pr.py:13-44`
 
-- [ ] **Step 1: Implement retry logic**
+- [x] **Step 1: Implement retry logic**
 
 ```python
 async def post_review_with_fallback(
@@ -1468,9 +1468,9 @@ async def post_review_with_fallback(
     )
 ```
 
-- [ ] **Step 2: Add tests**
+- [x] **Step 2: Add tests**
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/superseded/output/github_pr.py tests/test_github_pr.py

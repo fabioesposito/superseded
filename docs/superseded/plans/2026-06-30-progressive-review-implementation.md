@@ -46,7 +46,7 @@
 - Modify: `src/superseded/config.py:18-29` (`Config` model)
 - Test: `tests/test_config.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_config.py`:
 
@@ -65,12 +65,12 @@ def test_config_progressive_can_be_disabled():
     assert cfg.progressive is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_config.py::test_config_progressive_defaults_true -v`
 Expected: FAIL with `AttributeError` / unexpected keyword `progressive`.
 
-- [ ] **Step 3: Add the field**
+- [x] **Step 3: Add the field**
 
 In `src/superseded/config.py`, add `progressive: bool = True` to the `Config` model after the `graph` field (line 29):
 
@@ -79,12 +79,12 @@ In `src/superseded/config.py`, add `progressive: bool = True` to the `Config` mo
     progressive: bool = True
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_config.py -v`
 Expected: PASS (all config tests, including the two new ones).
 
-- [ ] **Step 5: Lint + commit**
+- [x] **Step 5: Lint + commit**
 
 ```bash
 uv run ruff check src/superseded/config.py tests/test_config.py
@@ -101,7 +101,7 @@ git commit -m "feat(config): add progressive review flag (default true)"
 - Modify: `src/superseded/memory/store.py` (SCHEMA, `_migrate`, two new methods)
 - Test: `tests/test_memory_store.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_memory_store.py`:
 
@@ -167,12 +167,12 @@ async def test_watermark_table_added_by_migration(tmp_path):
     assert await store.get_watermark("owner/repo", 1) == "deadbeef"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_memory_store.py -k watermark -v`
 Expected: FAIL with `AttributeError: 'MemoryStore' object has no attribute 'get_watermark'` (and the migration test may fail on the missing table).
 
-- [ ] **Step 3: Add the table to `SCHEMA`**
+- [x] **Step 3: Add the table to `SCHEMA`**
 
 In `src/superseded/memory/store.py`, append to the `SCHEMA` string (after the `installations` table block, before the closing `"""`):
 
@@ -187,7 +187,7 @@ CREATE TABLE IF NOT EXISTS review_watermarks (
 );
 ```
 
-- [ ] **Step 4: Add migration for existing DBs**
+- [x] **Step 4: Add migration for existing DBs**
 
 In `_migrate()` (after the `reasoning` column block, before the end of the method), add an idempotent create:
 
@@ -202,7 +202,7 @@ In `_migrate()` (after the `reasoning` column block, before the end of the metho
         )
 ```
 
-- [ ] **Step 5: Add the two methods**
+- [x] **Step 5: Add the two methods**
 
 Add to `MemoryStore` (after `remove_installation`, at the end of the class):
 
@@ -226,12 +226,12 @@ Add to `MemoryStore` (after `remove_installation`, at the end of the class):
             await db.commit()
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_memory_store.py -v`
 Expected: PASS (all existing + 5 new tests).
 
-- [ ] **Step 7: Lint + commit**
+- [x] **Step 7: Lint + commit**
 
 ```bash
 uv run ruff check src/superseded/memory/store.py tests/test_memory_store.py
@@ -248,7 +248,7 @@ git commit -m "feat(memory): per-PR review watermark storage"
 - Modify: `src/superseded/diff.py` (add function after `fetch_pr_description`)
 - Test: `tests/test_diff.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_diff.py`:
 
@@ -307,12 +307,12 @@ def patch_subprocess(monkeypatch):
 
 (If a comparable fixture already exists with a different name, reuse it and adjust the three tests to use that name instead of `patch_subprocess`.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_diff.py -k fetch_pr_head_sha -v`
 Expected: FAIL with `AttributeError: module 'superseded.diff' has no attribute 'fetch_pr_head_sha'`.
 
-- [ ] **Step 3: Implement the helper**
+- [x] **Step 3: Implement the helper**
 
 In `src/superseded/diff.py`, add after `fetch_pr_description` (before the regex constants block):
 
@@ -340,12 +340,12 @@ def fetch_pr_head_sha(pr: int) -> str:
     return result.stdout.strip()
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_diff.py -v`
 Expected: PASS (all existing + 3 new tests).
 
-- [ ] **Step 5: Lint + commit**
+- [x] **Step 5: Lint + commit**
 
 ```bash
 uv run ruff check src/superseded/diff.py tests/test_diff.py
@@ -364,7 +364,7 @@ git commit -m "feat(diff): fetch_pr_head_sha helper for progressive review"
 
 The function makes two `gh api` calls (one JSON for status, one diff-body when ahead). Tests mock `superseded.incremental.subprocess.run`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_incremental.py`:
 
@@ -459,12 +459,12 @@ def test_diff_call_uses_diff_accept_header(mock_run):
     assert diff_cmd[accept_idx] == "Accept: application/vnd.github.v3.diff"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_incremental.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'superseded.incremental'`.
 
-- [ ] **Step 3: Implement the module**
+- [x] **Step 3: Implement the module**
 
 Create `src/superseded/incremental.py`:
 
@@ -534,12 +534,12 @@ def fetch_incremental_diff(
     return diff_result.stdout, "ahead"
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_incremental.py -v`
 Expected: PASS (all 8 tests).
 
-- [ ] **Step 5: Lint + commit**
+- [x] **Step 5: Lint + commit**
 
 ```bash
 uv run ruff check src/superseded/incremental.py tests/test_incremental.py
@@ -565,7 +565,7 @@ This task has two test sets: (A) the pure helper, (B) `_run_review` integration 
 
 ### Part A — the `_resolve_pr_review_diff` helper
 
-- [ ] **Step A1: Write failing tests for the helper**
+- [x] **Step A1: Write failing tests for the helper**
 
 Append to `tests/test_cli.py`:
 
@@ -704,12 +704,12 @@ def test_resolve_incremental_error_falls_back(monkeypatch):
     assert mode == "fallback"
 ```
 
-- [ ] **Step A2: Run tests to verify they fail**
+- [x] **Step A2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_cli.py -k resolve -v`
 Expected: FAIL with `ImportError: cannot import name '_resolve_pr_review_diff'`.
 
-- [ ] **Step A3: Add imports to `cli.py`**
+- [x] **Step A3: Add imports to `cli.py`**
 
 In `src/superseded/cli.py`, extend the existing `from superseded.diff import (...)` block to include `fetch_pr_head_sha`, and add a new import for the incremental module. After the existing diff import:
 
@@ -723,7 +723,7 @@ from superseded.diff import (
 from superseded.incremental import IncrementalDiffError, fetch_incremental_diff
 ```
 
-- [ ] **Step A4: Implement the helper**
+- [x] **Step A4: Implement the helper**
 
 Add to `src/superseded/cli.py` (near the other module-level helpers like `_parse_passes`):
 
@@ -768,14 +768,14 @@ def _resolve_pr_review_diff(
     return fetch_diff(pr=pr), "fallback", head_sha
 ```
 
-- [ ] **Step A5: Run helper tests to verify they pass**
+- [x] **Step A5: Run helper tests to verify they pass**
 
 Run: `uv run pytest tests/test_cli.py -k resolve -v`
 Expected: PASS (all 6 helper tests).
 
 ### Part B — wire `_run_review` + `--full` flag
 
-- [ ] **Step B1: Write failing integration tests**
+- [x] **Step B1: Write failing integration tests**
 
 Append to `tests/test_integration.py`. These extend the existing `FakeStore` (add watermark support) and mock the new helper functions.
 
@@ -920,12 +920,12 @@ def test_review_full_flag_skips_resolve_and_advances(
     assert ("owner/repo", 5, "headsha") in store.set_watermark_calls
 ```
 
-- [ ] **Step B2: Run tests to verify they fail**
+- [x] **Step B2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_integration.py -k "progressive or noop or engine_failure or full_flag" -v`
 Expected: FAIL — `_resolve_pr_review_diff` exists but isn't wired into `review`/`_run_review`; `--full` flag unknown; watermark never written.
 
-- [ ] **Step B3: Add the `--full` flag to the `review` command**
+- [x] **Step B3: Add the `--full` flag to the `review` command**
 
 In `src/superseded/cli.py`, add this option among the other `@click.option` decorators on `review` (after the `--no-memory` option is fine):
 
@@ -981,7 +981,7 @@ Forward it in the `_run_review(...)` call inside `review()`:
     )
 ```
 
-- [ ] **Step B4: Wire progressive logic into `_run_review`**
+- [x] **Step B4: Wire progressive logic into `_run_review`**
 
 In `src/superseded/cli.py`, change the `_run_review` signature to accept `full: bool = False`:
 
@@ -1120,14 +1120,14 @@ async def _set_watermark(store: MemoryStore, repo: str, pr: int, head_sha: str) 
         await store.set_watermark(repo, pr, head_sha)
 ```
 
-- [ ] **Step B5: Run integration tests to verify they pass**
+- [x] **Step B5: Run integration tests to verify they pass**
 
 Run: `uv run pytest tests/test_integration.py -v`
 Expected: PASS (all existing tests still pass, plus the 4 new ones).
 
 If an existing test breaks because it mocked `superseded.cli.fetch_diff` for a `--pr` invocation and now expects progressive code to run instead, check that test: it should still work because when `config.memory` is True (default) and `current_repo` returns a value, progressive IS active and `_resolve_pr_review_diff` is invoked instead of `fetch_diff`. For those legacy tests, either (a) patch `superseded.cli._resolve_pr_review_diff` to return `("diff", "full", None)` so the watermark-write branch is skipped (head_sha is None), or (b) add `--no-memory` to the invocation. Prefer (a) for tests that exercise memory behaviour, (b) for tests that don't care about memory. Update each failing test minimally.
 
-- [ ] **Step B6: Lint + commit**
+- [x] **Step B6: Lint + commit**
 
 ```bash
 uv run ruff check src/superseded/cli.py tests/test_cli.py tests/test_integration.py
@@ -1146,7 +1146,7 @@ git commit -m "feat(cli): progressive --pr review with --full override"
 
 The server uses `httpx` (not `subprocess`/`gh`). `compare_diff` makes up to two requests: JSON for status, diff body when ahead. Tests mock `httpx.AsyncClient`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_server_github.py`. Adjust imports if `respx`/`httpx.MockTransport` isn't already used; prefer `httpx.MockTransport` (no extra dep). Check the file first — if tests already patch `httpx.AsyncClient`, match that style. Otherwise add:
 
@@ -1263,12 +1263,12 @@ async def test_compare_diff_http_error_raises():
 
 Add `from unittest.mock import patch` to imports if not present.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_server_github.py -k compare_diff -v`
 Expected: FAIL with `AttributeError: 'GitHubApp' object has no attribute 'compare_diff'`.
 
-- [ ] **Step 3: Implement the method**
+- [x] **Step 3: Implement the method**
 
 Add to `GitHubApp` in `src/superseded/server/github.py` (after `fetch_pr_description`):
 
@@ -1300,12 +1300,12 @@ Add to `GitHubApp` in `src/superseded/server/github.py` (after `fetch_pr_descrip
             return diff_response.text, "ahead"
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_server_github.py -v`
 Expected: PASS (existing + 4 new).
 
-- [ ] **Step 5: Lint + commit**
+- [x] **Step 5: Lint + commit**
 
 ```bash
 uv run ruff check src/superseded/server/github.py tests/test_server_github.py
@@ -1324,7 +1324,7 @@ git commit -m "feat(server): GitHubApp.compare_diff for incremental diffs"
 
 The worker already has `job.head_sha` and a `store`. Insert the progressive resolution between `_load_safe_config` and the existing `fetch_pr_diff` call. Also handle the no-op case by short-circuiting with a success `ReviewOutcome`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 The existing `test_run_review_for_job_passes_context` mocks `superseded.server.worker._load_safe_config`? Check first — it mocks `superseded.config.load_config`. Look at the actual test file: it patches `superseded.server.worker.checkout_repo`, `superseded.config.load_config`, etc. But `_run_review_for_job` calls `_load_safe_config` (which calls `github.fetch_repo_file` + builds `Config(**data)`). For progressive tests, provide a `FakeGitHubApp` whose `fetch_repo_file` returns `None` (so `_load_safe_config` falls back to `Config()` defaults, which has `progressive=True`).
 
@@ -1523,12 +1523,12 @@ async def test_worker_progressive_no_store_uses_full_diff(tmp_path):
     github.fetch_pr_diff.assert_awaited_once()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_server_worker.py -k progressive -v`
 Expected: FAIL — worker doesn't yet call `compare_diff` or short-circuit on no-op.
 
-- [ ] **Step 3: Implement the progressive flow in `_run_review_for_job`**
+- [x] **Step 3: Implement the progressive flow in `_run_review_for_job`**
 
 In `src/superseded/server/worker.py`, replace the diff-fetch block:
 
@@ -1606,12 +1606,12 @@ Append the watermark set inside the same `async with store:` block (so it shares
                 await store.set_watermark(repo_key, job.pr_number, job.head_sha)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_server_worker.py -v`
 Expected: PASS (all existing + 5 new). If an existing worker test now fails because it didn't expect `compare_diff` to be called, that test either passes `store=None` (so progressive is skipped) or should be updated to pass `store=None` explicitly. Check each failure and pass `store=None` where the test predates progressive.
 
-- [ ] **Step 5: Lint + commit**
+- [x] **Step 5: Lint + commit**
 
 ```bash
 uv run ruff check src/superseded/server/worker.py tests/test_server_worker.py
@@ -1624,22 +1624,22 @@ git commit -m "feat(server): progressive review flow in worker"
 
 ## Task 8: Final verification
 
-- [ ] **Step 1: Full lint**
+- [x] **Step 1: Full lint**
 
 Run: `uv run ruff check src/ tests/`
 Expected: no errors.
 
-- [ ] **Step 2: Full format check**
+- [x] **Step 2: Full format check**
 
 Run: `uv run ruff format --check src/ tests/`
 Expected: no differences. If differences reported, run `uv run ruff format src/ tests/` and re-stage.
 
-- [ ] **Step 3: Full test suite**
+- [x] **Step 3: Full test suite**
 
 Run: `uv run pytest tests/ -v`
 Expected: all PASS. Pay attention to any pre-existing test that mocked `fetch_diff` for `--pr` and now needs `_resolve_pr_review_diff` mocked or `--no-memory` added (per Task 5 Step B5 guidance).
 
-- [ ] **Step 4: Smoke test the CLI locally (manual)**
+- [x] **Step 4: Smoke test the CLI locally (manual)**
 
 ```bash
 uv run superseded review --pr <some-open-pr> --format table --no-memory   # full review (memory off)

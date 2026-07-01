@@ -34,7 +34,7 @@ No other modules change. `review.engine.AGENT_MAP` is imported by `detection.py`
 - Create: `src/superseded/detection.py`
 - Test: `tests/test_detection.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_detection.py`:
 
@@ -71,12 +71,12 @@ def test_agent_status_is_frozen_dataclass():
         raise AssertionError("AgentStatus must be frozen")
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_detection.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'superseded.detection'`.
 
-- [ ] **Step 3: Create `src/superseded/detection.py`**
+- [x] **Step 3: Create `src/superseded/detection.py`**
 
 ```python
 from __future__ import annotations
@@ -102,16 +102,16 @@ class AgentStatus:
     binary: str
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_detection.py -v`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Lint and format**
+- [x] **Step 5: Lint and format**
 
 Run: `uv run ruff check src/superseded/detection.py tests/test_detection.py && uv run ruff format src/superseded/detection.py tests/test_detection.py`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/detection.py tests/test_detection.py
@@ -126,7 +126,7 @@ git commit -m "feat(init): add detection module constants and AgentStatus"
 - Modify: `src/superseded/detection.py`
 - Test: `tests/test_detection.py`
 
-- [ ] **Step 1: Append failing tests to `tests/test_detection.py`**
+- [x] **Step 1: Append failing tests to `tests/test_detection.py`**
 
 Add at the end of the file:
 
@@ -195,12 +195,12 @@ def test_default_model_for_unknown_is_none():
     assert default_model_for("bogus") is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_detection.py -v`
 Expected: FAIL — `ImportError: cannot import name 'detect_agents' ...` for the new imports.
 
-- [ ] **Step 3: Extend `src/superseded/detection.py`**
+- [x] **Step 3: Extend `src/superseded/detection.py`**
 
 Replace the entire file contents with:
 
@@ -259,16 +259,16 @@ def default_model_for(agent: str) -> str | None:
     return DEFAULT_MODELS.get(agent)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_detection.py -v`
 Expected: PASS (all tests, including Task 1's).
 
-- [ ] **Step 5: Lint and format**
+- [x] **Step 5: Lint and format**
 
 Run: `uv run ruff check src/superseded/detection.py tests/test_detection.py && uv run ruff format src/superseded/detection.py tests/test_detection.py`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/detection.py tests/test_detection.py
@@ -283,7 +283,7 @@ git commit -m "feat(init): add detect_agents/detect_gh/pick_agent/default_model_
 - Modify: `src/superseded/config.py`
 - Test: `tests/test_config.py`
 
-- [ ] **Step 1: Append failing tests to `tests/test_config.py`**
+- [x] **Step 1: Append failing tests to `tests/test_config.py`**
 
 Add at the end of the file:
 
@@ -334,12 +334,12 @@ def test_write_config_default_path(tmp_path, monkeypatch):
     assert loaded.agent == "codex"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_config.py -v`
 Expected: FAIL with `ImportError: cannot import name 'write_config'`.
 
-- [ ] **Step 3: Modify `src/superseded/config.py`**
+- [x] **Step 3: Modify `src/superseded/config.py`**
 
 Replace the entire file contents with:
 
@@ -402,16 +402,16 @@ def write_config(config: Config, path: Path | None = None) -> None:
     os.replace(tmp, path)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_config.py -v`
 Expected: PASS (all config tests including new ones).
 
-- [ ] **Step 5: Lint and format**
+- [x] **Step 5: Lint and format**
 
 Run: `uv run ruff check src/superseded/config.py tests/test_config.py && uv run ruff format src/superseded/config.py tests/test_config.py`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/config.py tests/test_config.py
@@ -426,7 +426,7 @@ git commit -m "feat(init): add atomic write_config helper"
 - Modify: `src/superseded/cli.py`
 - Test: `tests/test_init.py`
 
-- [ ] **Step 1: Create failing CLI integration tests**
+- [x] **Step 1: Create failing CLI integration tests**
 
 Create `tests/test_init.py`:
 
@@ -597,12 +597,12 @@ def test_init_default_target_when_no_config_flag(tmp_path, monkeypatch):
     assert (tmp_path / ".superseded.yaml").exists()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_init.py -v`
 Expected: FAIL — `Error: No such command 'init'` from click.
 
-- [ ] **Step 3: Modify `src/superseded/cli.py`**
+- [x] **Step 3: Modify `src/superseded/cli.py`**
 
 3a. Replace the existing import line:
 
@@ -701,21 +701,21 @@ def _run_init(force: bool, agent_override: str | None, config_path: Path | None)
     _status(f"Wrote {target}")
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_init.py -v`
 Expected: PASS (all 9 tests).
 
-- [ ] **Step 5: Run the full suite to catch regressions**
+- [x] **Step 5: Run the full suite to catch regressions**
 
 Run: `uv run pytest tests/ -v`
 Expected: PASS (no regressions in `test_cli.py`, `test_config.py`, etc.).
 
-- [ ] **Step 6: Lint and format**
+- [x] **Step 6: Lint and format**
 
 Run: `uv run ruff check src/ tests/ && uv run ruff format src/ tests/`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/superseded/cli.py tests/test_init.py
@@ -729,9 +729,9 @@ git commit -m "feat(init): add superseded init command"
 **Files:**
 - Modify: `AGENTS.md`
 
-- [ ] **Step 1: Read the current `AGENTS.md`** to confirm exact anchor text.
+- [x] **Step 1: Read the current `AGENTS.md`** to confirm exact anchor text.
 
-- [ ] **Step 2: Add `init` to the Commands block**
+- [x] **Step 2: Add `init` to the Commands block**
 
 In the "## Commands" bash block, add this line immediately after the existing `uv run superseded review ...` line:
 
@@ -739,17 +739,17 @@ In the "## Commands" bash block, add this line immediately after the existing `u
 uv run superseded init                          # detect AI CLIs + write .superseded.yaml
 ```
 
-- [ ] **Step 3: Mention `init` and `detection.py` in Architecture notes**
+- [x] **Step 3: Mention `init` and `detection.py` in Architecture notes**
 
 In the "## Architecture notes" section, add this bullet immediately after the existing bullet that ends with "register in `AGENT_MAP` in `review/engine.py`.":
 
 > - `superseded init` is a non-interactive setup command: it probes PATH for the supported AI CLIs (via `src/superseded/detection.py`, which wraps `AGENT_MAP` + `Agent.is_available()`) plus `gh`, picks a default agent + model, and writes a `.superseded.yaml` via `config.write_config`. Refuses to overwrite without `--force`.
 
-- [ ] **Step 4: Verify the file parses sensibly (visual check)**
+- [x] **Step 4: Verify the file parses sensibly (visual check)**
 
 Re-read the modified sections of `AGENTS.md`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add AGENTS.md
@@ -762,17 +762,17 @@ git commit -m "docs(agents): document superseded init and detection module"
 
 **Files:** none.
 
-- [ ] **Step 1: Run the entire test suite**
+- [x] **Step 1: Run the entire test suite**
 
 Run: `uv run pytest tests/ -v`
 Expected: All tests PASS.
 
-- [ ] **Step 2: Run ruff across the repo**
+- [x] **Step 2: Run ruff across the repo**
 
 Run: `uv run ruff check src/ tests/ && uv run ruff format --check src/ tests/`
 Expected: No errors.
 
-- [ ] **Step 3: Smoke-test the command manually** (optional, environment-dependent)
+- [x] **Step 3: Smoke-test the command manually** (optional, environment-dependent)
 
 From the repo root (with at least one AI CLI on PATH):
 ```bash
@@ -782,7 +782,7 @@ rm /tmp/.superseded-smoke.yaml
 ```
 Expected: status lines on stderr, a YAML file written to `/tmp/`.
 
-- [ ] **Step 4: Confirm no DB or gitignored artifacts were committed**
+- [x] **Step 4: Confirm no DB or gitignored artifacts were committed**
 
 Run: `git status`
 Expected: clean working tree, no `.superseded/memory.db` or `*.db` staged.

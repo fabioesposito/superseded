@@ -16,7 +16,7 @@
 - Modify: `src/superseded/memory/feedback.py` (add function after `_parse_comment_lines`)
 - Test: `tests/test_memory.py` (add tests)
 
-- [ ] **Step 1: Write failing tests for `check_resolved_threads`**
+- [x] **Step 1: Write failing tests for `check_resolved_threads`**
 
 Add these imports and tests to `tests/test_memory.py`:
 
@@ -146,7 +146,7 @@ def test_check_resolved_threads_invalid_json_returns_empty(mock_run):
     assert resolved == set()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_memory.py -v -k "check_resolved_threads"
@@ -154,7 +154,7 @@ uv run pytest tests/test_memory.py -v -k "check_resolved_threads"
 
 Expected: 5 FAIL (function not defined).
 
-- [ ] **Step 3: Implement `check_resolved_threads`**
+- [x] **Step 3: Implement `check_resolved_threads`**
 
 Add after `_parse_comment_lines` in `src/superseded/memory/feedback.py`:
 
@@ -224,7 +224,7 @@ def check_resolved_threads(pr: int, owner: str, repo: str) -> set[int]:
     return resolved_ids
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_memory.py -v -k "check_resolved_threads"
@@ -232,13 +232,13 @@ uv run pytest tests/test_memory.py -v -k "check_resolved_threads"
 
 Expected: 5 PASS.
 
-- [ ] **Step 5: Run lint**
+- [x] **Step 5: Run lint**
 
 ```bash
 uv run ruff check src/superseded/memory/feedback.py tests/test_memory.py
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/memory/feedback.py tests/test_memory.py
@@ -252,7 +252,7 @@ git commit -m "feat: add GraphQL resolved-thread detection"
 **Files:**
 - Modify: `tests/test_memory.py:95-126` (existing `check_pr_feedback` tests)
 
-- [ ] **Step 1: Add `check_resolved_threads` mock to existing tests**
+- [x] **Step 1: Add `check_resolved_threads` mock to existing tests**
 
 The three existing `check_pr_feedback` tests call `check_pr_feedback` with only `subprocess.run` mocked. After Task 1, `check_pr_feedback` internally calls `check_resolved_threads`, which also calls `subprocess.run` — the mock will return the wrong data for the GraphQL call.
 
@@ -299,7 +299,7 @@ def test_check_pr_feedback_jq_uses_top_level_line(mock_run, mock_resolved):
     assert "_resolved" not in jq_expr
 ```
 
-- [ ] **Step 2: Run tests to verify they pass**
+- [x] **Step 2: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_memory.py -v -k "test_check_pr_feedback and not (merges or no_resolved)"
@@ -307,7 +307,7 @@ uv run pytest tests/test_memory.py -v -k "test_check_pr_feedback and not (merges
 
 Expected: 3 PASS (existing tests work with the GraphQL stub).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/test_memory.py
@@ -321,7 +321,7 @@ git commit -m "test: update feedback tests for resolved-thread integration"
 **Files:**
 - Modify: `src/superseded/memory/feedback.py:7-24` (`check_pr_feedback`)
 
-- [ ] **Step 1: Write failing integration test**
+- [x] **Step 1: Write failing integration test**
 
 Add to `tests/test_memory.py`:
 
@@ -360,7 +360,7 @@ def test_check_pr_feedback_no_resolved_threads(mock_run, mock_resolved):
     assert feedback[0].get("resolved") is not True
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_memory.py -v -k "merges_resolved or no_resolved_threads"
@@ -368,7 +368,7 @@ uv run pytest tests/test_memory.py -v -k "merges_resolved or no_resolved_threads
 
 Expected: 2 FAIL (no resolved field set).
 
-- [ ] **Step 3: Update `check_pr_feedback`**
+- [x] **Step 3: Update `check_pr_feedback`**
 
 Replace `check_pr_feedback` in `src/superseded/memory/feedback.py`:
 
@@ -402,7 +402,7 @@ def check_pr_feedback(pr: int, repo: str) -> list[dict]:
     return comments
 ```
 
-- [ ] **Step 4: Run all feedback tests**
+- [x] **Step 4: Run all feedback tests**
 
 ```bash
 uv run pytest tests/test_memory.py -v
@@ -410,7 +410,7 @@ uv run pytest tests/test_memory.py -v
 
 Expected: all ~10 tests PASS (including existing ones).
 
-- [ ] **Step 5: Run full test suite**
+- [x] **Step 5: Run full test suite**
 
 ```bash
 uv run pytest tests/ -v -q --ignore=tests/test_server_app.py
@@ -418,14 +418,14 @@ uv run pytest tests/ -v -q --ignore=tests/test_server_app.py
 
 Expected: all 186+ tests PASS.
 
-- [ ] **Step 6: Run lint and format**
+- [x] **Step 6: Run lint and format**
 
 ```bash
 uv run ruff check src/superseded/memory/feedback.py tests/test_memory.py
 uv run ruff format src/superseded/memory/feedback.py tests/test_memory.py
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/superseded/memory/feedback.py tests/test_memory.py
@@ -439,7 +439,7 @@ git commit -m "feat: merge resolved-thread data into check_pr_feedback"
 **Files:**
 - Modify: `TODO.md` (line 7)
 
-- [ ] **Step 1: Check the box in TODO.md**
+- [x] **Step 1: Check the box in TODO.md**
 
 Change line 7 from `- [ ]` to `- [x]`:
 
@@ -447,7 +447,7 @@ Change line 7 from `- [ ]` to `- [x]`:
 - [x] **Resolved-thread detection via GraphQL.**
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add TODO.md

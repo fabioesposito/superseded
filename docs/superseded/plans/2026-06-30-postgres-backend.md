@@ -45,7 +45,7 @@
 **Files:**
 - Modify: `pyproject.toml`
 
-- [ ] **Step 1: Add asyncpg and pytest config**
+- [x] **Step 1: Add asyncpg and pytest config**
 
 Replace the `[project]` dependencies block and the `[tool.pytest.ini_options]` block in `pyproject.toml`:
 
@@ -76,17 +76,17 @@ markers = [
 addopts = "-m 'not postgres'"
 ```
 
-- [ ] **Step 2: Sync the lockfile and venv**
+- [x] **Step 2: Sync the lockfile and venv**
 
 Run: `uv sync`
 Expected: `asyncpg` resolves and installs; `Resolved X packages` printed with no error.
 
-- [ ] **Step 3: Verify the default test run still excludes the marker (no marker tests exist yet, so just confirm green)**
+- [x] **Step 3: Verify the default test run still excludes the marker (no marker tests exist yet, so just confirm green)**
 
 Run: `uv run pytest tests/ -q`
 Expected: existing suite passes (no regressions from dep change).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add pyproject.toml uv.lock
@@ -104,7 +104,7 @@ The `StatsAggregator` reaches into `store._db()` and sets `aiosqlite.Row` direct
 - Modify: `src/superseded/audit/stats.py`
 - Modify: `tests/test_audit_stats.py`
 
-- [ ] **Step 1: Write failing tests for the new MemoryStore stats methods**
+- [x] **Step 1: Write failing tests for the new MemoryStore stats methods**
 
 Add to the **end** of `tests/test_audit_stats.py` (keep all existing imports; the file already imports `aiosqlite`, `MemoryStore`, `Path`):
 
@@ -147,12 +147,12 @@ async def test_memory_store_get_review_stats_respects_min_sample(tmp_path):
         await store.close()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_audit_stats.py::test_memory_store_refresh_review_stats tests/test_audit_stats.py::test_memory_store_get_review_stats_respects_min_sample -v`
 Expected: FAIL with `AttributeError: 'MemoryStore' object has no attribute 'refresh_review_stats'` (or `get_review_stats`).
 
-- [ ] **Step 3: Add the two methods to MemoryStore**
+- [x] **Step 3: Add the two methods to MemoryStore**
 
 In `src/superseded/memory/store.py`, add a module-level constant just below the existing `SCHEMA` string (copy the CASE expression verbatim from `audit/stats.py`):
 
@@ -207,12 +207,12 @@ Add these two methods as the last methods of the `MemoryStore` class (after `set
             return [dict(row) for row in rows]
 ```
 
-- [ ] **Step 4: Run the new tests to verify they pass**
+- [x] **Step 4: Run the new tests to verify they pass**
 
 Run: `uv run pytest tests/test_audit_stats.py::test_memory_store_refresh_review_stats tests/test_audit_stats.py::test_memory_store_get_review_stats_respects_min_sample -v`
 Expected: PASS (both).
 
-- [ ] **Step 5: Refactor StatsAggregator to call the new store methods**
+- [x] **Step 5: Refactor StatsAggregator to call the new store methods**
 
 Replace the entire body of `src/superseded/audit/stats.py` with:
 
@@ -273,24 +273,24 @@ class StatsAggregator:
 
 Note: the `Store` import is under `TYPE_CHECKING` because the Protocol does not exist yet — this forward reference will resolve once Task 3 creates `memory/backend.py`. To keep ruff happy *now*, the file uses a string-typed forward annotation only.
 
-- [ ] **Step 6: Update existing test_audit_stats.py assertions that used _db()**
+- [x] **Step 6: Update existing test_audit_stats.py assertions that used _db()**
 
 The existing tests in `test_audit_stats.py` reach into `store._db()` and set `db.row_factory = aiosqlite.Row`. They currently pass because `MemoryStore` still has `_db()`. They keep passing unchanged. **Do not modify them in this step** — Task 7 may revisit if desired, but they remain valid as-is. Verify they still pass:
 
 Run: `uv run pytest tests/test_audit_stats.py -v`
 Expected: PASS (all, including the two new tests).
 
-- [ ] **Step 7: Lint and format**
+- [x] **Step 7: Lint and format**
 
 Run: `uv run ruff check src/superseded/memory/store.py src/superseded/audit/stats.py tests/test_audit_stats.py && uv run ruff format src/superseded/memory/store.py src/superseded/audit/stats.py tests/test_audit_stats.py`
 Expected: no errors; any reformatting applied.
 
-- [ ] **Step 8: Run the full default suite**
+- [x] **Step 8: Run the full default suite**
 
 Run: `uv run pytest tests/ -q`
 Expected: PASS (no regressions).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/superseded/memory/store.py src/superseded/audit/stats.py tests/test_audit_stats.py
@@ -305,7 +305,7 @@ git commit -m "refactor: move review_stats SQL into MemoryStore methods"
 - Create: `src/superseded/memory/backend.py`
 - Create: `tests/test_memory_backend.py`
 
-- [ ] **Step 1: Write failing tests for make_store dispatch**
+- [x] **Step 1: Write failing tests for make_store dispatch**
 
 Create `tests/test_memory_backend.py`:
 
@@ -366,12 +366,12 @@ def test_make_store_unsupported_scheme_raises():
         make_store("mysql://u:p@host/db")
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_memory_backend.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'superseded.memory.backend'`.
 
-- [ ] **Step 3: Create memory/backend.py**
+- [x] **Step 3: Create memory/backend.py**
 
 Create `src/superseded/memory/backend.py`:
 
@@ -464,12 +464,12 @@ def make_store(database_url: str | None, *, max_size: int | None = None) -> Stor
     raise ValueError(f"Unsupported database scheme: {scheme!r}")
 ```
 
-- [ ] **Step 4: Run the make_store tests**
+- [x] **Step 4: Run the make_store tests**
 
 Run: `uv run pytest tests/test_memory_backend.py -v`
 Expected: PASS (all 7).
 
-- [ ] **Step 5: Verify MemoryStore structurally satisfies Store**
+- [x] **Step 5: Verify MemoryStore structurally satisfies Store**
 
 Run a quick check via the runtime-checkable Protocol:
 
@@ -480,17 +480,17 @@ Expected: prints `ok`.
 
 Note: `runtime_checkable` only verifies attribute names exist, not signatures. The behavioral parity is covered by the per-method tests in `test_memory_store.py` + the mirrored `test_postgres_store.py` (Task 5).
 
-- [ ] **Step 6: Lint and format**
+- [x] **Step 6: Lint and format**
 
 Run: `uv run ruff check src/superseded/memory/backend.py tests/test_memory_backend.py && uv run ruff format src/superseded/memory/backend.py tests/test_memory_backend.py`
 Expected: no errors.
 
-- [ ] **Step 7: Run the full default suite**
+- [x] **Step 7: Run the full default suite**
 
 Run: `uv run pytest tests/ -q`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/superseded/memory/backend.py tests/test_memory_backend.py
@@ -507,7 +507,7 @@ A pure-Python class implementing the `Store` Protocol against an `asyncpg` conne
 - Create: `src/superseded/memory/postgres.py`
 - Create: `tests/test_postgres_store.py` (skipped without env var)
 
-- [ ] **Step 1: Write the gated test module (skeleton + fixtures)**
+- [x] **Step 1: Write the gated test module (skeleton + fixtures)**
 
 Create `tests/test_postgres_store.py`:
 
@@ -553,7 +553,7 @@ async def store():
     await s.close()
 ```
 
-- [ ] **Step 2: Add behavioral tests (mirroring test_memory_store.py)**
+- [x] **Step 2: Add behavioral tests (mirroring test_memory_store.py)**
 
 Append to `tests/test_postgres_store.py`:
 
@@ -632,7 +632,7 @@ async def test_open_idempotent_and_close_safe(store):
     await store.close()  # second close is safe
 ```
 
-- [ ] **Step 3: Run tests to verify they SKIP (no DSN in CI/local default)**
+- [x] **Step 3: Run tests to verify they SKIP (no DSN in CI/local default)**
 
 Run: `uv run pytest tests/test_postgres_store.py -v`
 Expected: `SKIPPED` for all (file-level skip via env var absence). The default `addopts = "-m 'not postgres'"` also deselects them, so they won't even appear in a plain `uv run pytest` run.
@@ -642,7 +642,7 @@ Also verify the default suite still green:
 Run: `uv run pytest tests/ -q`
 Expected: PASS.
 
-- [ ] **Step 4: Implement PostgresStore**
+- [x] **Step 4: Implement PostgresStore**
 
 Create `src/superseded/memory/postgres.py`:
 
@@ -970,29 +970,29 @@ class PostgresStore:
             return [dict(r) for r in rows]
 ```
 
-- [ ] **Step 5: Verify the test module at least imports cleanly (still skipping)**
+- [x] **Step 5: Verify the test module at least imports cleanly (still skipping)**
 
 Run: `uv run pytest tests/test_postgres_store.py -v -m postgres --no-header`
 Expected: module-level skip kicks in (no DSN) → `SKIPPED`. No import errors.
 
-- [ ] **Step 6: Verify PostgresStore structurally satisfies Store**
+- [x] **Step 6: Verify PostgresStore structurally satisfies Store**
 
 ```bash
 uv run python -c "from superseded.memory.backend import Store; from superseded.memory.postgres import PostgresStore; assert isinstance(PostgresStore('postgres://x'), Store); print('ok')"
 ```
 Expected: prints `ok`. (`PostgresStore('postgres://x')` does not connect; it only stores the DSN string.)
 
-- [ ] **Step 7: Lint and format**
+- [x] **Step 7: Lint and format**
 
 Run: `uv run ruff check src/superseded/memory/postgres.py tests/test_postgres_store.py && uv run ruff format src/superseded/memory/postgres.py tests/test_postgres_store.py`
 Expected: no errors.
 
-- [ ] **Step 8: Run the full default suite (must remain green, Postgres tests skipped)**
+- [x] **Step 8: Run the full default suite (must remain green, Postgres tests skipped)**
 
 Run: `uv run pytest tests/ -q`
 Expected: PASS.
 
-- [ ] **Step 9: (Optional, if a local Postgres is available) Run the gated tests**
+- [x] **Step 9: (Optional, if a local Postgres is available) Run the gated tests**
 
 If the engineer has a local Postgres:
 ```bash
@@ -1002,7 +1002,7 @@ unset SUPERSEDED_POSTGRES_TEST_DSN
 ```
 Expected: PASS (all 9). If no Postgres is available, skip this step — Task 7 includes this as a documented manual check.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/superseded/memory/postgres.py tests/test_postgres_store.py
@@ -1017,7 +1017,7 @@ git commit -m "feat: add PostgresStore backed by asyncpg pool"
 - Modify: `src/superseded/server/config.py`
 - Modify: `tests/test_server_config.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_server_config.py` (after the existing tests; reuse the `from_env`-style pattern already in the file — look at `test_server_config_from_env` for the exact monkeypatch setup):
 
@@ -1068,12 +1068,12 @@ def test_server_config_database_url_from_yaml(tmp_path):
     assert cfg.database_url == "postgresql://u:p@h/db"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_server_config.py -v -k database_url`
 Expected: FAIL (`AttributeError: ... 'database_url'` or similar from pydantic).
 
-- [ ] **Step 3: Add the field to ServerConfig**
+- [x] **Step 3: Add the field to ServerConfig**
 
 In `src/superseded/server/config.py`, add the field right after `health_token` in the `ServerConfig` class body:
 
@@ -1091,17 +1091,17 @@ In `ServerConfig.from_env`, add (near the existing optional reads, e.g. just aft
 
 `ServerConfig.from_yaml` requires no change — `cls(**data)` already passes through unknown YAML keys, and `database_url` is now a known field.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_server_config.py -v`
 Expected: PASS (all, including the four new ones).
 
-- [ ] **Step 5: Lint, format, full suite**
+- [x] **Step 5: Lint, format, full suite**
 
 Run: `uv run ruff check src/superseded/server/config.py tests/test_server_config.py && uv run ruff format src/superseded/server/config.py tests/test_server_config.py && uv run pytest tests/ -q`
 Expected: no lint errors; full suite PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/superseded/server/config.py tests/test_server_config.py
@@ -1117,7 +1117,7 @@ git commit -m "feat: add database_url field to ServerConfig"
 - Modify: `src/superseded/server/app.py`
 - Modify: `src/superseded/cli.py`
 
-- [ ] **Step 1: Widen the store type in worker.py**
+- [x] **Step 1: Widen the store type in worker.py**
 
 In `src/superseded/server/worker.py`:
 
@@ -1142,7 +1142,7 @@ Replace the type hint of the `store` parameter in `_run_review_for_job` (line 26
     store: Store | None = None,
 ```
 
-- [ ] **Step 2: Widen the store type in app.py**
+- [x] **Step 2: Widen the store type in app.py**
 
 In `src/superseded/server/app.py`:
 
@@ -1175,7 +1175,7 @@ Replace the `store: MemoryStore` parameter of `_handle_installation_event` (line
     store: Store,
 ```
 
-- [ ] **Step 3: Wire make_store into the serve command**
+- [x] **Step 3: Wire make_store into the serve command**
 
 In `src/superseded/cli.py`, locate the `serve` function (around line 681). It currently builds two `MemoryStore()` instances at lines 713 and 736.
 
@@ -1218,7 +1218,7 @@ Replace `store=MemoryStore(),` on the `create_app(...)` call with the same share
     )
 ```
 
-- [ ] **Step 4: Close the store on lifespan shutdown**
+- [x] **Step 4: Close the store on lifespan shutdown**
 
 Still in `cli.py`, the lifespan function (around lines 723–729) currently reads:
 
@@ -1248,17 +1248,17 @@ Change it to ensure the store is closed for both backends:
 
 (`contextlib` is already imported at the top of `serve` via `from contextlib import asynccontextmanager`; add a plain `import contextlib` at module level if it is not already present — check first.)
 
-- [ ] **Step 5: Verify imports/types still resolve**
+- [x] **Step 5: Verify imports/types still resolve**
 
 Run: `uv run python -c "from superseded.cli import cli; from superseded.server.app import create_app; from superseded.server.worker import ReviewWorker; print('ok')"`
 Expected: prints `ok` with no import errors.
 
-- [ ] **Step 6: Lint, format, full suite**
+- [x] **Step 6: Lint, format, full suite**
 
 Run: `uv run ruff check src/ tests/ && uv run ruff format src/ tests/ && uv run pytest tests/ -q`
 Expected: no lint errors; full suite PASS (existing server tests construct `MemoryStore` directly and remain valid).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/superseded/server/worker.py src/superseded/server/app.py src/superseded/cli.py
@@ -1272,7 +1272,7 @@ git commit -m "feat: wire make_store into serve; widen store types to Store prot
 **Files:**
 - Modify: `AGENTS.md` (one paragraph under Architecture notes)
 
-- [ ] **Step 1: Add an Architecture note about the backend abstraction**
+- [x] **Step 1: Add an Architecture note about the backend abstraction**
 
 In `AGENTS.md`, under the "## Architecture notes" section, add this bullet after the existing memory-store bullet:
 
@@ -1280,7 +1280,7 @@ In `AGENTS.md`, under the "## Architecture notes" section, add this bullet after
 - Memory store has two interchangeable backends behind the `Store` Protocol in `memory/backend.py`: `MemoryStore` (SQLite, default, used by the local CLI path) and `PostgresStore` (asyncpg pool, server-only, selected via `ServerConfig.database_url`). `make_store(database_url)` dispatches on URL scheme (`sqlite://`/empty → SQLite, `postgres(ql)://` → Postgres). Postgres tests in `tests/test_postgres_store.py` are `@pytest.mark.postgres` and skipped unless `SUPERSEDED_POSTGRES_TEST_DSN` is set; `addopts = "-m 'not postgres'"` keeps the default `uv run pytest` green without a live DB.
 ```
 
-- [ ] **Step 2: Run the complete verification suite**
+- [x] **Step 2: Run the complete verification suite**
 
 ```bash
 uv run ruff check src/ tests/
@@ -1289,7 +1289,7 @@ uv run pytest tests/ -v
 ```
 Expected: ruff clean; format check clean; all non-Postgres tests PASS, Postgres tests reported as deselected/skipped.
 
-- [ ] **Step 3: Smoke-test the serve wiring with the default (SQLite) backend**
+- [x] **Step 3: Smoke-test the serve wiring with the default (SQLite) backend**
 
 ```bash
 uv run python -c "
@@ -1302,7 +1302,7 @@ print('ok')
 ```
 Expected: prints `MemoryStore` then `ok`.
 
-- [ ] **Step 4: Smoke-test that an unsupported scheme is rejected**
+- [x] **Step 4: Smoke-test that an unsupported scheme is rejected**
 
 ```bash
 uv run python -c "
@@ -1315,7 +1315,7 @@ except ValueError as e:
 ```
 Expected: `rejected: Unsupported database scheme: 'mysql'`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add AGENTS.md

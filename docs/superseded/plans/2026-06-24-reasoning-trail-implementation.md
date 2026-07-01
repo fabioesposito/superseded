@@ -34,7 +34,7 @@
 - Modify: `src/superseded/models.py`
 - Modify: `tests/test_models.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_models.py — append to existing file
@@ -99,12 +99,12 @@ def test_reasoning_does_not_affect_id():
     assert f1.id == f2.id
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_models.py::test_reasoning_defaults_empty -v`
 Expected: FAIL — `Finding.__init__() got unexpected keyword argument 'reasoning'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # src/superseded/models.py — add reasoning field after confidence (line 22)
@@ -125,12 +125,12 @@ class Finding(BaseModel):
 
 `model_post_init` is **not** changed — `reasoning` does not factor into the `id` hash (line 27-28 still uses `pass_name-file-line-title` only).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_models.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/models.py tests/test_models.py
@@ -146,7 +146,7 @@ git commit -m "feat: add reasoning field to Finding model"
 
 This task only touches the JSON_FORMAT_INSTRUCTIONS and rules block — the new kwargs for static/usage context are handled by the context plan's Task 5.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_prompts.py — append (or extend from context plan)
@@ -169,12 +169,12 @@ def test_reasoning_rule_in_prompt():
     assert "evidence led you to flag" in prompt
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_prompts.py::test_reasoning_in_json_format tests/test_prompts.py::test_reasoning_rule_in_prompt -v`
 Expected: FAIL — `"reasoning" not in JSON_FORMAT_INSTRUCTIONS`
 
-- [ ] **Step 3: Update prompts.py**
+- [x] **Step 3: Update prompts.py**
 
 Add `"reasoning"` to the example JSON array in `JSON_FORMAT_INSTRUCTIONS` (after `"suggestion"`):
 ```jsonc
@@ -187,12 +187,12 @@ Add a rule to the rules list in `build_prompt` (after the last existing rule):
 - For each finding, briefly (1-3 sentences) explain what evidence led you to flag it
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_prompts.py::test_reasoning_in_json_format tests/test_prompts.py::test_reasoning_rule_in_prompt -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/review/prompts.py tests/test_prompts.py
@@ -207,7 +207,7 @@ git commit -m "feat: add reasoning to JSON format instructions and prompt rules"
 - Modify: `src/superseded/memory/store.py`
 - Create: `tests/test_memory_store.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_memory_store.py — new file
@@ -362,12 +362,12 @@ def test_dismissed_findings_include_reasoning(store):
     assert dismissed[0]["reasoning"] == "N+1 query"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_memory_store.py -v`
 Expected: FAIL — either `ModuleNotFoundError` or `record_finding() got an unexpected keyword argument 'reasoning'`
 
-- [ ] **Step 3: Update store.py**
+- [x] **Step 3: Update store.py**
 
 Update `SCHEMA` — add `reasoning TEXT DEFAULT ''` to the `findings` CREATE TABLE (between `line INTEGER` and `title TEXT`):
 ```sql
@@ -424,12 +424,12 @@ async def record_finding(
 
 `get_dismissed_findings` is **unchanged** — `SELECT *` already returns the new column.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_memory_store.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/memory/store.py tests/test_memory_store.py
@@ -444,7 +444,7 @@ git commit -m "feat: add reasoning column to findings table with migration"
 - Modify: `src/superseded/cli.py`
 - Modify: `tests/test_cli.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_cli.py — append
@@ -526,12 +526,12 @@ def test_persist_findings_passes_reasoning(monkeypatch):
     assert calls[0]["reasoning"] == "suspicious input"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_cli.py::test_format_memory_context_with_reasoning -v`
 Expected: FAIL — `format_memory_context` doesn't handle reasoning yet
 
-- [ ] **Step 3: Update cli.py**
+- [x] **Step 3: Update cli.py**
 
 Update `format_memory_context` (cli.py:35-43):
 ```python
@@ -572,12 +572,12 @@ def _persist_findings(store: MemoryStore, result: ReviewResult, repo: str) -> No
         )
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_cli.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/cli.py tests/test_cli.py
@@ -592,7 +592,7 @@ git commit -m "feat: persist reasoning to store and enhance dismissed-findings l
 - Modify: `src/superseded/output/markdown.py`
 - Modify: `tests/test_output.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_output.py — append
@@ -639,12 +639,12 @@ def test_reasoning_in_correct_position():
     assert desc_pos < details_pos < suggestion_pos
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_output.py::test_reasoning_renders_when_present -v`
 Expected: FAIL — `<details>` not in output (reasoning not rendered yet)
 
-- [ ] **Step 3: Update markdown.py**
+- [x] **Step 3: Update markdown.py**
 
 ```python
 # src/superseded/output/markdown.py — update the per-finding block (lines 25-32)
@@ -666,12 +666,12 @@ Expected: FAIL — `<details>` not in output (reasoning not rendered yet)
             lines.append("")
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_output.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/output/markdown.py tests/test_output.py
@@ -686,7 +686,7 @@ git commit -m "feat: render reasoning as collapsible details in markdown output"
 - Modify: `src/superseded/output/github_pr.py`
 - Modify: `tests/test_output.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_output.py — append
@@ -737,12 +737,12 @@ def test_pr_comment_excludes_reasoning_when_empty():
     assert "<details>" not in body
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_output.py::test_pr_comment_includes_reasoning_when_present -v`
 Expected: FAIL — `<details>` not in comment body
 
-- [ ] **Step 3: Update github_pr.py**
+- [x] **Step 3: Update github_pr.py**
 
 In `post_review_to_pr` (github_pr.py:11-23), update the comment body construction:
 ```python
@@ -764,12 +764,12 @@ In `post_review_to_pr` (github_pr.py:11-23), update the comment body constructio
         }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_output.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/output/github_pr.py tests/test_output.py
@@ -780,17 +780,17 @@ git commit -m "feat: render reasoning as collapsible details in GitHub PR commen
 
 ### Task 7: Final integration pass
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run: `uv run pytest tests/ -v`
 Expected: ALL PASS
 
-- [ ] **Step 2: Run lint and format**
+- [x] **Step 2: Run lint and format**
 
 Run: `uv run ruff check src/ tests/ && uv run ruff format src/ tests/`
 Expected: PASS
 
-- [ ] **Step 3: Commit any lint fixes if needed**
+- [x] **Step 3: Commit any lint fixes if needed**
 
 ```bash
 git add -A

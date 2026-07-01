@@ -15,7 +15,7 @@
 **Files:**
 - Modify: `src/superseded/output/github_pr.py:47-54`
 
-- [ ] **Step 1: Extract the subprocess call and comment-ID extraction into a helper**
+- [x] **Step 1: Extract the subprocess call and comment-ID extraction into a helper**
 
 Replace the body of `post_review_to_pr` (lines 48-54) with a call through the new helper:
 
@@ -34,7 +34,7 @@ def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) ->
     return _post_review_payload(payload, target_repo, pr)
 ```
 
-- [ ] **Step 2: Run existing tests to verify the refactor is transparent**
+- [x] **Step 2: Run existing tests to verify the refactor is transparent**
 
 ```bash
 uv run pytest tests/test_output.py -v
@@ -42,7 +42,7 @@ uv run pytest tests/test_output.py -v
 
 Expected: all 18 tests pass (no behavior change).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/superseded/output/github_pr.py
@@ -56,7 +56,7 @@ git commit -m "refactor: extract _post_review_payload helper"
 **Files:**
 - Modify: `src/superseded/output/github_pr.py` (add function after `_post_review_payload`)
 
-- [ ] **Step 1: Write failing tests for `_partition_comments`**
+- [x] **Step 1: Write failing tests for `_partition_comments`**
 
 Add these tests to `tests/test_output.py`:
 
@@ -123,7 +123,7 @@ def test_partition_comments_empty():
     assert bad == set()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_output.py -v -k "partition_comments"
@@ -131,7 +131,7 @@ uv run pytest tests/test_output.py -v -k "partition_comments"
 
 Expected: 4 FAIL (function not defined).
 
-- [ ] **Step 3: Implement `_partition_comments`**
+- [x] **Step 3: Implement `_partition_comments`**
 
 Add after `_post_review_payload` in `src/superseded/output/github_pr.py`:
 
@@ -160,7 +160,7 @@ def _partition_comments(
     return left_bad | {i + mid for i in right_bad}
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_output.py -v -k "partition_comments"
@@ -168,7 +168,7 @@ uv run pytest tests/test_output.py -v -k "partition_comments"
 
 Expected: 4 PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/output/github_pr.py tests/test_output.py
@@ -182,7 +182,7 @@ git commit -m "feat: add binary-search partition for invalid review comments"
 **Files:**
 - Modify: `src/superseded/output/github_pr.py` (add function after `_partition_comments`)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add to `tests/test_output.py`:
 
@@ -236,7 +236,7 @@ def test_build_fallback_text_multiple():
     assert "b.py:2" in text
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_output.py -v -k "build_fallback_text"
@@ -244,7 +244,7 @@ uv run pytest tests/test_output.py -v -k "build_fallback_text"
 
 Expected: 2 FAIL (function not defined).
 
-- [ ] **Step 3: Implement `_build_fallback_text`**
+- [x] **Step 3: Implement `_build_fallback_text`**
 
 Add after `_partition_comments` in `src/superseded/output/github_pr.py`:
 
@@ -262,7 +262,7 @@ def _build_fallback_text(findings: list[Finding]) -> str:
 
 Note: `Finding` is already imported at the top of the file — no import changes needed.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/test_output.py -v -k "build_fallback_text"
@@ -270,7 +270,7 @@ uv run pytest tests/test_output.py -v -k "build_fallback_text"
 
 Expected: 2 PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/superseded/output/github_pr.py tests/test_output.py
@@ -284,7 +284,7 @@ git commit -m "feat: add fallback text formatter for out-of-range findings"
 **Files:**
 - Modify: `src/superseded/output/github_pr.py:47-54`
 
-- [ ] **Step 1: Write failing test for mixed valid/invalid fallback**
+- [x] **Step 1: Write failing test for mixed valid/invalid fallback**
 
 Add to `tests/test_output.py`:
 
@@ -397,11 +397,11 @@ def test_post_review_no_comments_raises():
 
 Note: `pytest` is already imported via `from unittest.mock import ...` — add `import pytest` at the top of `tests/test_output.py`.
 
-- [ ] **Step 2: Add `import pytest` to tests**
+- [x] **Step 2: Add `import pytest` to tests**
 
 Add `import pytest` after `from unittest.mock import MagicMock, patch` on line 4 of `tests/test_output.py`.
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 ```bash
 uv run pytest tests/test_output.py -v -k "fallback"
@@ -409,7 +409,7 @@ uv run pytest tests/test_output.py -v -k "fallback"
 
 Expected: 3 FAIL (fallback not implemented).
 
-- [ ] **Step 4: Update `post_review_to_pr` with fallback logic**
+- [x] **Step 4: Update `post_review_to_pr` with fallback logic**
 
 Replace `post_review_to_pr` in `src/superseded/output/github_pr.py`:
 
@@ -438,7 +438,7 @@ def post_review_to_pr(pr: int, result: ReviewResult, repo: str | None = None) ->
     return _post_review_payload(payload, target_repo, pr)
 ```
 
-- [ ] **Step 5: Run all tests to verify entire suite passes**
+- [x] **Step 5: Run all tests to verify entire suite passes**
 
 ```bash
 uv run pytest tests/test_output.py -v
@@ -446,7 +446,7 @@ uv run pytest tests/test_output.py -v
 
 Expected: all ~24 tests PASS.
 
-- [ ] **Step 6: Run full test suite**
+- [x] **Step 6: Run full test suite**
 
 ```bash
 uv run pytest tests/ -v
@@ -454,14 +454,14 @@ uv run pytest tests/ -v
 
 Expected: all tests PASS.
 
-- [ ] **Step 7: Run lint and format**
+- [x] **Step 7: Run lint and format**
 
 ```bash
 uv run ruff check src/superseded/output/github_pr.py tests/test_output.py
 uv run ruff format src/superseded/output/github_pr.py tests/test_output.py
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/superseded/output/github_pr.py tests/test_output.py
@@ -475,7 +475,7 @@ git commit -m "fix: fallback to review body for out-of-range inline comments"
 **Files:**
 - Modify: `TODO.md:26`
 
-- [ ] **Step 1: Check the box in TODO.md**
+- [x] **Step 1: Check the box in TODO.md**
 
 Change line 26 from `- [ ]` to `- [x]`:
 
@@ -483,7 +483,7 @@ Change line 26 from `- [ ]` to `- [x]`:
 - [x] **GitHub review comments can fail silently** ...
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add TODO.md

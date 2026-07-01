@@ -360,6 +360,8 @@ async def _test_learned_rules_crud():
         assert rules[0]["confidence"] == 0.9
         assert await store.get_learned_rules("other/repo") == []
 
+        await store.close()
+
 
 def test_learned_rules_crud():
     asyncio.run(_test_learned_rules_crud())
@@ -402,6 +404,8 @@ async def _test_learned_rules_respects_confidence_filter():
         rules = await store.get_learned_rules("owner/repo", limit=5)
         assert len(rules) == 1
         assert rules[0]["rule_text"] == "Good rule"
+
+        await store.close()
 
 
 def test_learned_rules_confidence_filter():
