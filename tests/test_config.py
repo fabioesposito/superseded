@@ -135,3 +135,22 @@ def test_config_progressive_can_be_disabled():
 
     cfg = Config(progressive=False)
     assert cfg.progressive is False
+
+
+def test_config_log_defaults():
+    from superseded.config import Config
+
+    cfg = Config()
+    assert cfg.log_format == "text"
+    assert cfg.log_level == "WARNING"
+
+
+def test_config_log_round_trips(tmp_path):
+    from superseded.config import Config, load_config, write_config
+
+    cfg = Config(log_format="json", log_level="INFO")
+    path = tmp_path / ".superseded.yaml"
+    write_config(cfg, path)
+    loaded = load_config(path)
+    assert loaded.log_format == "json"
+    assert loaded.log_level == "INFO"

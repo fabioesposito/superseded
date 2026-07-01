@@ -302,6 +302,19 @@ def test_fetch_git_diff_forwards_timeout():
     assert captured.get("timeout") is not None and captured["timeout"] > 0
 
 
+def test_fetch_raw_diff_wraps_called_process_error():
+    from superseded.diff import _fetch_raw_diff
+
+    err = subprocess.CalledProcessError(
+        returncode=128, cmd=["git", "diff", "HEAD"], output="", stderr="bad revision 'HEAD'"
+    )
+    with (
+        patch("subprocess.run", side_effect=err),
+        pytest.raises(RuntimeError, match=r"git diff HEAD.*exit 128.*bad revision 'HEAD'"),
+    ):
+        _fetch_raw_diff(["HEAD"])
+
+
 def test_repo_root_forward_timeout(monkeypatch):
     from superseded.diff import repo_root
 
@@ -347,3 +360,58 @@ def test_fetch_pr_head_sha_raises_on_gh_failure(patch_subprocess):
     patch_subprocess.side_effect = subprocess.CalledProcessError(1, "gh", stderr="not found")
     with pytest.raises(RuntimeError, match=r"gh pr view 9.*exit 1.*not found"):
         diff_mod.fetch_pr_head_sha(9)
+
+
+def test_fetch_diff_autodetect_head(monkeypatch):
+    from superseded.diff import fetch_diff
+
+    captured: dict = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="diff content\n", stderr="")
+
+    monkeypatch.setattr("superseded.diff.subprocess.run", fake_run)
+    out = fetch_diff()
+    assert out == "diff content\n"
+    assert captured["cmd"][:3] == ["git", "diff", "HEAD"]
+
+
+def test_fetch_diff_staged_uses_cached(monkeypatch):
+    from superseded.diff import fetch_diff
+
+    captured: dict = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="staged diff\n", stderr="")
+
+    monkeypatch.setattr("superseded.diff.subprocess.run", fake_run)
+    out = fetch_diff(staged=True)
+    assert out == "staged diff\n"
+    assert captured["cmd"][:3] == ["git", "diff", "--cached"]
+
+
+def test_fetch_diff_autodetect_empty_raises(monkeypatch):
+    from superseded.diff import fetch_diff
+
+    monkeypatch.setattr(
+        "superseded.diff.subprocess.run",
+        lambda *a, **kw: MagicMock(returncode=0, stdout="   \n", stderr=""),
+    )
+    with pytest.raises(ValueError, match=r"no changes detected"):
+        fetch_diff()
+
+
+def test_fetch_diff_staged_ignored_when_diff_range_given(monkeypatch):
+    from superseded.diff import fetch_diff
+
+    captured: dict = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return MagicMock(returncode=0, stdout="x\n", stderr="")
+
+    monkeypatch.setattr("superseded.diff.subprocess.run", fake_run)
+    fetch_diff(diff_range="HEAD~1..HEAD", staged=True)
+    assert captured["cmd"] == ["git", "diff", "HEAD~1..HEAD"]

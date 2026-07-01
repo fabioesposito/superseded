@@ -21,6 +21,8 @@ class Config(BaseModel):
     passes: PassConfig = PassConfig()
     post_to_pr: bool = False
     format: str = "table"
+    log_format: str = "text"
+    log_level: str = "WARNING"
     memory: bool = True
     static_analysis: bool = True
     usage_retrieval: bool = True

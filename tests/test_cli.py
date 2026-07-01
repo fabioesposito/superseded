@@ -27,11 +27,36 @@ def test_serve_refuses_unconfigured_config(tmp_path):
     assert "not configured" in result.output.lower() or "app_id" in result.output.lower()
 
 
-def test_review_requires_pr_or_diff():
+@patch("superseded.cli._run_review")
+def test_review_no_args_auto_detects(mock_review):
+    mock_review.return_value = None
     runner = CliRunner()
     result = runner.invoke(cli, ["review"])
-    assert result.exit_code != 0
-    assert "pr" in result.output.lower() or "diff" in result.output.lower()
+    assert result.exit_code == 0
+    mock_review.assert_called_once()
+
+
+def test_review_staged_flag_threads_to_fetch_diff(monkeypatch):
+    captured: dict = {}
+
+    def fake_run_review(**kwargs):
+        captured.update(kwargs)
+        return None
+
+    monkeypatch.setattr("superseded.cli._run_review", fake_run_review)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--staged"])
+    assert result.exit_code == 0
+    assert captured.get("staged") is True
+
+
+@patch("superseded.cli._run_review")
+def test_review_staged_defaults_false(mock_review):
+    mock_review.return_value = None
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--pr", "5"])
+    assert result.exit_code == 0
+    assert mock_review.call_args.kwargs.get("staged") is False
 
 
 @patch("superseded.cli._run_review")
@@ -144,7 +169,7 @@ def test_persist_findings_passes_reasoning(monkeypatch):
 def test_run_review_exits_cleanly_when_agent_unavailable(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         "superseded.cli.fetch_diff",
-        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr(
@@ -182,7 +207,7 @@ def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, mo
 
     monkeypatch.setattr(
         "superseded.cli.fetch_diff",
-        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr(
@@ -346,7 +371,7 @@ def test_review_passes_graph_to_gather_context(monkeypatch):
             "spec_signals": None,
         }
 
-    def fake_fetch_diff(*, pr, diff_range, files):
+    def fake_fetch_diff(*, pr, diff_range, files, staged=False):
         return "diff"
 
     def fake_engine_review(*a, **kw):
@@ -482,3 +507,52 @@ def test_resolve_incremental_error_falls_back(monkeypatch):
     diff, mode, _head = _resolve_pr_review_diff(pr=1, repo="o/r", store=store, full=False)
     assert diff == "FULLDIFF"
     assert mode == "fallback"
+
+
+@patch("superseded.cli.setup_logging")
+@patch("superseded.cli._run_review")
+def test_review_calls_setup_logging(mock_review, mock_setup, monkeypatch):
+    mock_review.return_value = None
+    monkeypatch.delenv("SUPERSEDED_LOG_FORMAT", raising=False)
+    monkeypatch.delenv("SUPERSEDED_LOG_LEVEL", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["--log-format", "json", "review", "--pr", "1"])
+    assert result.exit_code == 0
+    mock_setup.assert_called()
+    called_fmt = mock_setup.call_args.args[0]
+    assert called_fmt == "json"
+
+
+@patch("superseded.cli.setup_logging")
+def test_log_format_env_overrides_flag(mock_setup, monkeypatch):
+    monkeypatch.setenv("SUPERSEDED_LOG_FORMAT", "json")
+    runner = CliRunner()
+    runner.invoke(cli, ["--log-format", "text", "feedback", "--rules"])
+    called_fmt = mock_setup.call_args.args[0]
+    assert called_fmt == "json"
+
+
+@patch("superseded.cli.setup_logging")
+def test_log_level_passed_through(mock_setup, monkeypatch):
+    monkeypatch.delenv("SUPERSEDED_LOG_LEVEL", raising=False)
+    runner = CliRunner()
+    runner.invoke(cli, ["--log-level", "DEBUG", "feedback", "--rules"])
+    called_level = mock_setup.call_args.args[1]
+    assert called_level == "DEBUG"
+
+
+@patch("superseded.cli.setup_logging")
+@patch("superseded.cli._run_review")
+def test_log_format_config_file_used_when_no_flag_or_env(
+    mock_review, mock_setup, tmp_path, monkeypatch
+):
+    mock_review.return_value = None
+    monkeypatch.delenv("SUPERSEDED_LOG_FORMAT", raising=False)
+    monkeypatch.delenv("SUPERSEDED_LOG_LEVEL", raising=False)
+    (tmp_path / ".superseded.yaml").write_text("log_format: json\nlog_level: INFO\n")
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--pr", "1"])
+    assert result.exit_code == 0
+    assert mock_setup.call_args.args[0] == "json"
+    assert mock_setup.call_args.args[1] == "INFO"

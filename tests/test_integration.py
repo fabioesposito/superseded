@@ -367,7 +367,7 @@ def test_context_enrichment_called(monkeypatch):
     """Verify run_static_analysis and retrieve_usages are called and kwargs forwarded."""
     monkeypatch.setattr(
         "superseded.cli.fetch_diff",
-        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n+x",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr(
@@ -415,7 +415,7 @@ def test_context_disabled_skips_enrichment(monkeypatch):
     """When config disables enrichment, functions are not called."""
     monkeypatch.setattr(
         "superseded.cli.fetch_diff",
-        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n+x",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr(
@@ -460,7 +460,7 @@ def test_context_disabled_skips_enrichment(monkeypatch):
 def test_conventions_and_specs_called_and_forwarded(monkeypatch):
     monkeypatch.setattr(
         "superseded.cli.fetch_diff",
-        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n+x",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr(
@@ -505,7 +505,7 @@ def test_conventions_and_specs_called_and_forwarded(monkeypatch):
 def test_no_conventions_flag_skips_discover(monkeypatch):
     monkeypatch.setattr(
         "superseded.cli.fetch_diff",
-        lambda pr=None, diff_range=None, files=None: "diff --git a/x.py b/x.py\n+x",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n+x",
     )
     monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
     monkeypatch.setattr(

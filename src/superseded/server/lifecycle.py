@@ -2,58 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import logging
 import signal
 from typing import TYPE_CHECKING
+
+from superseded.logging_utils import JsonFormatter as JsonFormatter
 
 if TYPE_CHECKING:
     from superseded.server.worker import ReviewWorker
 
 logger = logging.getLogger(__name__)
-
-_RESERVED_LOG_FIELDS = frozenset(
-    {
-        "name",
-        "msg",
-        "args",
-        "levelname",
-        "levelno",
-        "pathname",
-        "filename",
-        "module",
-        "exc_info",
-        "exc_text",
-        "stack_info",
-        "lineno",
-        "funcName",
-        "created",
-        "msecs",
-        "relativeCreated",
-        "thread",
-        "threadName",
-        "processName",
-        "process",
-        "taskName",
-        "message",
-        "getMessage",
-    }
-)
-
-
-class JsonFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:
-        payload: dict = {
-            "event": record.getMessage(),
-            "level": record.levelname,
-            "time": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
-        }
-        for key, value in record.__dict__.items():
-            if key not in _RESERVED_LOG_FIELDS and not key.startswith("_"):
-                payload[key] = value
-        if record.exc_info:
-            payload["exc_info"] = self.formatException(record.exc_info)
-        return json.dumps(payload, default=str)
 
 
 class ServerLifecycle:

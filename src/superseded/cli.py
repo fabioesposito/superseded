@@ -31,6 +31,7 @@ from superseded.diff import (
     repo_root,
 )
 from superseded.incremental import IncrementalDiffError, fetch_incremental_diff
+from superseded.logging_utils import setup_logging
 from superseded.memory.feedback import check_pr_feedback
 from superseded.memory.store import MemoryStore
 from superseded.models import PassName, ReviewResult
@@ -43,6 +44,8 @@ from superseded.review.engine import ReviewEngine
 AGENT_ENV = "SUPERSEDED_AGENT"
 MODEL_ENV = "SUPERSEDED_MODEL"
 GRAPH_ENV = "SUPERSEDED_GRAPH"
+LOG_FORMAT_ENV = "SUPERSEDED_LOG_FORMAT"
+LOG_LEVEL_ENV = "SUPERSEDED_LOG_LEVEL"
 DEFAULT_TIMEOUT = 600
 KNOWN_PASSES: list[str] = list(get_args(PassName))
 
@@ -78,6 +81,14 @@ def resolve_graph(cli_value: bool | None, config: Config) -> bool:
     if cli_value is not None:
         return cli_value
     return config.graph
+
+
+def resolve_log_format(flag: str | None, config: Config | None = None) -> str:
+    return os.environ.get(LOG_FORMAT_ENV) or flag or (config.log_format if config else "text")
+
+
+def resolve_log_level(flag: str | None, config: Config | None = None) -> str:
+    return os.environ.get(LOG_LEVEL_ENV) or flag or (config.log_level if config else "WARNING")
 
 
 def _parse_passes(raw: str | None) -> list[str] | None:
@@ -189,8 +200,23 @@ def format_memory_context(dismissed: list[dict]) -> str | None:
 
 @click.group()
 @click.version_option(version=_VERSION)
-def cli() -> None:
+@click.option(
+    "--log-format",
+    "log_format",
+    type=click.Choice(["text", "json"]),
+    default=None,
+    help="Log output format (default: text). Env: SUPERSEDED_LOG_FORMAT.",
+)
+@click.option(
+    "--log-level",
+    "log_level",
+    default=None,
+    help="Log level (e.g. DEBUG/INFO/WARNING). Env: SUPERSEDED_LOG_LEVEL.",
+)
+@click.pass_context
+def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> None:
     """Superseded — reviews that supersede themselves."""
+    ctx.obj = {"log_format": log_format, "log_level": log_level}
 
 
 @cli.command()
@@ -236,13 +262,20 @@ def cli() -> None:
 @click.option("--no-conventions", is_flag=True, help="Disable project conventions injection")
 @click.option("--no-specs", is_flag=True, help="Disable design spec/plan retrieval")
 @click.option(
+    "--staged",
+    is_flag=True,
+    help="Review staged (cached) changes only; default reviews all uncommitted changes.",
+)
+@click.option(
     "--graph/--no-graph",
     "graph",
     default=None,
     help="Toggle graph-grounded usage retrieval (default: from config)",
 )
 @click.argument("files", nargs=-1, type=click.Path(exists=True, dir_okay=False))
+@click.pass_context
 def review(
+    ctx: click.Context,
     pr: int | None,
     diff_range: str | None,
     agent: str | None,
@@ -259,6 +292,7 @@ def review(
     no_conventions: bool,
     no_specs: bool,
     graph: bool | None,
+    staged: bool,
     files: tuple[str, ...],
 ) -> None:
     """Review code changes.
@@ -268,12 +302,11 @@ def review(
     `--diff` (defaulting to `HEAD` if only files are given) and cannot be used
     with `--pr`.
     """
-    if pr is None and diff_range is None and not files:
-        click.echo(
-            "Error: Provide either --pr, --diff, or one or more FILES to review.",
-            err=True,
-        )
-        sys.exit(2)
+    log_config = load_config(config_path)
+    setup_logging(
+        resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None, log_config),
+        resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None, log_config),
+    )
 
     if post and pr is None:
         click.echo("Error: --post requires --pr (cannot post from a local diff).", err=True)
@@ -302,6 +335,7 @@ def review(
         no_conventions=no_conventions,
         no_specs=no_specs,
         graph=graph,
+        staged=staged,
         files=list(files) or None,
     )
 
@@ -324,6 +358,7 @@ def _run_review(
     no_conventions: bool = False,
     no_specs: bool = False,
     graph: bool | None = None,
+    staged: bool = False,
     files: list[str] | None = None,
 ) -> None:
     config = load_config(config_path)
@@ -382,7 +417,10 @@ def _run_review(
             _status("memory disabled; running full review (progressive review needs memory)")
         _status("Fetching diff...")
         try:
-            diff = fetch_diff(pr=pr, diff_range=diff_range, files=files)
+            diff = fetch_diff(pr=pr, diff_range=diff_range, files=files, staged=staged)
+        except ValueError as err:
+            click.echo(f"Error: {err}", err=True)
+            sys.exit(2)
         except RuntimeError as err:
             click.echo(f"Error: {err}", err=True)
             sys.exit(1)
@@ -537,8 +575,15 @@ async def _build_learned_context(
     default=None,
     help="Path to write (default: .superseded.yaml in cwd)",
 )
-def init(force: bool, agent_override: str | None, config_path: Path | None) -> None:
+@click.pass_context
+def init(
+    ctx: click.Context, force: bool, agent_override: str | None, config_path: Path | None
+) -> None:
     """Detect installed AI CLIs and write a .superseded.yaml config file."""
+    setup_logging(
+        resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
+        resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
+    )
     _run_init(force=force, agent_override=agent_override, config_path=config_path)
 
 
@@ -625,6 +670,11 @@ def feedback(
     dismiss: bool,
 ) -> None:
     """Manage review feedback."""
+    setup_logging(
+        resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
+        resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
+    )
+
     if rules:
         _run_feedback_rules()
         return
@@ -698,7 +748,8 @@ async def _process_feedback(store: MemoryStore, comments: list[dict]) -> None:
 @click.option("--port", type=int, default=None, help="Server port")
 @click.option("--host", default=None, help="Server host")
 @click.option("--config", "config_path", default=None, help="Server config file path")
-def serve(port: int | None, host: str | None, config_path: str | None) -> None:
+@click.pass_context
+def serve(ctx: click.Context, port: int | None, host: str | None, config_path: str | None) -> None:
     """Start the Superseded review server."""
     from contextlib import asynccontextmanager
 
@@ -740,7 +791,7 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
     import uvicorn
 
     from superseded.server.app import create_app
-    from superseded.server.lifecycle import JsonFormatter, ServerLifecycle
+    from superseded.server.lifecycle import ServerLifecycle
 
     lifecycle = ServerLifecycle(worker=worker)
 
@@ -763,10 +814,15 @@ def serve(port: int | None, host: str | None, config_path: str | None) -> None:
         lifespan=lifespan,
     )
 
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    log_level = getattr(logging, config.log_level.upper(), logging.INFO)
-    logging.basicConfig(level=log_level, handlers=[handler])
+    serve_fmt = (
+        os.environ.get(LOG_FORMAT_ENV) or (ctx.obj.get("log_format") if ctx.obj else None) or "json"
+    )
+    serve_level = (
+        os.environ.get(LOG_LEVEL_ENV)
+        or (ctx.obj.get("log_level") if ctx.obj else None)
+        or config.log_level
+    )
+    setup_logging(serve_fmt, serve_level)
 
     _status(f"Starting Superseded server on {config.host}:{config.port}")
     ssl_kwargs: dict = {}

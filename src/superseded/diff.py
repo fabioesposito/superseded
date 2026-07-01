@@ -15,13 +15,15 @@ def fetch_diff(
     pr: int | None = None,
     diff_range: str | None = None,
     files: list[str] | None = None,
+    staged: bool = False,
 ) -> str:
     """Fetch a diff.
 
     ``pr`` and ``diff_range`` are mutually exclusive. ``files`` restricts a
     local ``--diff`` to the given pathspecs (cannot be combined with ``--pr``);
     when only ``files`` are given, the diff defaults to the working tree vs
-    ``HEAD``.
+    ``HEAD``. When nothing is supplied, the working tree is diffed against
+    ``HEAD`` (or, with ``staged=True``, the index against ``HEAD``).
     """
     if pr is not None:
         if files:
@@ -30,7 +32,38 @@ def fetch_diff(
     if diff_range is not None or files:
         rng = diff_range or "HEAD"
         return _fetch_git_diff(rng, files)
-    raise ValueError("Either --pr, --diff, or FILES must be provided")
+    out = _fetch_raw_diff(["--cached"] if staged else ["HEAD"])
+    if not out.strip():
+        raise ValueError("no changes detected; stage/commit changes or pass --diff/--pr/FILES")
+    return out
+
+
+def _fetch_git_diff(diff_range: str, files: list[str] | None = None) -> str:
+    args: list[str] = [diff_range]
+    if files:
+        args += ["--", *files]
+    return _fetch_raw_diff(args)
+
+
+def _fetch_raw_diff(args: list[str]) -> str:
+    cmd = ["git", "diff", *args]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=DEFAULT_GH_TIMEOUT,
+        )
+    except FileNotFoundError as err:
+        raise RuntimeError("'git' not found on PATH. Install git to use --diff.") from err
+    except subprocess.CalledProcessError as err:
+        detail = (err.stderr or "").strip()
+        msg = f"'{' '.join(cmd)}' failed (exit {err.returncode})"
+        if detail:
+            msg += f": {detail}"
+        raise RuntimeError(msg) from err
+    return result.stdout
 
 
 def _fetch_pr_diff(pr: int) -> str:
@@ -52,23 +85,6 @@ def _fetch_pr_diff(pr: int) -> str:
         if detail:
             msg += f": {detail}"
         raise RuntimeError(msg) from err
-    return result.stdout
-
-
-def _fetch_git_diff(diff_range: str, files: list[str] | None = None) -> str:
-    cmd = ["git", "diff", diff_range]
-    if files:
-        cmd += ["--", *files]
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=DEFAULT_GH_TIMEOUT,
-        )
-    except FileNotFoundError as err:
-        raise RuntimeError("'git' not found on PATH. Install git to use --diff.") from err
     return result.stdout
 
 
