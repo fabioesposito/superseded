@@ -36,6 +36,7 @@ Environment variables (prefixed with `SUPERSEDED_`):
 | `SUPERSEDED_PRIVATE_KEY_PATH` | `private_key_path` | Yes | — |
 | `SUPERSEDED_PORT` | `port` | No | `8000` |
 | `SUPERSEDED_HOST` | `host` | No | `127.0.0.1` |
+| `SUPERSEDED_BEHIND_PROXY` | `behind_proxy` | No | `false` |
 | `SUPERSEDED_MAX_CONCURRENT` | `max_concurrent_reviews` | No | `3` |
 | `SUPERSEDED_LOG_LEVEL` | `log_level` | No | `info` |
 | `SUPERSEDED_HEALTH_TOKEN` | `health_token` | No | — |
@@ -98,6 +99,54 @@ SUPERSEDED_DATABASE_URL=postgresql://user:pass@host:5432/superseded
 ```
 
 This enables concurrent access from multiple server instances. The SQLite path is fine for single-instance deployments.
+
+### Docker / Compose Deployment
+
+Ship the server as a container backed by Postgres. The image is the `api` target
+of the multi-stage `docker/Dockerfile`; `compose.yml` wires it to a Postgres
+service.
+
+```bash
+cp .env.example .env                       # fill in the required values
+mkdir -p keys && cp /path/to/private-key.pem keys/private-key.pem
+docker compose up -d                       # api + postgres
+```
+
+`.env` holds the non-file secrets; the GitHub App private key is mounted
+read-only from `./keys/private-key.pem` (never baked into the image or stored in
+`.env`). Required `.env` values: `POSTGRES_PASSWORD`, `SUPERSEDED_APP_ID`,
+`SUPERSEDED_WEBHOOK_SECRET`.
+
+The API binds `0.0.0.0:8000` **inside the compose network only** — there is no
+published port. Terminate TLS at a reverse proxy in front of compose (nginx,
+Caddy, Traefik) and forward to the `api` service. Because the bind is
+non-loopback without in-process TLS, set `SUPERSEDED_BEHIND_PROXY=1` (compose
+sets this for you): it tells the server that TLS terminates upstream, relaxing
+the otherwise-strict "non-loopback requires TLS" guard. (Direct public binds
+without TLS still raise at startup — the guard is only relaxed when
+`behind_proxy` is explicitly enabled.)
+
+**Build the images directly** (without compose):
+
+```bash
+# CLI image (all three AI CLIs + gh) — also what the GitHub Action builds.
+docker build -f docker/Dockerfile --target cli -t superseded-cli .
+
+# Server image.
+docker build -f docker/Dockerfile --target api -t superseded-api .
+
+# Slim image carrying only the agent you actually run (~1 GB vs ~2 GB).
+docker build -f docker/Dockerfile --build-arg AI_CLIS=@anthropic-ai/claude-code \
+    --target api -t superseded-api-claude .
+```
+
+`AI_CLIS` is a space-separated list of npm package specs; the default installs
+`@anthropic-ai/claude-code @openai/codex opencode-ai`. Override it via
+`--build-arg`, or in compose via the `AI_CLIS` variable in `.env`.
+
+> The server never invokes `gh` — it uses the GitHub REST API directly (and
+> clones via `git`) — so `gh` is installed only in the CLI image, not the server
+> image.
 
 ## GitHub Action
 

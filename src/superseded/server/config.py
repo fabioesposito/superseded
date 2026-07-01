@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 class ServerConfig(BaseModel):
@@ -23,6 +26,7 @@ class ServerConfig(BaseModel):
     tls_key_path: Path | None = None
     agent: str | None = None
     model: str | None = None
+    behind_proxy: bool = False
 
     @property
     def is_configured(self) -> bool:
@@ -33,7 +37,9 @@ class ServerConfig(BaseModel):
         """Raise ValueError if the server is not fully configured for production.
 
         Guards against booting a webhook receiver with a forgeable empty
-        webhook secret / missing app credentials.
+        webhook secret / missing app credentials, or binding a non-loopback
+        interface without TLS unless the operator has explicitly asserted that
+        TLS terminates at a trusted upstream reverse proxy (``behind_proxy``).
         """
         if not self.is_configured:
             raise ValueError(
@@ -44,10 +50,19 @@ class ServerConfig(BaseModel):
         if self.host not in ("127.0.0.1", "localhost") and not (
             self.tls_cert_path and self.tls_key_path
         ):
-            raise ValueError(
-                f"Binding to {self.host} requires TLS. Set SUPERSEDED_TLS_CERT "
-                "and SUPERSEDED_TLS_KEY, or use --host 127.0.0.1."
-            )
+            if self.behind_proxy:
+                logger.warning(
+                    "Binding to %s without TLS; SUPERSEDED_BEHIND_PROXY=1 asserts "
+                    "that TLS terminates at a trusted upstream reverse proxy.",
+                    self.host,
+                )
+            else:
+                raise ValueError(
+                    f"Binding to {self.host} requires TLS. Set SUPERSEDED_TLS_CERT "
+                    "and SUPERSEDED_TLS_KEY, use --host 127.0.0.1, or enable "
+                    "behind-proxy mode (SUPERSEDED_BEHIND_PROXY=1) when TLS "
+                    "terminates at a trusted upstream reverse proxy."
+                )
 
     @model_validator(mode="after")
     def _validate_required_fields(self) -> ServerConfig:
@@ -125,6 +140,15 @@ class ServerConfig(BaseModel):
         model = os.environ.get("SUPERSEDED_SERVER_MODEL")
         if model:
             kwargs["model"] = model
+
+        behind_proxy = os.environ.get("SUPERSEDED_BEHIND_PROXY")
+        if behind_proxy:
+            kwargs["behind_proxy"] = behind_proxy.strip().lower() in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            )
 
         return cls(**kwargs)
 

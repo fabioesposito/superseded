@@ -27,7 +27,8 @@ inputs:
     default: ""
 runs:
   using: "docker"
-  image: "Dockerfile"
+  image: "docker/Dockerfile"
+  entrypoint: "/entrypoint.sh"
   env:
     GITHUB_TOKEN: ${{ github.token }}
     SUPERSEDED_AGENT: ${{ inputs.agent }}

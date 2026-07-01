@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-superseded}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-superseded}
+    volumes:
+      - superseded-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-superseded}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: api
+      args:
+        # Slim the image by installing only the AI CLI(s) you run. Default: all three.
+        AI_CLIS: ${AI_CLIS:-@anthropic-ai/claude-code @openai/codex opencode-ai}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SUPERSEDED_DATABASE_URL: postgres://${POSTGRES_USER:-superseded}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-superseded}
+      SUPERSEDED_APP_ID: ${SUPERSEDED_APP_ID:?set SUPERSEDED_APP_ID in .env}
+      SUPERSEDED_WEBHOOK_SECRET: ${SUPERSEDED_WEBHOOK_SECRET:?set SUPERSEDED_WEBHOOK_SECRET in .env}
+      SUPERSEDED_PRIVATE_KEY_PATH: /keys/private-key.pem
+      SUPERSEDED_HOST: "0.0.0.0"
+      SUPERSEDED_PORT: "8000"
+      SUPERSEDED_BEHIND_PROXY: "1"
+      SUPERSEDED_LOG_FORMAT: json
+      SUPERSEDED_LOG_LEVEL: ${SUPERSEDED_LOG_LEVEL:-info}
+      SUPERSEDED_SERVER_AGENT: ${SUPERSEDED_SERVER_AGENT:-}
+      SUPERSEDED_SERVER_MODEL: ${SUPERSEDED_SERVER_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./keys:/keys:ro
+      - superseded-tmp:/tmp/superseded
+
+volumes:
+  superseded-pgdata:
+  superseded-tmp:

@@ -158,3 +158,57 @@ def test_server_config_database_url_from_yaml(tmp_path):
     )
     cfg = ServerConfig.from_yaml(config_file)
     assert cfg.database_url == "postgresql://u:p@h/db"
+
+
+def test_server_config_behind_proxy_defaults_false():
+    config = ServerConfig()
+    assert config.behind_proxy is False
+
+
+def test_server_config_require_configured_rejects_non_loopback_without_tls():
+    key_file = Path("/dev/null")
+    config = ServerConfig(
+        app_id=123,
+        webhook_secret="s",
+        private_key_path=key_file,
+        host="0.0.0.0",
+        behind_proxy=False,
+    )
+    with pytest.raises(ValueError, match="requires TLS"):
+        config.require_configured()
+
+
+def test_server_config_require_configured_allows_non_loopback_when_behind_proxy(caplog):
+    key_file = Path("/dev/null")
+    config = ServerConfig(
+        app_id=123,
+        webhook_secret="s",
+        private_key_path=key_file,
+        host="0.0.0.0",
+        behind_proxy=True,
+    )
+    with caplog.at_level("WARNING", logger="superseded.server.config"):
+        config.require_configured()
+    assert any("SUPERSEDED_BEHIND_PROXY" in rec.message for rec in caplog.records)
+
+
+def test_server_config_behind_proxy_from_env(monkeypatch, tmp_path):
+    key = tmp_path / "key.pem"
+    key.write_text("x")
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "111")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "s")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(key))
+    monkeypatch.setenv("SUPERSEDED_BEHIND_PROXY", "true")
+    cfg = ServerConfig.from_env()
+    assert cfg.behind_proxy is True
+
+
+def test_server_config_behind_proxy_falsey_from_env(monkeypatch, tmp_path):
+    key = tmp_path / "key.pem"
+    key.write_text("x")
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "111")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "s")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(key))
+    monkeypatch.setenv("SUPERSEDED_BEHIND_PROXY", "0")
+    cfg = ServerConfig.from_env()
+    assert cfg.behind_proxy is False

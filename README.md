@@ -149,9 +149,11 @@ list of built-in providers and their SDK packages.
 
 Run Superseded as a persistent GitHub App. Multiple repos install your app and get automatic reviews on every PR.
 
+**Run directly:**
+
 ```bash
-# Install server dependencies
-uv pip install -e ".[server]"
+# Dependencies (fastapi, uvicorn, asyncpg, ...) ship with the package.
+uv sync
 
 # Set environment variables
 export SUPERSEDED_APP_ID=12345
@@ -162,20 +164,32 @@ export SUPERSEDED_PRIVATE_KEY_PATH=/path/to/private-key.pem
 superseded serve --port 8000
 ```
 
-**Server config file** (`/etc/superseded/server.yaml`):
+**Run with Docker Compose** (server + Postgres, secrets from a gitignored `.env`):
+
+```bash
+cp .env.example .env                       # fill in the required values
+mkdir -p keys && cp /path/to/private-key.pem keys/private-key.pem
+docker compose up -d                       # api + postgres
+```
+
+The API binds `0.0.0.0:8000` **inside the compose network only**; terminate TLS at
+a reverse proxy in front of compose. `SUPERSEDED_BEHIND_PROXY=1` (set by compose)
+tells the server TLS terminates upstream. See [Server Mode](docs/superseded/server.md)
+for the full Docker/compose guide and slim-image builds.
+
+**Server config file** (`/etc/superseded/server.yaml`) — alternatively to env vars:
 
 ```yaml
 app_id: 12345
 webhook_secret: whsec_...
-private_key_path: /path/to/key.pem
+private_key_path: /etc/superseded/github-app.pem
+host: 127.0.0.1
+port: 8000
 max_concurrent_reviews: 3
 temp_dir: /tmp/superseded
 log_level: info
-
-defaults:
-  agent: claude-code
-  model: claude-sonnet-4-6
-  passes: [security, correctness, performance, style, architecture]
+agent: null    # null = use each repo's .superseded.yaml
+model: null    # null = use each repo's .superseded.yaml
 ```
 
 **GitHub App setup:**
@@ -194,8 +208,10 @@ defaults:
 | `SUPERSEDED_PRIVATE_KEY_PATH` | Path to private key PEM |
 | `SUPERSEDED_WEBHOOK_SECRET` | Webhook signature secret |
 | `SUPERSEDED_MAX_CONCURRENT` | Max parallel reviews (default: 3) |
-| `SUPERSEDED_PORT` | Server port (default: 8000) |
-| `SUPERSEDED_HOST` | Server host (default: 0.0.0.0) |
+| `SUPERSEDED_PORT` / `SUPERSEDED_HOST` | Bind address (default: `127.0.0.1:8000`) |
+| `SUPERSEDED_BEHIND_PROXY` | Set `1` when TLS terminates at an upstream reverse proxy (allows binding `0.0.0.0` without in-process TLS) |
+| `SUPERSEDED_DATABASE_URL` | `postgresql://...` for Postgres; omit for SQLite |
+| `SUPERSEDED_SERVER_AGENT` / `SUPERSEDED_SERVER_MODEL` | Override each repo's agent/model |
 
 ### Feedback
 

@@ -13,3 +13,8 @@ tests
 *.md
 LICENSE
 node_modules
+keys/
+*.pem
+compose.yml
+.env
+.env.example

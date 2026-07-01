@@ -67,7 +67,7 @@ superseded review --pr 123
 
 - **Python 3.14+**
 - One of: `claude` CLI, `opencode` CLI, or `codex` CLI on your PATH
-- `gh` CLI (optional — required for PR reviews, feedback, server mode)
+- `gh` CLI (optional — required for local PR reviews and feedback; the server uses the GitHub REST API directly)
 
 ## Next Steps
 
