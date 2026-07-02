@@ -113,6 +113,22 @@ def test_config_graph_default_true():
     assert Config().graph is True
 
 
+def test_config_sandbox_defaults_false():
+    from superseded.config import Config
+
+    assert Config().sandbox is False
+
+
+def test_config_sandbox_round_trip(tmp_path):
+    from superseded.config import Config, load_config, write_config
+
+    cfg = Config(sandbox=True)
+    target = tmp_path / ".superseded.yaml"
+    write_config(cfg, target)
+    loaded = load_config(target)
+    assert loaded.sandbox is True
+
+
 def test_config_graph_round_trip(tmp_path):
     from superseded.config import Config, load_config, write_config
 

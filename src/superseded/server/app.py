@@ -151,6 +151,64 @@ def create_app(
         )
         return {"status": "enqueued", "job_id": job.job_id}
 
+    @app.post("/review/pr")
+    async def review_pr(request: Request) -> Response:
+        # Action-driven entry point. Authorization here is the bearer api_key
+        # plus resolution of an App installation for the repo (409 if absent) —
+        # intentionally NOT the per-installation ``authorized_repos`` store check
+        # the webhook path applies, since the caller is already api_key-trusted.
+        if not config.api_key:
+            return Response(status_code=501, content="API key not configured on this server.")
+        auth = request.headers.get("Authorization", "")
+        expected = f"Bearer {config.api_key}"
+        if not hmac.compare_digest(auth, expected):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        from superseded.server.worker import ReviewJob
+
+        body = await request.json()
+        try:
+            owner = body["owner"]
+            repo = body["repo"]
+            pr_number = int(body["pr_number"])
+        except (KeyError, ValueError) as err:
+            raise HTTPException(status_code=422, detail=f"Missing or invalid field: {err}") from err
+
+        passes_raw = body.get("passes")
+        passes_list: list[str] | None = None
+        if isinstance(passes_raw, str) and passes_raw.strip():
+            passes_list = [p.strip() for p in passes_raw.split(",") if p.strip()]
+
+        installation_id = await github.resolve_installation(owner, repo)
+        if installation_id is None:
+            raise HTTPException(
+                status_code=409, detail="GitHub App is not installed on this repository."
+            )
+
+        try:
+            token = await github.get_installation_token(installation_id)
+            pr_info = await github.fetch_pr_info(
+                token=token, owner=owner, repo=repo, pr_number=pr_number
+            )
+        except Exception as err:
+            raise HTTPException(status_code=502, detail=f"Failed to fetch PR info: {err}") from err
+
+        job = ReviewJob(
+            installation_id=installation_id,
+            owner=owner,
+            repo=repo,
+            pr_number=pr_number,
+            head_sha=pr_info["head_sha"],
+            base_sha=pr_info["base_sha"],
+            passes=passes_list,
+        )
+        await worker.enqueue(job)
+        logger.info(
+            "review_pr_enqueued",
+            extra={"repo": f"{owner}/{repo}", "pr": pr_number, "job_id": job.job_id},
+        )
+        return {"status": "enqueued", "job_id": job.job_id}
+
     @app.post("/webhook")
     async def webhook(request: Request, background_tasks: BackgroundTasks) -> Response:
         client_ip = request.client.host if request.client else "unknown"

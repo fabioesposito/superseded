@@ -12,9 +12,10 @@
 #       --target cli -t superseded-cli-claude .
 #
 # compose.yml builds the `api` target (override AI_CLIS via .env or
-# --build-arg). The GitHub Action builds `docker/Dockerfile` with no --target,
-# so it resolves to the FINAL stage; the `cli` stage is therefore kept last on
-# purpose. Do not reorder the stages.
+# --build-arg). The GitHub Action is a composite client that POSTs to a running
+# server; it no longer builds this image. The `cli` stage is kept last on
+# purpose so an untargeted build resolves to the CLI image. Do not reorder the
+# stages.
 
 # Space-separated npm package specs of the AI CLI(s) to install. Override with
 # --build-arg (or compose build.args / .env AI_CLIS) to build a slim image that
@@ -44,10 +45,9 @@ FROM base AS api
 ENTRYPOINT ["superseded"]
 CMD ["serve"]
 
-# --- CLI target (default/final stage; used by the GitHub Action and general CLI use) ---
+# --- CLI target (default/final stage; used for containerized CLI use) ---
 # Kept last so an untargeted build produces the CLI image. The local CLI path
-# uses `gh pr diff` / `gh pr view`, so gh is installed in this stage only. The
-# GitHub Action overrides ENTRYPOINT via action.yml `runs.entrypoint: /entrypoint.sh`.
+# uses `gh pr diff` / `gh pr view`, so gh is installed in this stage only.
 FROM base AS cli
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
         | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -57,7 +57,5 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && apt-get update \
         && apt-get install -y --no-install-recommends gh \
         && rm -rf /var/lib/apt/lists/*
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["superseded"]
 CMD ["--help"]

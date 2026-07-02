@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import subprocess
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -12,6 +11,7 @@ from superseded.agents.claude_code import ClaudeCodeAgent
 from superseded.agents.codex import CodexAgent
 from superseded.agents.opencode import OpenCodeAgent
 from superseded.models import Finding, ReviewResult
+from superseded.review.executor import AgentExecutor, Session, SubprocessExecutor
 from superseded.review.merger import merge_findings
 from superseded.review.prompts import build_prompt
 
@@ -54,41 +54,15 @@ class ReviewEngine:
         prompt: str,
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
-        cwd: str | Path | None = None,
-        *,
-        env: dict[str, str] | None = None,
+        sess: Session | None = None,
     ) -> list[Finding]:
+        if sess is None:
+            sess = SubprocessExecutor().session()
         cmd = self.agent.build_command()
         if progress is not None:
             progress(pass_name, "start")
-        try:
-            result = subprocess.run(
-                cmd,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=str(cwd) if cwd is not None else None,
-                env=env,
-            )
-        except FileNotFoundError as err:
-            raise RuntimeError(
-                f"Agent CLI '{cmd[0]}' not found on PATH. "
-                f"Install it or choose a different agent with --agent."
-            ) from err
-        except subprocess.TimeoutExpired as err:
-            raise RuntimeError(
-                f"Agent timed out after {timeout} seconds for pass: {pass_name}"
-            ) from err
-
-        if result.returncode != 0:
-            stderr = result.stderr.strip()
-            raise RuntimeError(
-                f"Agent '{cmd[0]}' exited {result.returncode} for pass '{pass_name}'"
-                + (f": {stderr}" if stderr else "")
-            )
-
-        raw_findings = self.agent.parse_output(result.stdout, pass_name)
+        stdout = sess.run(cmd, prompt, timeout=timeout)
+        raw_findings = self.agent.parse_output(stdout, pass_name)
         findings = []
         for item in raw_findings:
             try:
@@ -116,8 +90,10 @@ class ReviewEngine:
         cwd: str | Path | None = None,
         *,
         env: dict[str, str] | None = None,
+        executor: AgentExecutor | None = None,
     ) -> ReviewResult:
-        if not self.agent.is_available():
+        resolved_executor = executor if executor is not None else SubprocessExecutor()
+        if not resolved_executor.available(self.agent):
             raise RuntimeError(
                 f"Agent CLI '{self.agent.name}' not found on PATH. "
                 "Install it or choose a different agent with --agent."
@@ -132,7 +108,10 @@ class ReviewEngine:
         all_findings: list[list[Finding]] = []
         warnings: list[str] = []
 
-        with ThreadPoolExecutor(max_workers=max(1, len(passes))) as executor:
+        with (
+            resolved_executor.session(cwd, env=env) as sess,
+            ThreadPoolExecutor(max_workers=max(1, len(passes))) as pool,
+        ):
             future_to_pass = {}
             for pass_name in passes:
                 prompt = build_prompt(
@@ -147,9 +126,7 @@ class ReviewEngine:
                     spec_signals=spec_signals,
                     learned_context=learned_context,
                 )
-                future = executor.submit(
-                    self.run_pass, pass_name, prompt, timeout, progress, cwd, env=env
-                )
+                future = pool.submit(self.run_pass, pass_name, prompt, timeout, progress, sess)
                 future_to_pass[future] = pass_name
 
             for future in as_completed(future_to_pass):

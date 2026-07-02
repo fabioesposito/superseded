@@ -223,7 +223,7 @@ def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, mo
 
     invoked: list[str] = []
 
-    def fake_run_pass(self, pass_name, prompt, timeout=300, progress=None, cwd=None, *, env=None):
+    def fake_run_pass(self, pass_name, prompt, timeout=300, progress=None, sess=None):
         invoked.append(pass_name)
         if progress is not None:
             progress(pass_name, "done")
@@ -556,3 +556,120 @@ def test_log_format_config_file_used_when_no_flag_or_env(
     assert result.exit_code == 0
     assert mock_setup.call_args.args[0] == "json"
     assert mock_setup.call_args.args[1] == "INFO"
+
+
+def test_resolve_sandbox_env_overrides_flag(monkeypatch):
+    from superseded.cli import resolve_sandbox
+
+    with monkeypatch.context() as m:
+        m.setenv("SUPERSEDED_SANDBOX", "0")
+        assert resolve_sandbox(True, Config()) is False
+
+
+def test_resolve_sandbox_env_truthy_overrides_flag(monkeypatch):
+    from superseded.cli import resolve_sandbox
+
+    with monkeypatch.context() as m:
+        m.setenv("SUPERSEDED_SANDBOX", "1")
+        assert resolve_sandbox(False, Config()) is True
+
+
+def test_resolve_sandbox_flag_overrides_config():
+    from superseded.cli import resolve_sandbox
+
+    assert resolve_sandbox(True, Config(sandbox=False)) is True
+    assert resolve_sandbox(False, Config(sandbox=True)) is False
+
+
+def test_resolve_sandbox_defaults_to_config():
+    from superseded.cli import resolve_sandbox
+
+    assert resolve_sandbox(None, Config(sandbox=True)) is True
+    assert resolve_sandbox(None, Config(sandbox=False)) is False
+
+
+def test_resolve_sandbox_defaults_false():
+    from superseded.cli import resolve_sandbox
+
+    assert resolve_sandbox(None, Config()) is False
+
+
+def test_run_review_sandbox_missing_sbx_exits(tmp_path, monkeypatch, capsys):
+    """--sandbox with no sbx on PATH exits 2 with a clear sbx message."""
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n",
+    )
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr(
+        "superseded.context.gathering.compute_file_context", lambda diff, root=None: None
+    )
+    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        "superseded.context.gathering.run_static_analysis", lambda files, root: None
+    )
+    monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/claude" if cmd != "sbx" else None)
+
+    from superseded.cli import _run_review
+
+    with pytest.raises(SystemExit) as exc:
+        _run_review(
+            pr=None,
+            diff_range="HEAD~1..HEAD",
+            agent=None,
+            model=None,
+            output_format="json",
+            post=False,
+            passes=None,
+            sandbox=True,
+        )
+    assert exc.value.code == 2
+    assert "sbx" in capsys.readouterr().err.lower()
+
+
+def test_run_review_sandbox_builds_sandbox_executor(tmp_path, monkeypatch):
+    """--sandbox with sbx present builds a SandboxExecutor and passes it to engine.review."""
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n",
+    )
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr(
+        "superseded.context.gathering.compute_file_context", lambda diff, root=None: None
+    )
+    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        "superseded.context.gathering.run_static_analysis", lambda files, root: None
+    )
+    monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/sbx")
+
+    captured: dict = {}
+
+    def fake_review(self, **kwargs):
+        captured.update(kwargs)
+        from superseded.models import ReviewResult
+
+        return ReviewResult(findings=[], warnings=[])
+
+    monkeypatch.setattr("superseded.review.engine.ReviewEngine.review", fake_review)
+    monkeypatch.setattr("superseded.review.engine.ReviewEngine.run_pass", lambda self, *a, **k: [])
+
+    from superseded.cli import _run_review
+    from superseded.review.executor import SandboxExecutor
+
+    _run_review(
+        pr=None,
+        diff_range="HEAD~1..HEAD",
+        agent=None,
+        model=None,
+        output_format="json",
+        post=False,
+        passes=None,
+        sandbox=True,
+    )
+    ex = captured.get("executor")
+    assert isinstance(ex, SandboxExecutor)

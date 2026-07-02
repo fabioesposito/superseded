@@ -396,3 +396,110 @@ async def test_handle_installation_event_uses_injected_store():
     assert call.kwargs["installation_id"] == 99999
     assert call.kwargs["owner"] == "octocat"
     assert call.kwargs["repos"] == ["repo1", "repo2"]
+
+
+@pytest.fixture
+def keyed_server(tmp_path):
+    key_file = tmp_path / "key.pem"
+    key_file.write_text("fake-key")
+    config = ServerConfig(
+        app_id=12345,
+        webhook_secret="whsec_test",
+        private_key_path=key_file,
+        temp_dir=tmp_path / "repos",
+        api_key="test-api-key",
+    )
+    github = GitHubApp(
+        app_id=config.app_id,
+        private_key_path=config.private_key_path,
+        webhook_secret=config.webhook_secret,
+    )
+    repo_manager = RepoManager(base_path=config.temp_dir)
+    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    from superseded.memory.store import MemoryStore
+
+    store = MemoryStore(tmp_path / "memory.db")
+    application = create_app(
+        config=config, github=github, worker=worker, repo_manager=repo_manager, store=store
+    )
+    return SimpleNamespace(app=application, worker=worker, github=github, config=config)
+
+
+def test_review_pr_returns_501_when_no_api_key(client):
+    response = client.post("/review/pr")
+    assert response.status_code == 501
+
+
+def test_review_pr_returns_401_when_api_key_missing(keyed_server):
+    response = TestClient(keyed_server.app).post("/review/pr")
+    assert response.status_code == 401
+
+
+def test_review_pr_returns_422_when_body_invalid(keyed_server):
+    response = TestClient(keyed_server.app).post(
+        "/review/pr",
+        json={"owner": "octocat"},
+        headers={"Authorization": "Bearer test-api-key"},
+    )
+    assert response.status_code == 422
+
+
+def test_review_pr_returns_409_when_app_not_installed(keyed_server, monkeypatch):
+    async def fake_resolve(owner, repo):
+        return None
+
+    monkeypatch.setattr(keyed_server.github, "resolve_installation", fake_resolve)
+    response = TestClient(keyed_server.app).post(
+        "/review/pr",
+        json={"owner": "octocat", "repo": "hello-world", "pr_number": 7},
+        headers={"Authorization": "Bearer test-api-key"},
+    )
+    assert response.status_code == 409
+
+
+def test_review_pr_enqueues_job(keyed_server, monkeypatch):
+    async def fake_resolve(owner, repo):
+        return 12345
+
+    async def fake_token(installation_id):
+        return "ghp_fake"
+
+    async def fake_pr_info(token, owner, repo, pr_number):
+        return {"head_sha": "abc", "base_sha": "def", "title": "T"}
+
+    monkeypatch.setattr(keyed_server.github, "resolve_installation", fake_resolve)
+    monkeypatch.setattr(keyed_server.github, "get_installation_token", fake_token)
+    monkeypatch.setattr(keyed_server.github, "fetch_pr_info", fake_pr_info)
+
+    response = TestClient(keyed_server.app).post(
+        "/review/pr",
+        json={"owner": "octocat", "repo": "hello-world", "pr_number": 7, "passes": "security"},
+        headers={"Authorization": "Bearer test-api-key"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "enqueued"
+    assert "job_id" in body
+    assert keyed_server.worker.queue.qsize() == 1
+
+
+def test_review_pr_returns_502_when_pr_fetch_fails(keyed_server, monkeypatch):
+    async def fake_resolve(owner, repo):
+        return 12345
+
+    async def fake_token(installation_id):
+        return "ghp_fake"
+
+    async def fake_pr_info(token, owner, repo, pr_number):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(keyed_server.github, "resolve_installation", fake_resolve)
+    monkeypatch.setattr(keyed_server.github, "get_installation_token", fake_token)
+    monkeypatch.setattr(keyed_server.github, "fetch_pr_info", fake_pr_info)
+
+    response = TestClient(keyed_server.app).post(
+        "/review/pr",
+        json={"owner": "octocat", "repo": "hello-world", "pr_number": 7},
+        headers={"Authorization": "Bearer test-api-key"},
+    )
+    assert response.status_code == 502

@@ -63,43 +63,43 @@ superseded review --pr 123 --passes security,correctness
 
 ### GitHub Action
 
+The Action is a thin client: it POSTs the PR to a running Superseded server,
+which runs the review in sandboxes and posts the result via its GitHub App.
+**Breaking:** the Action no longer builds a Docker image or runs the agents
+itself — you must (a) install the Superseded GitHub App on the repo and (b)
+run the server somewhere reachable. No `permissions:` block is needed on the
+workflow (the server's App does all GitHub writes).
+
 ```yaml
 # .github/workflows/review.yml
 name: Code Review
 on:
   pull_request:
     types: [opened, synchronize]
-
-# Required: superseded posts inline review comments via the GitHub API.
-permissions:
-  contents: read
-  pull-requests: write
-
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: fabioesposito/superseded@v1
         with:
-          agent: claude-code
-          model: claude-sonnet-4-6
+          server-url: https://reviews.example.com
+          server-key: ${{ secrets.SUPERSEDED_SERVER_KEY }}
           passes: security,correctness,performance
-          post: true
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # env vars override the inputs (useful for org-wide secrets):
+          # SUPERSEDED_SERVER_URL: https://reviews.example.com
+          # SUPERSEDED_SERVER_KEY: ${{ secrets.SUPERSEDED_SERVER_KEY }}
 ```
+
+Set `server-url`/`server-key` (or the `SUPERSEDED_SERVER_URL`/`SUPERSEDED_SERVER_KEY` env vars) and install the App on the repo. The previous `agent`, `model`, `anthropic_api_key`, and `openai_api_key` inputs are removed — the server owns agent/model/credentials.
 
 #### Using opencode with custom providers (DeepSeek, z.ai, ...)
 
 The `opencode` agent delegates auth to opencode itself, which reads any provider
-key from the environment. The Action only forwards `ANTHROPIC_API_KEY` and
-`OPENAI_API_KEY` from inputs; for any other provider, add the key directly to the
-step `env:` block and reference it from an `opencode.json` committed at the repo
-root.
+key from the environment. On the server, configure the provider key in the
+server's environment (or via `sbx secret set` for sandboxed runs); for the local
+CLI, add the key to your shell env and reference it from an `opencode.json`
+committed at the repo root.
 
 **1. Commit an `opencode.json`** using `{env:VAR}` substitution:
 

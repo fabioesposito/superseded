@@ -27,6 +27,11 @@ class ServerConfig(BaseModel):
     agent: str | None = None
     model: str | None = None
     behind_proxy: bool = False
+    sandbox_enabled: bool = True
+    sbx_binary: str = "sbx"
+    sandbox_timeout: int = 600
+    sandbox_keep_on_error: bool = False
+    sandbox_io_mode: str = "exec"
 
     @property
     def is_configured(self) -> bool:
@@ -149,6 +154,31 @@ class ServerConfig(BaseModel):
                 "yes",
                 "on",
             )
+
+        sandbox = os.environ.get("SUPERSEDED_SANDBOX")
+        if sandbox:
+            kwargs["sandbox_enabled"] = sandbox.strip().lower() in ("1", "true", "yes", "on")
+
+        sbx_binary = os.environ.get("SUPERSEDED_SBX_BINARY")
+        if sbx_binary:
+            kwargs["sbx_binary"] = sbx_binary
+
+        sandbox_timeout = os.environ.get("SUPERSEDED_SANDBOX_TIMEOUT")
+        if sandbox_timeout:
+            kwargs["sandbox_timeout"] = int(sandbox_timeout)
+
+        sandbox_keep = os.environ.get("SUPERSEDED_SANDBOX_KEEP_ON_ERROR")
+        if sandbox_keep:
+            kwargs["sandbox_keep_on_error"] = sandbox_keep.strip().lower() in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            )
+
+        sandbox_io = os.environ.get("SUPERSEDED_SANDBOX_IO_MODE")
+        if sandbox_io:
+            kwargs["sandbox_io_mode"] = sandbox_io
 
         return cls(**kwargs)
 

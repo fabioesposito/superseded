@@ -16,6 +16,7 @@ venv/
 *.db
 *.sqlite3
 .superseded/
+.sbx_prompt_*.txt
 node_modules/
 test-results/
 htmlcov/

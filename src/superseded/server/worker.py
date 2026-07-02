@@ -40,6 +40,7 @@ class ReviewJob:
     head_sha: str
     base_sha: str
     job_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    passes: list[str] | None = None
 
 
 @dataclass
@@ -47,6 +48,17 @@ class ReviewOutcome:
     conclusion: str
     title: str
     summary: str = ""
+
+
+@dataclass
+class SandboxSettings:
+    """Whether/how the server runs agents inside sbx sandboxes."""
+
+    enabled: bool = False
+    binary: str = "sbx"
+    timeout: int = 600
+    keep_on_error: bool = False
+    io_mode: str = "exec"
 
 
 def build_check_run_title(result: ReviewResult) -> str:
@@ -66,6 +78,7 @@ class ReviewWorker:
         store: Store | None = None,
         server_agent: str | None = None,
         server_model: str | None = None,
+        sandbox: SandboxSettings | None = None,
     ) -> None:
         self.github = github
         self.repo_manager = repo_manager
@@ -79,6 +92,7 @@ class ReviewWorker:
         self.store = store
         self.server_agent = server_agent
         self.server_model = server_model
+        self._sandbox = sandbox
 
     @property
     def active_count(self) -> int:
@@ -194,6 +208,7 @@ class ReviewWorker:
                 store=self.store,
                 server_agent=self.server_agent,
                 server_model=self.server_model,
+                sandbox=self._sandbox,
             )
 
             await self.github.update_check_run(
@@ -316,6 +331,7 @@ async def _run_review_for_job(
     store: Store | None = None,
     server_agent: str | None = None,
     server_model: str | None = None,
+    sandbox: SandboxSettings | None = None,
 ) -> ReviewOutcome:
     tmp_dir = repo_manager.job_dir(
         job.installation_id, job.owner, job.repo, job.pr_number, job.job_id
@@ -432,6 +448,25 @@ async def _run_review_for_job(
             learned_context = assemble_learned_context(None, all_rules, config.max_learned_rules)
 
         engine = ReviewEngine.select(config.agent, model=config.model, config=config)
+
+        executor = None
+        if sandbox is not None and sandbox.enabled:
+            from superseded.review.executor import make_sandbox_executor
+
+            executor = make_sandbox_executor(
+                agent_name=config.agent,
+                name=f"superseded-{job.job_id}",
+                timeout=sandbox.timeout,
+                keep_on_error=sandbox.keep_on_error,
+                binary=sandbox.binary,
+                io_mode=sandbox.io_mode,
+            )
+            if not executor.available(engine.agent):
+                raise RuntimeError(
+                    f"sandbox unavailable: '{sandbox.binary}' not found on PATH "
+                    "(install docker-sbx to run sandboxed reviews)."
+                )
+
         _server_env = {k: v for k, v in os.environ.items() if not k.startswith("SUPERSEDED_")}
         result = await asyncio.to_thread(
             engine.review,
@@ -443,8 +478,10 @@ async def _run_review_for_job(
             conventions_signals=conventions_signals,
             spec_signals=spec_signals,
             learned_context=learned_context,
+            passes=job.passes,
             cwd=repo_path,
             env=_server_env,
+            executor=executor,
         )
 
         payload = build_review_payload(result)

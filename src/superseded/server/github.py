@@ -58,6 +58,24 @@ class GitHubApp:
             response.raise_for_status()
             return response.json()["token"]
 
+    async def resolve_installation(self, owner: str, repo: str) -> int | None:
+        """Resolve the GitHub App installation id for a repository.
+
+        Returns the installation id, or ``None`` if the app is not installed on
+        the repository (HTTP 404). Uses the app JWT (not an installation token).
+        Raises ``httpx.HTTPStatusError`` on other non-2xx responses.
+        """
+        jwt_token = self._sign_jwt()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/installation",
+                headers=self._api_headers(jwt_token),
+            )
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            return response.json()["id"]
+
     async def fetch_pr_diff(self, token: str, owner: str, repo: str, pr_number: int) -> str:
         async with httpx.AsyncClient() as client:
             response = await client.get(

@@ -904,3 +904,111 @@ async def test_worker_progressive_compare_diff_error_falls_back_to_full(tmp_path
 
     github.fetch_pr_diff.assert_awaited_once()
     assert await store.get_watermark("octocat/hello-world", 42) == "newhead"
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_builds_sandbox_executor(tmp_path, monkeypatch):
+    """When sandbox settings are enabled, _run_review_for_job builds a SandboxExecutor and passes it to engine.review."""
+    from superseded.review.executor import SandboxExecutor
+    from superseded.server.worker import SandboxSettings, _run_review_for_job
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
+    job = ReviewJob(1, "o", "r", 5, "abc", "def")
+
+    captured: dict = {}
+    mock_engine = MagicMock()
+
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/sbx")
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo", new_callable=AsyncMock, return_value=tmp_path
+        ),
+        patch("superseded.config.load_config", return_value=Config()),
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value=None),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
+    ):
+        mock_engine.review.side_effect = lambda **kw: (
+            captured.update(kw) or MagicMock(findings=[], summary={})
+        )
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="t",
+            job=job,
+            correlation_id="c",
+            sandbox=SandboxSettings(enabled=True),
+        )
+
+    ex = captured.get("executor")
+    assert isinstance(ex, SandboxExecutor)
+    assert ex._name == f"superseded-{job.job_id}"
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_fails_when_sbx_missing(tmp_path, monkeypatch):
+    """Sandbox enabled but sbx missing must raise a loud 'sandbox unavailable' error."""
+    from superseded.server.worker import SandboxSettings, _run_review_for_job
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
+    job = ReviewJob(1, "o", "r", 5, "abc", "def")
+
+    mock_engine = MagicMock()
+    monkeypatch.setattr("shutil.which", lambda cmd: None)
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo", new_callable=AsyncMock, return_value=tmp_path
+        ),
+        patch("superseded.config.load_config", return_value=Config()),
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value=None),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
+        pytest.raises(RuntimeError, match="sandbox unavailable"),
+    ):
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="t",
+            job=job,
+            correlation_id="c",
+            sandbox=SandboxSettings(enabled=True),
+        )
+    mock_engine.review.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_defaults_no_sandbox(tmp_path):
+    """Without sandbox settings, executor is NOT passed (engine uses SubprocessExecutor default)."""
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
+    job = ReviewJob(1, "o", "r", 5, "abc", "def")
+
+    captured: dict = {}
+    mock_engine = MagicMock()
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo", new_callable=AsyncMock, return_value=tmp_path
+        ),
+        patch("superseded.config.load_config", return_value=Config()),
+        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value=None),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
+    ):
+        mock_engine.review.side_effect = lambda **kw: (
+            captured.update(kw) or MagicMock(findings=[], summary={})
+        )
+        await _run_review_for_job(
+            github=github, repo_manager=repo_manager, token="t", job=job, correlation_id="c"
+        )
+
+    assert captured.get("executor") is None

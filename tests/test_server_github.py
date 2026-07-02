@@ -282,3 +282,69 @@ async def test_compare_diff_http_error_raises(app):
         pytest.raises(httpx.HTTPStatusError),
     ):
         await app.compare_diff("tok", "o", "r", "a", "b")
+
+
+@pytest.mark.asyncio
+async def test_resolve_installation_returns_id(app, monkeypatch):
+    monkeypatch.setattr(app, "_sign_jwt", lambda: "fake-jwt")
+    captured: dict = {}
+
+    class FakeResp:
+        def __init__(self, status, payload):
+            self.status_code = status
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            if self.status_code >= 400:
+                raise httpx.HTTPStatusError("boom", request=None, response=self)
+
+        def json(self) -> dict:
+            return self._payload
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, headers=None):
+            captured["url"] = url
+            return FakeResp(200, {"id": 777})
+
+    monkeypatch.setattr("superseded.server.github.httpx.AsyncClient", FakeClient)
+    assert await app.resolve_installation("octocat", "hello-world") == 777
+    assert "repos/octocat/hello-world/installation" in captured["url"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_installation_returns_none_when_not_installed(app, monkeypatch):
+    monkeypatch.setattr(app, "_sign_jwt", lambda: "fake-jwt")
+
+    class FakeResp:
+        status_code = 404
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            return {}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url, headers=None):
+            return FakeResp()
+
+    monkeypatch.setattr("superseded.server.github.httpx.AsyncClient", FakeClient)
+    assert await app.resolve_installation("octocat", "hello-world") is None

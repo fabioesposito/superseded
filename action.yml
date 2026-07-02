@@ -1,37 +1,44 @@
 name: "Superseded Code Review"
-description: "Multi-pass AI code review on pull requests. The calling workflow MUST grant `permissions: { contents: read, pull-requests: write }` so review comments can be posted."
+description: "Requests a multi-pass AI code review from a running Superseded server, which runs the agents in sandboxes and posts the review via its GitHub App. The App must be installed on the repository."
 inputs:
-  agent:
-    description: "AI CLI agent (claude-code, opencode, codex). Leave empty to auto-detect the highest-preference CLI installed in the image."
+  server-url:
+    description: "Base URL of the running Superseded review server (e.g. https://reviews.example.com). Env SUPERSEDED_SERVER_URL overrides this."
     required: false
     default: ""
-  model:
-    description: "Model id for the selected agent. Leave empty to use the agent's built-in default (e.g. claude-sonnet-4-6, gpt-5.4-mini)."
+  server-key:
+    description: "Bearer API key for the server. Env SUPERSEDED_SERVER_KEY overrides this. Map from a secret."
     required: false
     default: ""
   passes:
-    description: "Comma-separated passes to run"
-    required: false
-    default: "security,correctness,performance,style,architecture"
-  post:
-    description: "Post review to GitHub PR"
-    required: false
-    default: "true"
-  anthropic_api_key:
-    description: "Anthropic API key. Required when agent is claude-code, and forwarded to opencode if it targets Anthropic. Map from a secret, e.g. `${{ secrets.ANTHROPIC_API_KEY }}`."
-    required: false
-    default: ""
-  openai_api_key:
-    description: "OpenAI API key. Required when agent is codex, and forwarded to opencode if it targets OpenAI. Map from a secret, e.g. `${{ secrets.OPENAI_API_KEY }}`."
+    description: "Comma-separated passes to run (optional; the server default applies if omitted)."
     required: false
     default: ""
 runs:
-  using: "docker"
-  image: "docker/Dockerfile"
-  entrypoint: "/entrypoint.sh"
-  env:
-    GITHUB_TOKEN: ${{ github.token }}
-    SUPERSEDED_AGENT: ${{ inputs.agent }}
-    SUPERSEDED_MODEL: ${{ inputs.model }}
-    ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
-    OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+  using: "composite"
+  steps:
+    - name: Request review
+      shell: bash
+      run: |
+        set -euo pipefail
+        URL="${SUPERSEDED_SERVER_URL:-${INPUT_SERVER_URL}}"
+        KEY="${SUPERSEDED_SERVER_KEY:-${INPUT_SERVER_KEY}}"
+        if [ -z "$URL" ] || [ -z "$KEY" ]; then
+          echo "::error::Set SUPERSEDED_SERVER_URL and SUPERSEDED_SERVER_KEY (or the server-url/server-key inputs)."
+          exit 1
+        fi
+        if [ -z "${GITHUB_EVENT_PULL_REQUEST_NUMBER:-}" ]; then
+          echo "::error::This action must run on a pull_request event."
+          exit 1
+        fi
+        owner=${GITHUB_REPOSITORY%/*}
+        repo=${GITHUB_REPOSITORY#*/}
+        body=$(jq -n --arg o "$owner" --arg r "$repo" --argjson n "$GITHUB_EVENT_PULL_REQUEST_NUMBER" '{owner:$o, repo:$r, pr_number:$n}')
+        if [ -n "${INPUT_PASSES:-}" ]; then
+          body=$(echo "$body" | jq --arg p "$INPUT_PASSES" '. + {passes:$p}')
+        fi
+        echo "Requesting review for PR #$GITHUB_EVENT_PULL_REQUEST_NUMBER at $URL/review/pr"
+        curl -fsS --retry 3 --retry-delay 2 --retry-connrefused \
+          -X POST "$URL/review/pr" \
+          -H "Authorization: Bearer $KEY" \
+          -H "Content-Type: application/json" \
+          -d "$body"

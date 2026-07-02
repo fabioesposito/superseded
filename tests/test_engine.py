@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -74,61 +73,13 @@ def test_engine_selects_agent():
     assert isinstance(engine.agent, CodexAgent)
 
 
-def _make_completed(stdout="", stderr="", returncode=0):
-    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
-
-
-def test_run_pass_raises_on_nonzero_exit():
-    agent = MagicMock()
-    agent.build_command.return_value = ["fakeclaude"]
-    agent.parse_output.return_value = []
-    engine = ReviewEngine(agent=agent, config=MagicMock())
-    with patch("superseded.review.engine.subprocess.run") as mock_run:
-        mock_run.return_value = _make_completed(stderr="auth error", returncode=1)
-        with pytest.raises(RuntimeError, match="auth error"):
-            engine.run_pass("security", "prompt")
-
-
-def test_run_pass_forwards_cwd_to_subprocess(tmp_path):
-    agent = MagicMock()
-    agent.build_command.return_value = ["fakeclaude"]
-    agent.parse_output.return_value = []
-    engine = ReviewEngine(agent=agent, config=MagicMock())
-    with patch("superseded.review.engine.subprocess.run") as mock_run:
-        mock_run.return_value = _make_completed(stdout="[]", stderr="")
-        engine.run_pass("security", "prompt", cwd=tmp_path)
-    assert mock_run.call_args.kwargs.get("cwd") == str(tmp_path)
-
-
-def test_run_pass_defaults_cwd_to_none():
-    agent = MagicMock()
-    agent.build_command.return_value = ["fakeclaude"]
-    agent.parse_output.return_value = []
-    engine = ReviewEngine(agent=agent, config=MagicMock())
-    with patch("superseded.review.engine.subprocess.run") as mock_run:
-        mock_run.return_value = _make_completed(stdout="[]", stderr="")
-        engine.run_pass("security", "prompt")
-    assert mock_run.call_args.kwargs.get("cwd") is None
-
-
-def test_run_pass_raises_on_timeout():
-    agent = MagicMock()
-    agent.build_command.return_value = ["fakeclaude"]
-    agent.parse_output.return_value = []
-    engine = ReviewEngine(agent=agent, config=MagicMock())
-    with patch("superseded.review.engine.subprocess.run") as mock_run:
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd=["fakeclaude"], timeout=300)
-        with pytest.raises(RuntimeError, match="timed out"):
-            engine.run_pass("security", "prompt")
-
-
 def test_review_continues_when_one_pass_fails():
     engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
     engine.config.is_pass_enabled = lambda name: True
 
     good_finding = make_finding(severity="critical", line=5)
 
-    def fake_run_pass(pass_name, prompt, timeout=300, progress=None, cwd=None, *, env=None):
+    def fake_run_pass(pass_name, prompt, timeout=300, progress=None, sess=None):
         if pass_name == "correctness":
             raise RuntimeError("boom")
         return [good_finding]
@@ -170,13 +121,15 @@ def test_run_pass_skips_and_logs_malformed_findings(caplog):
     mock_agent.build_command.return_value = ["fake"]
     mock_agent.parse_output.return_value = raw_items
     engine.agent = mock_agent
-    with patch("superseded.review.engine.subprocess.run") as mock_run:
-        mock_run.return_value = _make_completed(stdout="x")
-        with caplog.at_level(logging.WARNING, logger="superseded.review.engine"):
-            findings = engine.run_pass("security", "prompt")
+
+    fake_session = MagicMock()
+    fake_session.run.return_value = "x"
+    with caplog.at_level(logging.WARNING, logger="superseded.review.engine"):
+        findings = engine.run_pass("security", "prompt", sess=fake_session)
     assert len(findings) == 1
     assert findings[0].file == "a.py"
     assert "malformed" in caplog.text.lower() or "not-a-severity" in caplog.text
+    fake_session.run.assert_called_once()
 
 
 def test_review_raises_when_agent_unavailable(monkeypatch):
@@ -195,7 +148,7 @@ def test_review_forwards_conventions_and_spec_signals(monkeypatch):
 
     monkeypatch.setattr("superseded.review.engine.build_prompt", fake_build_prompt)
     monkeypatch.setattr(
-        "superseded.review.engine.subprocess.run",
+        "superseded.review.executor.subprocess.run",
         lambda *a, **kw: MagicMock(returncode=0, stdout="[]", stderr=""),
     )
 
@@ -213,3 +166,38 @@ def test_review_forwards_conventions_and_spec_signals(monkeypatch):
     )
     assert captured.get("conventions_signals") == "conv-block"
     assert captured.get("spec_signals") == "spec-block"
+
+
+def test_review_uses_injected_executor_session():
+    """review() opens exactly one session on the injected executor and runs each pass through it."""
+    engine = ReviewEngine(agent=MagicMock(), config=MagicMock(is_pass_enabled=lambda n: True))
+    engine.agent.is_available.return_value = True
+    engine.agent.build_command.return_value = ["echo"]
+    engine.agent.parse_output.return_value = []
+
+    fake_session = MagicMock()
+    fake_session.run.return_value = "[]"
+    fake_session.__enter__ = MagicMock(return_value=fake_session)
+    fake_session.__exit__ = MagicMock(return_value=None)
+    fake_executor = MagicMock()
+    fake_executor.available.return_value = True
+    fake_executor.session.return_value = fake_session
+
+    engine.review(diff="d", passes=["security", "correctness"], executor=fake_executor)
+
+    fake_executor.session.assert_called_once()
+    assert fake_session.run.call_count == 2
+
+
+def test_review_defaults_to_subprocess_executor(monkeypatch):
+    """With no executor injected, a SubprocessExecutor is used and its availability checked."""
+    monkeypatch.setattr(
+        "superseded.review.executor.subprocess.run",
+        lambda *a, **kw: MagicMock(returncode=0, stdout="[]", stderr=""),
+    )
+    agent = MagicMock()
+    agent.is_available.return_value = True
+    agent.build_command.return_value = ["echo"]
+    agent.parse_output.return_value = []
+    engine = ReviewEngine(agent=agent, config=MagicMock(is_pass_enabled=lambda n: True))
+    engine.review(diff="d", passes=["security"])  # should not raise

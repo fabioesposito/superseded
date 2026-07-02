@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess
 import sys
+import uuid
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import get_args
@@ -40,10 +41,12 @@ from superseded.output.json_out import format_json
 from superseded.output.markdown import format_markdown
 from superseded.output.table import format_table
 from superseded.review.engine import ReviewEngine
+from superseded.review.executor import AgentExecutor, SubprocessExecutor, make_sandbox_executor
 
 AGENT_ENV = "SUPERSEDED_AGENT"
 MODEL_ENV = "SUPERSEDED_MODEL"
 GRAPH_ENV = "SUPERSEDED_GRAPH"
+SANDBOX_ENV = "SUPERSEDED_SANDBOX"
 LOG_FORMAT_ENV = "SUPERSEDED_LOG_FORMAT"
 LOG_LEVEL_ENV = "SUPERSEDED_LOG_LEVEL"
 DEFAULT_TIMEOUT = 600
@@ -81,6 +84,25 @@ def resolve_graph(cli_value: bool | None, config: Config) -> bool:
     if cli_value is not None:
         return cli_value
     return config.graph
+
+
+def resolve_sandbox(cli_value: bool | None, config: Config) -> bool:
+    env = os.environ.get(SANDBOX_ENV)
+    if env is not None:
+        return env.strip().lower() in ("1", "true", "yes", "on")
+    if cli_value is not None:
+        return cli_value
+    return config.sandbox
+
+
+def _select_executor(sandbox: bool, *, agent_name: str, timeout: int) -> AgentExecutor:
+    if not sandbox:
+        return SubprocessExecutor()
+    return make_sandbox_executor(
+        agent_name=agent_name,
+        name=f"superseded-local-{uuid.uuid4().hex[:10]}",
+        timeout=timeout,
+    )
 
 
 def resolve_log_format(flag: str | None, config: Config | None = None) -> str:
@@ -272,6 +294,12 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
     default=None,
     help="Toggle graph-grounded usage retrieval (default: from config)",
 )
+@click.option(
+    "--sandbox/--no-sandbox",
+    "sandbox",
+    default=None,
+    help="Run agents inside an sbx Docker Sandbox (default: from config; env SUPERSEDED_SANDBOX).",
+)
 @click.argument("files", nargs=-1, type=click.Path(exists=True, dir_okay=False))
 @click.pass_context
 def review(
@@ -292,6 +320,7 @@ def review(
     no_conventions: bool,
     no_specs: bool,
     graph: bool | None,
+    sandbox: bool | None,
     staged: bool,
     files: tuple[str, ...],
 ) -> None:
@@ -335,6 +364,7 @@ def review(
         no_conventions=no_conventions,
         no_specs=no_specs,
         graph=graph,
+        sandbox=sandbox,
         staged=staged,
         files=list(files) or None,
     )
@@ -358,6 +388,7 @@ def _run_review(
     no_conventions: bool = False,
     no_specs: bool = False,
     graph: bool | None = None,
+    sandbox: bool | None = None,
     staged: bool = False,
     files: list[str] | None = None,
 ) -> None:
@@ -374,12 +405,22 @@ def _run_review(
     except ValueError as err:
         click.echo(f"Error: {err}", err=True)
         sys.exit(2)
-    if not engine.agent.is_available():
-        click.echo(
-            f"Error: Agent CLI '{engine.agent.name}' not found on PATH. "
-            "Install it or choose a different agent with --agent.",
-            err=True,
-        )
+
+    pass_timeout = timeout if timeout is not None else DEFAULT_TIMEOUT
+    sandbox = resolve_sandbox(sandbox, config)
+    executor = _select_executor(sandbox, agent_name=agent_name, timeout=pass_timeout)
+    if not executor.available(engine.agent):
+        if sandbox:
+            msg = (
+                "Error: 'sbx' (Docker Sandboxes) not found on PATH. "
+                "Install docker-sbx to use --sandbox."
+            )
+        else:
+            msg = (
+                f"Error: Agent CLI '{engine.agent.name}' not found on PATH. "
+                "Install it or choose a different agent with --agent."
+            )
+        click.echo(msg, err=True)
         sys.exit(2)
 
     repo = current_repo()
@@ -460,7 +501,6 @@ def _run_review(
     if config.learned_review and store is not None and repo:
         learned_context = asyncio.run(_build_learned_context(store, engine, repo, config, root))
 
-    pass_timeout = timeout if timeout is not None else DEFAULT_TIMEOUT
     _status(f"Running review with {agent_name} (timeout {pass_timeout}s per pass)...")
     try:
         result = engine.review(
@@ -477,6 +517,7 @@ def _run_review(
             timeout=pass_timeout,
             progress=_progress,
             cwd=str(root),
+            executor=executor,
         )
     except RuntimeError as err:
         click.echo(f"Error: {err}", err=True)
@@ -757,7 +798,7 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
     from superseded.server.config import ServerConfig
     from superseded.server.github import GitHubApp
     from superseded.server.repo_manager import RepoManager
-    from superseded.server.worker import ReviewWorker
+    from superseded.server.worker import ReviewWorker, SandboxSettings
 
     config = ServerConfig.from_yaml(Path(config_path)) if config_path else ServerConfig.from_env()
 
@@ -779,6 +820,13 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
     )
     repo_manager = RepoManager(base_path=config.temp_dir)
     store = make_store(config.database_url, max_size=config.max_concurrent_reviews + 2)
+    sandbox = SandboxSettings(
+        enabled=config.sandbox_enabled,
+        binary=config.sbx_binary,
+        timeout=config.sandbox_timeout,
+        keep_on_error=config.sandbox_keep_on_error,
+        io_mode=config.sandbox_io_mode,
+    )
     worker = ReviewWorker(
         github=github,
         repo_manager=repo_manager,
@@ -786,6 +834,7 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
         store=store,
         server_agent=config.agent,
         server_model=config.model,
+        sandbox=sandbox,
     )
 
     import uvicorn

@@ -212,3 +212,28 @@ def test_server_config_behind_proxy_falsey_from_env(monkeypatch, tmp_path):
     monkeypatch.setenv("SUPERSEDED_BEHIND_PROXY", "0")
     cfg = ServerConfig.from_env()
     assert cfg.behind_proxy is False
+
+
+def test_server_config_sandbox_defaults():
+    config = ServerConfig()
+    assert config.sandbox_enabled is True
+    assert config.sbx_binary == "sbx"
+    assert config.sandbox_timeout == 600
+    assert config.sandbox_keep_on_error is False
+    assert config.sandbox_io_mode == "exec"
+
+
+def test_server_config_sandbox_from_env(monkeypatch, tmp_path):
+    key_file = tmp_path / "key.pem"
+    key_file.write_text("fake-private-key")
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "12345")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whsec_test")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(key_file))
+    monkeypatch.setenv("SUPERSEDED_SANDBOX", "0")
+    monkeypatch.setenv("SUPERSEDED_SANDBOX_TIMEOUT", "900")
+    monkeypatch.setenv("SUPERSEDED_SANDBOX_IO_MODE", "cp")
+
+    config = ServerConfig.from_env()
+    assert config.sandbox_enabled is False
+    assert config.sandbox_timeout == 900
+    assert config.sandbox_io_mode == "cp"
