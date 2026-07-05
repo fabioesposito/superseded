@@ -309,6 +309,14 @@ def _filter_provider_keys(mapping: dict[str, str], environ: dict[str, str]) -> d
 
 
 class _SmolvmSession:
+    """One smolvm machine, shared across the concurrent passes of a review.
+
+    ``run()`` writes the prompt to a per-call guest file then exec's the
+    agent argv with stdin redirected from that file. Per-pass invocations
+    are independent Python calls, safe to run concurrently against the
+    same Machine (the prompt file path is per-call UUID-named).
+    """
+
     def __init__(
         self,
         *,
@@ -325,15 +333,37 @@ class _SmolvmSession:
         self._timeout = timeout
         self._keep_on_error = keep_on_error
         self._keys = keys
+        self._machine = None
+        self._errored = False
 
     def __enter__(self) -> _SmolvmSession:
-        raise NotImplementedError
+        machine_cls, machine_cfg_cls, mount_spec_cls, resource_spec_cls, _ = _smol()
+        try:
+            self._machine = machine_cls.create(
+                machine_cfg_cls(
+                    name=self._name,
+                    image=self._image,
+                    mounts=[mount_spec_cls(source=self._cwd, target="/workspace", read_only=False)],
+                    resources=resource_spec_cls(network=True),
+                )
+            )
+        except Exception as err:
+            raise AgentRunError(f"smol Machine.create failed: {err}") from err
+        return self
 
     def __exit__(self, *exc: object) -> None:
-        raise NotImplementedError
+        if self._keep_on_error and self._errored:
+            logger.warning("keep_on_error: leaving smolvm %s for inspection", self._name)
+            return None
+        try:
+            if self._machine is not None:
+                self._machine.delete()
+        except Exception:
+            logger.warning("smol delete failed for machine %s", self._name)
+        return None
 
     def run(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
-        raise NotImplementedError
+        raise NotImplementedError  # filled in by Task 4
 
 
 class SmolvmExecutor:
