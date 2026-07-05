@@ -1066,3 +1066,55 @@ def test_sandbox_unavailable_msg_smolvm():
     msg = _sandbox_unavailable_msg(s)
     assert "smolmachines" in msg
     assert "uv sync --extra sandbox" in msg
+
+
+def test_run_review_smolvm_dispatch_builds_smolvm_executor(monkeypatch, tmp_path):
+    """When sandbox.kind=smolvm + image set + smol importable, the worker
+    constructs a SmolvmExecutor via make_sandbox_executor(kind='smolvm')."""
+    import sys
+    import types
+
+    machine_inst = types.SimpleNamespace(
+        name="superseded-x",
+        write_file=lambda p, d, m=None: None,
+        exec=lambda c, o=None: types.SimpleNamespace(exit_code=0, stdout="[]", stderr=""),
+        delete=lambda: None,
+        state=lambda: "running",
+    )
+    fake = types.ModuleType("smol")
+    fake.Machine = type("M", (), {"create": staticmethod(lambda c=None, conn=None: machine_inst)})
+    fake.MachineConfig = type("MC", (), {"__init__": lambda self, **k: None})
+    fake.MountSpec = type("MS", (), {"__init__": lambda self, **k: None})
+    fake.ResourceSpec = type("RS", (), {"__init__": lambda self, **k: None})
+    fake.ExecOptions = type("EO", (), {"__init__": lambda self, **k: None})
+    monkeypatch.setitem(sys.modules, "smol", fake)
+
+    from superseded.review import executor as exec_mod
+    from superseded.review.executor import SmolvmExecutor, make_sandbox_executor
+
+    monkeypatch.setattr(exec_mod, "SMOLVM_AVAILABLE", True)
+    ex = make_sandbox_executor(
+        kind="smolvm",
+        agent_name="claude-code",
+        name="superseded-x",
+        cwd=tmp_path,
+        resolved_image="ghcr.io/x/c:1",
+        timeout=600,
+        keep_on_error=False,
+        binary="sbx",
+        io_mode="exec",
+        smolvm_binary="smolvm",
+    )
+    assert isinstance(ex, SmolvmExecutor)
+    assert ex._image == "ghcr.io/x/c:1"
+
+
+def test_run_review_smolvm_image_unset_raises_runtime_error():
+    """Direct construction (mirrors what the worker does) without an image
+    must raise loudly — no silent fallback."""
+    from superseded.review.executor import make_sandbox_executor
+
+    with pytest.raises(ValueError, match="resolved_image"):
+        make_sandbox_executor(
+            kind="smolvm", agent_name="claude-code", name="n1", resolved_image=None
+        )

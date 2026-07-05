@@ -491,19 +491,29 @@ async def _run_review_for_job(
         if sandbox is not None and sandbox.enabled:
             from superseded.review.executor import make_sandbox_executor
 
+            resolved_image: str | None = None
+            if sandbox.kind == "smolvm":
+                resolved_image = _agent_smolvm_image(sandbox, config.agent)
+                if not resolved_image:
+                    raise RuntimeError(
+                        f"smolvm sandbox selected for agent {config.agent!r} "
+                        "but no image configured (set SUPERSEDED_SMOLVM_IMAGE or "
+                        f"SUPERSEDED_SMOLVM_IMAGE_"
+                        f"{config.agent.upper().replace('-', '_')})."
+                    )
             executor = make_sandbox_executor(
+                kind=sandbox.kind,
                 agent_name=config.agent,
                 name=f"superseded-{job.job_id}",
                 timeout=sandbox.timeout,
                 keep_on_error=sandbox.keep_on_error,
                 binary=sandbox.binary,
                 io_mode=sandbox.io_mode,
+                smolvm_binary=sandbox.smolvm_binary,
+                resolved_image=resolved_image if sandbox.kind == "smolvm" else None,
             )
             if not executor.available(engine.agent):
-                raise RuntimeError(
-                    f"sandbox unavailable: '{sandbox.binary}' not found on PATH "
-                    "(install docker-sbx to run sandboxed reviews)."
-                )
+                raise RuntimeError(_sandbox_unavailable_msg(sandbox))
 
         _server_env = {k: v for k, v in os.environ.items() if not k.startswith("SUPERSEDED_")}
         result = await asyncio.to_thread(
