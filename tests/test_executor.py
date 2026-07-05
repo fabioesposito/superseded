@@ -593,3 +593,101 @@ def test_make_sandbox_executor_kind_unknown_raises(tmp_path):
 
     with pytest.raises(ValueError, match="unknown sandbox kind"):
         make_sandbox_executor(kind="other", agent_name="claude-code", name="n1", cwd=tmp_path)
+
+
+def test_build_agent_env_allowlists_only_provider_keys_and_runtime_vars():
+    from superseded.review.executor import build_agent_env
+
+    env = build_agent_env(
+        {
+            "PATH": "/usr/bin",
+            "HOME": "/root",
+            "LANG": "C.UTF-8",
+            "ANTHROPIC_API_KEY": "sk-ant-xyz",
+            "OPENAI_API_KEY": "sk-openai",
+            "SUPERSEDED_API_KEY": "server-secret",
+            "SUPERSEDED_DATABASE_URL": "postgres://u:pw@h/db",
+            "AWS_SECRET_ACCESS_KEY": "aws-secret",
+            "GITHUB_TOKEN": "ghp_x",
+            "SHELL": "/bin/bash",
+        }
+    )
+    assert env["ANTHROPIC_API_KEY"] == "sk-ant-xyz"
+    assert env["OPENAI_API_KEY"] == "sk-openai"
+    assert env["PATH"] == "/usr/bin"
+    assert env["HOME"] == "/root"
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    # deny-list fail-open vector closed: no SUPERSEDED_* or unrelated secrets
+    for leaked in (
+        "SUPERSEDED_API_KEY",
+        "SUPERSEDED_DATABASE_URL",
+        "AWS_SECRET_ACCESS_KEY",
+        "GITHUB_TOKEN",
+        "SHELL",
+    ):
+        assert leaked not in env
+
+
+def test_smolvm_cli_run_does_not_put_provider_keys_on_argv(tmp_path, monkeypatch):
+    """Provider keys are sourced from a guest env file, never on the argv."""
+    from superseded.review import executor as exec_mod
+    from superseded.review.executor import SmolvmExecutor
+
+    monkeypatch.setattr(
+        exec_mod.os,
+        "environ",
+        {"ANTHROPIC_API_KEY": "sk-secret-DO-NOT-LEAK"},
+    )
+    # Force CLI mode by pointing the image at an existing on-disk path.
+    image = tmp_path / "image.tar"
+    image.write_text("")
+    ex = SmolvmExecutor(agent_name="claude-code", image=str(image), name="smol-1", cwd=tmp_path)
+
+    captured_argv: list[list[str]] = []
+    written: dict[str, str] = {}
+
+    def fake_run(argv, **kw):
+        captured_argv.append(list(argv))
+        return _completed(stdout="[]")
+
+    monkeypatch.setattr(exec_mod.subprocess, "run", fake_run)
+    sess = ex.session()
+    sess._cli_write_guest_file = lambda path, content: written.__setitem__(path, content)
+    sess.__enter__()
+    sess.run(["claude", "-p"], "the-prompt", timeout=10)
+    sess.__exit__(None, None, None)
+
+    exec_calls = [a for a in captured_argv if "sh" in a and "-c" in a and "exec" in a]
+    assert exec_calls, "expected an sh -c exec call"
+    joined = " ".join(exec_calls[-1])
+    assert "sk-secret-DO-NOT-LEAK" not in joined
+    assert "-e" not in exec_calls[-1]
+    # the env file written into the per-exec guest HOME carries the key instead
+    env_files = {p: c for p, c in written.items() if p.endswith("/.env")}
+    assert env_files, "expected a guest env file to be written"
+    assert any("sk-secret-DO-NOT-LEAK" in c for c in env_files.values())
+
+
+def test_sbx_cp_mode_prompt_file_is_created_mode_0600(tmp_path, monkeypatch):
+    """The sbx cp-mode prompt file (which may hold secrets) must be 0600."""
+    import os as _os
+
+    executor = SandboxExecutor(agent_name="claude", name="sbx-1", cwd=tmp_path, io_mode="cp")
+    created_modes: list[int] = []
+
+    real_open = _os.open
+
+    def spy_open(path, flags, mode=0o777, *args, **kwargs):
+        # capture the requested creation mode for new files under cwd
+        p = str(path)
+        if ".sbx_prompt_" in p and p.endswith(".txt") and flags & _os.O_CREAT:
+            created_modes.append(mode)
+        return real_open(path, flags, mode, *args, **kwargs)
+
+    monkeypatch.setattr("superseded.review.executor.os.open", spy_open)
+    with patch("superseded.review.executor.subprocess.run") as mock_run:
+        mock_run.return_value = _completed(stdout="[]")
+        with executor.session() as sess:
+            sess.run(["claude", "-p"], "secret-prompt", timeout=10)
+    assert created_modes, "prompt file was not created via os.open"
+    assert all(m == 0o600 for m in created_modes), created_modes

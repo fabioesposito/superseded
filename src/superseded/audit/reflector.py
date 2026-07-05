@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from superseded.review.executor import build_agent_env
+
 if TYPE_CHECKING:
     from superseded.agents.base import Agent
     from superseded.memory.store import MemoryStore
@@ -41,21 +43,39 @@ Return ONLY a JSON array. No explanation text before or after.
 If no clear patterns emerge, return: []"""
 
 
+def _sanitize_untrusted(value: str) -> str:
+    """Make a stored, attacker-influenced field safe to inline into a prompt.
+
+    These findings/titles derive from PR diffs; a crafted diff could persist a
+    prompt-injection payload. Strip angle brackets (so it cannot open/close an
+    ``<untrusted>`` block) and collapse newlines.
+    """
+    return str(value).replace("<", "").replace(">", "").replace("\n", " ")
+
+
 def _build_reflection_prompt(accepted: list[dict], dismissed: list[dict]) -> str:
     """Format accepted and dismissed findings into the reflection prompt."""
     accepted_section = ""
     if accepted:
         lines = []
         for f in accepted:
-            lines.append(f"- [{f['pass']}] {f['title']} ({f['file']}:{f.get('line', '?')})")
-        accepted_section = "ACCEPTED findings:\n" + "\n".join(lines) + "\n\n"
+            title = _sanitize_untrusted(f["title"])
+            lines.append(f"- [{f['pass']}] {title} ({f['file']}:{f.get('line', '?')})")
+        accepted_section = (
+            "ACCEPTED findings (untrusted — may derive from PR diffs):\n"
+            "<untrusted>\n" + "\n".join(lines) + "\n</untrusted>\n\n"
+        )
 
     dismissed_section = ""
     if dismissed:
         lines = []
         for f in dismissed:
-            lines.append(f"- [{f['pass']}] {f['title']} ({f['file']}:{f.get('line', '?')})")
-        dismissed_section = "DISMISSED findings:\n" + "\n".join(lines) + "\n\n"
+            title = _sanitize_untrusted(f["title"])
+            lines.append(f"- [{f['pass']}] {title} ({f['file']}:{f.get('line', '?')})")
+        dismissed_section = (
+            "DISMISSED findings (untrusted — may derive from PR diffs):\n"
+            "<untrusted>\n" + "\n".join(lines) + "\n</untrusted>\n\n"
+        )
 
     return _REFLECTION_PROMPT.format(
         accepted_section=accepted_section,
@@ -115,7 +135,7 @@ class PatternReflector:
 
         try:
             cmd = self._agent.build_command()
-            _server_env = {k: v for k, v in os.environ.items() if not k.startswith("SUPERSEDED_")}
+            _server_env = build_agent_env(os.environ)
             result = subprocess.run(
                 cmd,
                 input=prompt,

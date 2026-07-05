@@ -31,8 +31,18 @@ services:
       SUPERSEDED_PRIVATE_KEY_PATH: /keys/private-key.pem
       SUPERSEDED_HOST: "0.0.0.0"
       SUPERSEDED_PORT: "8000"
-      SUPERSEDED_BEHIND_PROXY: "1"
-      SUPERSEDED_SANDBOX: ${SUPERSEDED_SANDBOX:-0}
+      # The server binds 0.0.0.0. Terminate TLS at a reverse proxy you run in
+      # front of this service (the default) OR mount certs and set
+      # SUPERSEDED_TLS_CERT / SUPERSEDED_TLS_KEY + SUPERSEDED_BEHIND_PROXY=0.
+      # Do NOT publish port 8000 directly without TLS: the bearer API key and
+      # webhook signatures would traverse cleartext.
+      SUPERSEDED_BEHIND_PROXY: ${SUPERSEDED_BEHIND_PROXY:-1}
+      # Agents run over arbitrary PR contents. The sandbox (docker-sbx or a
+      # smolvm image) keeps that execution off the host; default ON. To disable
+      # on an isolated/throwaway host set SUPERSEDED_SANDBOX=0 AND
+      # SUPERSEDED_ALLOW_NO_SANDBOX=1 on the server (it refuses to boot
+      # otherwise).
+      SUPERSEDED_SANDBOX: ${SUPERSEDED_SANDBOX:-1}
       SUPERSEDED_SANDBOX_KIND: ${SUPERSEDED_SANDBOX_KIND:-sbx}
       SUPERSEDED_LOG_FORMAT: json
       SUPERSEDED_LOG_LEVEL: ${SUPERSEDED_LOG_LEVEL:-info}

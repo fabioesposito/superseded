@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import time
 from collections.abc import AsyncIterator, Callable
@@ -21,6 +22,23 @@ logger = logging.getLogger(__name__)
 WEBHOOK_RATE_LIMIT = 60
 WEBHOOK_RATE_WINDOW = 60.0
 REPLAY_WINDOW = 300.0
+
+
+def _is_repo_authorized(installation: dict | None, owner: str, repo: str) -> bool:
+    """Return True if ``owner/repo`` is in the installation's recorded repos.
+
+    ``installation["repos"]`` is a JSON-encoded list of either ``"owner/repo"``
+    full names or bare ``"repo"`` names (as recorded by the installation event
+    handler). An unknown/unrecorded installation (``None``) or malformed payload
+    is treated as not authorized.
+    """
+    if not installation:
+        return False
+    try:
+        authorized = json.loads(installation.get("repos", "[]"))
+    except TypeError, ValueError:
+        return False
+    return f"{owner}/{repo}" in authorized or repo in authorized
 
 
 class ReplayProtector:
@@ -153,10 +171,12 @@ def create_app(
 
     @app.post("/review/pr")
     async def review_pr(request: Request) -> Response:
-        # Action-driven entry point. Authorization here is the bearer api_key
-        # plus resolution of an App installation for the repo (409 if absent) —
-        # intentionally NOT the per-installation ``authorized_repos`` store check
-        # the webhook path applies, since the caller is already api_key-trusted.
+        # Action-driven entry point. Authorization is the bearer api_key PLUS
+        # resolution of an App installation for the repo (409 if absent) AND a
+        # per-installation ``authorized_repos`` membership check — the same gate
+        # the webhook path applies — so a single leaked api_key cannot be used to
+        # drive reviews (and post PR comments / burn AI-CLI credits) against a
+        # repo belonging to a different tenant of the same App installation.
         if not config.api_key:
             return Response(status_code=501, content="API key not configured on this server.")
         auth = request.headers.get("Authorization", "")
@@ -183,6 +203,13 @@ def create_app(
         if installation_id is None:
             raise HTTPException(
                 status_code=409, detail="GitHub App is not installed on this repository."
+            )
+
+        await store.init()
+        if not _is_repo_authorized(await store.get_installation(installation_id), owner, repo):
+            raise HTTPException(
+                status_code=403,
+                detail="Repository is not authorized for this installation.",
             )
 
         try:
@@ -271,17 +298,13 @@ async def _handle_pr_event(
         )
         return
 
-    import json
-
-    authorized_repos = json.loads(installation.get("repos", "[]"))
-    full_name = f"{owner}/{repo_name}"
-    if full_name not in authorized_repos and repo_name not in authorized_repos:
+    if not _is_repo_authorized(installation, owner, repo_name):
         logger.warning(
             "webhook_pr_repo_not_authorized",
             extra={
                 "installation_id": installation_id,
-                "repo": full_name,
-                "authorized": authorized_repos,
+                "repo": f"{owner}/{repo_name}",
+                "authorized": json.loads(installation.get("repos", "[]")),
             },
         )
         return

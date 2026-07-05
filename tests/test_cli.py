@@ -717,3 +717,45 @@ def test_serve_threads_smolvm_sandbox_fields(monkeypatch):
     assert "sandbox" in captured
     assert captured["sandbox"].kind == "smolvm"
     assert captured["sandbox"].smolvm_image == "gcr/x/all:1"
+
+
+def test_serve_refuses_no_sandbox_without_opt_in(monkeypatch, tmp_path):
+    """serve must refuse to boot with the sandbox off unless explicitly opted in."""
+    import pathlib
+
+    pk = pathlib.Path(tmp_path / "key.pem")
+    pk.write_text("dummy")
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "123456")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whs")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(pk))
+    monkeypatch.setenv("SUPERSEDED_SANDBOX", "0")
+    monkeypatch.delenv("SUPERSEDED_ALLOW_NO_SANDBOX", raising=False)
+
+    from click.testing import CliRunner
+
+    from superseded.cli import cli
+
+    result = CliRunner().invoke(cli, ["serve", "--host", "127.0.0.1", "--port", "0"])
+    assert result.exit_code == 2
+    assert "refusing to serve without a sandbox" in result.output
+
+
+def test_serve_allows_no_sandbox_with_explicit_opt_in(monkeypatch, tmp_path):
+    import pathlib
+
+    pk = pathlib.Path(tmp_path / "key.pem")
+    pk.write_text("dummy")
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "123456")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whs")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(pk))
+    monkeypatch.setenv("SUPERSEDED_SANDBOX", "0")
+    monkeypatch.setenv("SUPERSEDED_ALLOW_NO_SANDBOX", "1")
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+
+    from click.testing import CliRunner
+
+    from superseded.cli import cli
+
+    result = CliRunner().invoke(cli, ["serve", "--host", "127.0.0.1", "--port", "0"])
+    assert "refusing to serve without a sandbox" not in result.output
+    assert result.exit_code == 0

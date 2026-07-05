@@ -422,7 +422,9 @@ def keyed_server(tmp_path):
     application = create_app(
         config=config, github=github, worker=worker, repo_manager=repo_manager, store=store
     )
-    return SimpleNamespace(app=application, worker=worker, github=github, config=config)
+    return SimpleNamespace(
+        app=application, worker=worker, github=github, config=config, store=store
+    )
 
 
 def test_review_pr_returns_501_when_no_api_key(client):
@@ -458,6 +460,11 @@ def test_review_pr_returns_409_when_app_not_installed(keyed_server, monkeypatch)
 
 
 def test_review_pr_enqueues_job(keyed_server, monkeypatch):
+    import asyncio
+
+    asyncio.run(keyed_server.store.init())
+    asyncio.run(keyed_server.store.record_installation(12345, "octocat", ["hello-world"]))
+
     async def fake_resolve(owner, repo):
         return 12345
 
@@ -483,7 +490,51 @@ def test_review_pr_enqueues_job(keyed_server, monkeypatch):
     assert keyed_server.worker.queue.qsize() == 1
 
 
+def test_review_pr_returns_403_when_repo_not_authorized(keyed_server, monkeypatch):
+    """A repo on an installed App but absent from authorized_repos is rejected."""
+    import asyncio
+
+    asyncio.run(keyed_server.store.init())
+    asyncio.run(keyed_server.store.record_installation(12345, "octocat", ["other-repo"]))
+
+    async def fake_resolve(owner, repo):
+        return 12345
+
+    monkeypatch.setattr(keyed_server.github, "resolve_installation", fake_resolve)
+
+    response = TestClient(keyed_server.app).post(
+        "/review/pr",
+        json={"owner": "octocat", "repo": "hello-world", "pr_number": 7},
+        headers={"Authorization": "Bearer test-api-key"},
+    )
+    assert response.status_code == 403
+
+
+def test_review_pr_returns_403_when_installation_unrecorded(keyed_server, monkeypatch):
+    """App installed (resolve ok) but no installation event recorded -> 403."""
+    import asyncio
+
+    asyncio.run(keyed_server.store.init())
+
+    async def fake_resolve(owner, repo):
+        return 12345
+
+    monkeypatch.setattr(keyed_server.github, "resolve_installation", fake_resolve)
+
+    response = TestClient(keyed_server.app).post(
+        "/review/pr",
+        json={"owner": "octocat", "repo": "hello-world", "pr_number": 7},
+        headers={"Authorization": "Bearer test-api-key"},
+    )
+    assert response.status_code == 403
+
+
 def test_review_pr_returns_502_when_pr_fetch_fails(keyed_server, monkeypatch):
+    import asyncio
+
+    asyncio.run(keyed_server.store.init())
+    asyncio.run(keyed_server.store.record_installation(12345, "octocat", ["hello-world"]))
+
     async def fake_resolve(owner, repo):
         return 12345
 

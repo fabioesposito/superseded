@@ -192,8 +192,9 @@ async def test_prompt_includes_both(mock_agent, mock_store):
         await reflector.maybe_reflect("owner/repo")
 
     assert captured_prompt is not None
-    assert "ACCEPTED findings:" in captured_prompt
-    assert "DISMISSED findings:" in captured_prompt
+    assert "ACCEPTED findings" in captured_prompt
+    assert "DISMISSED findings" in captured_prompt
+    assert "<untrusted>" in captured_prompt
     assert "[security] Title1" in captured_prompt
     assert "[correctness] Title2" in captured_prompt
     assert "[performance] Title3" in captured_prompt
@@ -212,7 +213,10 @@ def test_build_reflection_prompt_with_data():
     accepted = [{"pass": "security", "title": "SQL injection", "file": "db.py", "line": 42}]
     dismissed = [{"pass": "style", "title": "Naming issue", "file": "api.py", "line": 10}]
     prompt = _build_reflection_prompt(accepted, dismissed)
-    assert "ACCEPTED findings:" in prompt
+    assert "ACCEPTED findings" in prompt
     assert "[security] SQL injection (db.py:42)" in prompt
-    assert "DISMISSED findings:" in prompt
+    assert "DISMISSED findings" in prompt
     assert "[style] Naming issue (api.py:10)" in prompt
+    assert "<untrusted>" in prompt
+    assert prompt.count("<untrusted>") == 2
+    assert prompt.count("</untrusted>") == 2

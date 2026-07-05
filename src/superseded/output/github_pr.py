@@ -1,10 +1,40 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 
 from superseded.diff import _HUNK_RE, DEFAULT_GH_TIMEOUT, parse_diff_files
 from superseded.models import Finding, ReviewResult
+
+# Cap per-comment bodies so a runaway agent can't dump an unbounded amount of
+# (potentially secret-bearing) text into a PR comment. GitHub's own review
+# comment limit is well above this; the cap is a defense-in-depth sanity bound.
+MAX_COMMENT_CHARS = 20_000
+
+# Secret shapes that may appear in diff/file context the agent quotes back.
+# Matched anywhere in comment bodies before posting; replaced with [REDACTED].
+_SECRET_RE = re.compile(
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----"
+    r"|AKIA[0-9A-Z]{16}"
+    r"|sk-(?:ant-)?[A-Za-z0-9_-]{20,}"
+    r"|gh[pousr]_[A-Za-z0-9]{36,}"
+    r"|github_pat_[A-Za-z0-9_]{22,}"
+    r"|glpat-[A-Za-z0-9_-]{20,}"
+    r"|xox[baprs]-[A-Za-z0-9-]{10,}"
+    r"|Bearer [A-Za-z0-9._-]{16,}"
+)
+
+
+def _redact(text: str) -> str:
+    """Replace common credential patterns with ``[REDACTED]``."""
+    return _SECRET_RE.sub("[REDACTED]", text)
+
+
+def _truncate(text: str, limit: int = MAX_COMMENT_CHARS) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "\n\n…(comment truncated)"
 
 
 def _escape_reasoning(reasoning: str) -> str:
@@ -24,7 +54,7 @@ def build_review_payload(result: ReviewResult) -> dict:
         comment: dict = {
             "path": f.file,
             "line": f.end_line,
-            "body": body_text,
+            "body": _truncate(_redact(body_text)),
         }
         if f.line != f.end_line:
             comment["start_line"] = f.line
@@ -120,7 +150,7 @@ def _build_fallback_text(findings: list[Finding]) -> str:
         "line numbers fall outside the PR diff hunk:\n\n",
     ]
     for f in findings:
-        lines.append(f"- **{f.file}:{f.line}** [{f.severity}] {f.title}\n")
+        lines.append(f"- **{f.file}:{f.line}** [{f.severity}] {_redact(f.title)}\n")
     return "".join(lines)
 
 

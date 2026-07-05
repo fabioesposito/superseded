@@ -17,6 +17,7 @@ from superseded.context.gathering import gather_context
 from superseded.models import ReviewResult
 from superseded.output.github_pr import build_review_payload
 from superseded.review.engine import ReviewEngine
+from superseded.review.executor import build_agent_env
 from superseded.server.checkout import checkout_repo
 
 if TYPE_CHECKING:
@@ -515,7 +516,7 @@ async def _run_review_for_job(
             if not executor.available(engine.agent):
                 raise RuntimeError(_sandbox_unavailable_msg(sandbox))
 
-        _server_env = {k: v for k, v in os.environ.items() if not k.startswith("SUPERSEDED_")}
+        _server_env = build_agent_env(os.environ)
         result = await asyncio.to_thread(
             engine.review,
             diff=diff,

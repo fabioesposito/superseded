@@ -185,7 +185,11 @@ class _SandboxSession:
     def _run_via_file(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
         prompt_path = Path(self._cwd) / f".sbx_prompt_{uuid.uuid4().hex[:8]}.txt"
         try:
-            prompt_path.write_text(prompt)
+            # Create 0600 from the outset: the prompt embeds diff/file context
+            # that may contain secrets; the default umask would leave it 0644.
+            fd = os.open(prompt_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as fh:
+                fh.write(prompt)
             shell_cmd = f"{shlex.join(cmd)} < {shlex.quote(str(prompt_path))}"
             try:
                 result = subprocess.run(
@@ -306,7 +310,9 @@ def make_sandbox_executor(
             cwd=cwd,
             timeout=timeout,
             keep_on_error=keep_on_error,
-            provider_files=provider_files if provider_files is not None else agent_credential_files(agent_name),
+            provider_files=provider_files
+            if provider_files is not None
+            else agent_credential_files(agent_name),
             smolvm_binary=smolvm_binary,
         )
     raise ValueError(f"unknown sandbox kind: {kind!r}")
@@ -340,7 +346,9 @@ def agent_credential_files(agent_name: str) -> dict[str, str]:
     data_home = os.environ.get("XDG_DATA_HOME", os.path.join(home, ".local", "share"))
     candidates: dict[str, str] = {}  # guest_path -> host_path
     if agent_name == "opencode":
-        candidates["/root/.local/share/opencode/auth.json"] = os.path.join(data_home, "opencode", "auth.json")
+        candidates["/root/.local/share/opencode/auth.json"] = os.path.join(
+            data_home, "opencode", "auth.json"
+        )
     elif agent_name == "claude-code":
         candidates["/root/.claude.json"] = os.path.join(home, ".claude.json")
     elif agent_name == "codex":
@@ -351,6 +359,7 @@ def agent_credential_files(agent_name: str) -> dict[str, str]:
             with contextlib.suppress(OSError):
                 out[guest_path] = Path(host_path).read_text()
     return out
+
 
 SMOLVM_AVAILABLE = importlib.util.find_spec("smol") is not None
 
@@ -372,6 +381,55 @@ def _filter_provider_keys(mapping: dict[str, str], environ: dict[str, str]) -> d
     return {guest: environ[host] for guest, host in mapping.items() if host in environ}
 
 
+def _format_env_file(env: dict[str, str]) -> str:
+    """Render env vars as POSIX ``export KEY='value'`` lines for sourcing.
+
+    Used to pass provider keys (and HOME) into a smolvm guest *without* putting
+    them on the ``smolvm machine exec`` argv, which is world-readable via
+    ``ps``/``/proc/<pid>/cmdline``. Single quotes are escaped so values round-trip
+    through ``. <file>`` in any POSIX sh.
+    """
+    lines = []
+    for key, value in env.items():
+        escaped = value.replace("'", "'\\''")
+        lines.append(f"export {key}='{escaped}'")
+    return "\n".join(lines)
+
+
+_AGENT_ENV_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_STATE_HOME",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "CODEX_API_KEY",
+    }
+)
+
+
+def build_agent_env(environ: dict[str, str]) -> dict[str, str]:
+    """Build an explicit allowlist env for an agent subprocess.
+
+    Only what an AI CLI needs to run and authenticate is forwarded (``PATH``/
+    ``HOME``/``XDG_*``, locale, and the provider API keys). Everything else from
+    the server process environment — including unrelated operator secrets such
+    as ``AWS_*``, ``GITHUB_TOKEN`` or cloud creds — is dropped, avoiding the
+    deny-list model (``not SUPERSEDED_*``) that fails open for any future secret.
+    ``GIT_TERMINAL_PROMPT=0`` keeps the agent's own git calls from blocking on an
+    interactive credential prompt when run against untrusted checkout contents.
+    """
+    env = {k: v for k, v in environ.items() if k in _AGENT_ENV_ALLOWLIST}
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
 def _relocate_under_root(guest_path: str, new_root: str) -> str:
     """Rewrite a /root-prefixed guest path to live under ``new_root``.
 
@@ -382,7 +440,7 @@ def _relocate_under_root(guest_path: str, new_root: str) -> str:
     if guest_path == "/root":
         return new_root
     if guest_path.startswith("/root/"):
-        return new_root + guest_path[len("/root"):]
+        return new_root + guest_path[len("/root") :]
     return guest_path
 
 
@@ -512,10 +570,13 @@ class _SmolvmSession:
     def _cli_start(self) -> None:
         create_argv = [
             self._smolvm_binary,
-            "machine", "create",
-            "--name", self._name,
+            "machine",
+            "create",
+            "--name",
+            self._name,
             "--net",
-            "-v", f"{self._cwd}:/workspace",
+            "-v",
+            f"{self._cwd}:/workspace",
         ]
         if self._boot_source == "docker":
             # Stream `docker save <tag>` into smolvm via stdin (`--image -`): a
@@ -538,11 +599,15 @@ class _SmolvmSession:
                     docker.stdout.close()
                 docker.wait(timeout=120)
             if create.returncode != 0:
-                raise AgentRunError(f"smolvm create failed: {(create.stderr or create.stdout).strip()}")
+                raise AgentRunError(
+                    f"smolvm create failed: {(create.stderr or create.stdout).strip()}"
+                )
         else:
             create = self._cli(*create_argv, "--image", self._image, timeout=300)
             if create.returncode != 0:
-                raise AgentRunError(f"smolvm create failed: {(create.stderr or create.stdout).strip()}")
+                raise AgentRunError(
+                    f"smolvm create failed: {(create.stderr or create.stdout).strip()}"
+                )
         start = self._cli("machine", "start", "--name", self._name, timeout=180)
         if start.returncode != 0:
             raise AgentRunError(f"smolvm start failed: {(start.stderr or start.stdout).strip()}")
@@ -558,7 +623,6 @@ class _SmolvmSession:
             logger.warning("smolvm: failed to seed %s: %s", guest_path, err)
 
     def _cli_run(self, cmd: list[str], prompt: str, prompt_guest: str, *, timeout: int) -> str:
-        shell = f"{shlex.join(cmd)} < {shlex.quote(prompt_guest)}"
         argv = [self._smolvm_binary, "machine", "exec", "--name", self._name, "-w", "/workspace"]
         # Passes run concurrently against one shared VM. opencode touches several
         # SQLite DBs (state, cache, data) that error with "database is locked"
@@ -573,8 +637,12 @@ class _SmolvmSession:
         for guest_path, content in self._auth_files.items():
             target = _relocate_under_root(guest_path, home)
             self._cli_write_guest_file(target, content)
-        for k, v in env.items():
-            argv += ["-e", f"{k}={v}"]
+        # Provider keys (and HOME) are written to a guest-side env file under the
+        # per-exec HOME and sourced by the shell — they must NOT be passed as
+        # ``-e KEY=val`` argv elements, which are visible via ps/proc.
+        env_path = f"{home}/.env"
+        self._cli_write_guest_file(env_path, _format_env_file(env))
+        shell = f". {shlex.quote(env_path)} && {shlex.join(cmd)} < {shlex.quote(prompt_guest)}"
         argv += ["--timeout", f"{timeout}s", "--", "sh", "-c", shell]
         try:
             self._cli_write_guest_file(prompt_guest, prompt)
@@ -603,7 +671,14 @@ class _SmolvmSession:
         try:
             if guest_dir:
                 self._cli(
-                    "machine", "exec", "--name", self._name, "--", "mkdir", "-p", guest_dir,
+                    "machine",
+                    "exec",
+                    "--name",
+                    self._name,
+                    "--",
+                    "mkdir",
+                    "-p",
+                    guest_dir,
                     timeout=60,
                 )
             with tempfile.NamedTemporaryFile("w", suffix=".seed", delete=False) as tmp:
@@ -611,7 +686,10 @@ class _SmolvmSession:
                 tmp_path = tmp.name
             try:
                 self._cli(
-                    "machine", "cp", tmp_path, f"{self._name}:{guest_path}",
+                    "machine",
+                    "cp",
+                    tmp_path,
+                    f"{self._name}:{guest_path}",
                     timeout=120,
                 )
             finally:

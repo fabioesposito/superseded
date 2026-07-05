@@ -212,6 +212,53 @@ def _finding(**overrides):
     return Finding(**defaults)
 
 
+def test_review_payload_redacts_secrets_in_finding_fields():
+    from superseded.output.github_pr import build_review_payload
+
+    result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="src/auth.py",
+                line=1,
+                end_line=1,
+                title="Leaked key ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789 here",
+                description="AWS key AKIAIOSFODNN7EXAMPLE and sk-ant-api03-abcdef1234567890abcd seen",
+                suggestion="rotate the Bearer abcdefghijklmnop0123456789 token",
+            )
+        ]
+    )
+    body = build_review_payload(result)["comments"][0]["body"]
+    assert "ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789" not in body
+    assert "AKIAIOSFODNN7EXAMPLE" not in body
+    assert "sk-ant-api03-abcdef1234567890abcd" not in body
+    assert "Bearer abcdefghijklmnop0123456789" not in body
+    assert body.count("[REDACTED]") >= 3
+
+
+def test_review_payload_truncates_oversized_comment_body():
+    from superseded.output.github_pr import MAX_COMMENT_CHARS, build_review_payload
+
+    result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="a.py",
+                line=1,
+                end_line=1,
+                title="t",
+                description="x" * (MAX_COMMENT_CHARS + 500),
+                suggestion="s",
+            )
+        ]
+    )
+    body = build_review_payload(result)["comments"][0]["body"]
+    assert len(body) <= MAX_COMMENT_CHARS + 50
+    assert "comment truncated" in body
+
+
 def test_reasoning_renders_when_present():
     f = _finding(reasoning="Suspicious input from user request")
     result = format_markdown(ReviewResult(findings=[f]))
