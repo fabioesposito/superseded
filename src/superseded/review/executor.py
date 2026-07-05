@@ -309,7 +309,16 @@ def _filter_provider_keys(mapping: dict[str, str], environ: dict[str, str]) -> d
 
 
 class _SmolvmSession:
-    def __init__(self, *, image, name, cwd, timeout, keep_on_error, keys):
+    def __init__(
+        self,
+        *,
+        image: str,
+        name: str,
+        cwd: str,
+        timeout: int,
+        keep_on_error: bool,
+        keys: dict[str, str],
+    ) -> None:
         self._image = image
         self._name = name
         self._cwd = cwd
@@ -317,13 +326,13 @@ class _SmolvmSession:
         self._keep_on_error = keep_on_error
         self._keys = keys
 
-    def __enter__(self):
+    def __enter__(self) -> _SmolvmSession:
         raise NotImplementedError
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: object) -> None:
         raise NotImplementedError
 
-    def run(self, cmd, prompt, *, timeout):
+    def run(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
         raise NotImplementedError
 
 
