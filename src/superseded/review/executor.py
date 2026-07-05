@@ -309,13 +309,7 @@ def _filter_provider_keys(mapping: dict[str, str], environ: dict[str, str]) -> d
 
 
 class _SmolvmSession:
-    """One smolvm machine, shared across the concurrent passes of a review.
-
-    ``run()`` writes the prompt to a per-call guest file then exec's the
-    agent argv with stdin redirected from that file. Per-pass invocations
-    are independent Python calls, safe to run concurrently against the
-    same Machine (the prompt file path is per-call UUID-named).
-    """
+    """One smolvm machine, shared across the concurrent passes of a review."""
 
     def __init__(
         self,
@@ -363,7 +357,7 @@ class _SmolvmSession:
         return None
 
     def run(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
-        raise NotImplementedError  # filled in by Task 4
+        raise NotImplementedError
 
 
 class SmolvmExecutor:
