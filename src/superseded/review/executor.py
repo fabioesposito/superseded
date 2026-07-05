@@ -474,6 +474,87 @@ def _resolve_boot_source(image: str, smolvm_binary: str) -> str:
     return "registry"
 
 
+def _docker_image_id(image: str) -> str | None:
+    """Fast content-addressable key for a local docker tag (no ``docker save``)."""
+    try:
+        out = subprocess.run(
+            ["docker", "image", "inspect", image, "--format", "{{.Id}}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception:
+        return None
+    if out.returncode != 0:
+        return None
+    return out.stdout.strip() or None
+
+
+def _docker_cache_dir() -> Path:
+    return Path(
+        os.environ.get("SUPERSEDED_SMOLVM_IMAGE_CACHE")
+        or os.path.expanduser("~/.cache/superseded/smolvm-images")
+    )
+
+
+def _resolve_docker_cache(image: str) -> str | None:
+    """Return a cached local-tar path for a local docker ``image``.
+
+    Promotes the slow ``docker`` boot source (which streams ``docker save`` into
+    smolvm on every review, ~3-4s of host I/O) to the fast ``file`` boot source
+    (~0.5s create) by materializing the archive once into a content-addressed
+    cache keyed on the image ID. Subsequent reviews with the same image ID hit
+    the cache and skip ``docker save`` entirely; rebuilding the image changes
+    its ID and triggers a single re-save.
+
+    Returns ``None`` on any failure (docker missing, save error, FS error); the
+    caller falls back to the streaming path unchanged.
+    """
+    image_id = _docker_image_id(image)
+    if not image_id:
+        return None
+    cache_dir = _docker_cache_dir()
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        return None
+    digest = image_id.rsplit(":", 1)[-1] if ":" in image_id else image_id
+    target = cache_dir / f"{digest[:24]}.tar"
+    if target.exists() and target.stat().st_size > 0:
+        logger.info("smolvm image cache hit for %s -> %s", image, target)
+        return str(target)
+    # Materialize atomically: save to a sibling temp file, then rename into place
+    # so a partial cache file is never visible to a concurrent review.
+    staging = target.with_suffix(".tar.part")
+    try:
+        save = subprocess.run(
+            ["docker", "save", image, "-o", str(staging)],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except Exception:
+        with contextlib.suppress(Exception):
+            staging.unlink(missing_ok=True)
+        return None
+    if save.returncode != 0:
+        with contextlib.suppress(Exception):
+            staging.unlink(missing_ok=True)
+        logger.warning(
+            "smolvm image cache: docker save failed for %s; falling back to stream",
+            image,
+        )
+        return None
+    try:
+        os.replace(staging, target)
+    except Exception:
+        with contextlib.suppress(Exception):
+            staging.unlink(missing_ok=True)
+        return None
+    logger.info("smolvm image cache populated for %s -> %s", image, target)
+    return str(target)
+
+
 class _SmolvmSession:
     """One smolvm machine, shared across the concurrent passes of a review.
 
@@ -512,6 +593,14 @@ class _SmolvmSession:
         #                into `smolvm ... --image -` (no tar file, no push/pull)
         #  - "registry": image is a registry ref → embedded smol SDK pulls it
         self._boot_source = _resolve_boot_source(image, smolvm_binary)
+        # Promote docker→file via a content-addressed cache so repeated reviews
+        # skip the ~3-4s `docker save` stream and boot from the local tar
+        # (~0.5s create). Falls back silently to streaming on any failure.
+        if self._boot_source == "docker":
+            cached = _resolve_docker_cache(image)
+            if cached is not None:
+                self._image = cached
+                self._boot_source = "file"
 
     @property
     def _cli_mode(self) -> bool:

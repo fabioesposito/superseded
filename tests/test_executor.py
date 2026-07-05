@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 import types
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -691,3 +693,180 @@ def test_sbx_cp_mode_prompt_file_is_created_mode_0600(tmp_path, monkeypatch):
             sess.run(["claude", "-p"], "secret-prompt", timeout=10)
     assert created_modes, "prompt file was not created via os.open"
     assert all(m == 0o600 for m in created_modes), created_modes
+
+
+# ---------------------------------------------------------------------------
+# docker→file boot-source cache (avoids per-review `docker save` streaming)
+# ---------------------------------------------------------------------------
+
+
+def _fake_docker_subprocess(image_id="sha256:abc123def456", save_ok=True):
+    """Return a fake ``subprocess.run`` that handles ``docker image inspect``
+    and ``docker save -o`` calls, recording the save targets."""
+
+    saved_to: list[str] = []
+
+    def fake_run(argv, **kw):
+        if "inspect" in argv:
+            return _completed(stdout=image_id + "\n")
+        if "save" in argv and "-o" in argv:
+            target = argv[argv.index("-o") + 1]
+            if save_ok:
+                saved_to.append(target)
+                # `docker save -o path` writes the archive; emulate by creating it.
+                Path(target).write_text("tar-bytes")
+            return _completed() if save_ok else _completed(returncode=1, stderr="save failed")
+        return _completed()
+
+    return fake_run, saved_to
+
+
+def test_resolve_docker_cache_miss_populates_and_returns_path(tmp_path, monkeypatch):
+    from superseded.review import executor as exec_mod
+    from superseded.review.executor import _docker_cache_dir, _resolve_docker_cache
+
+    monkeypatch.setattr(exec_mod.shutil, "which", lambda _: "/usr/bin/docker")
+    monkeypatch.setattr(exec_mod.os, "environ", {})
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CACHE", str(tmp_path))
+    fake_run, saved_to = _fake_docker_subprocess()
+    monkeypatch.setattr(exec_mod.subprocess, "run", fake_run)
+
+    result = _resolve_docker_cache("superseded-smolvm-opencode:latest")
+    assert result is not None
+    assert result.startswith(str(_docker_cache_dir()))
+    assert len(saved_to) == 1, "docker save should run once on cache miss"
+    assert os.path.exists(result)
+
+
+def test_resolve_docker_cache_hit_skips_docker_save(tmp_path, monkeypatch):
+    from superseded.review import executor as exec_mod
+    from superseded.review.executor import _resolve_docker_cache
+
+    monkeypatch.setattr(exec_mod.shutil, "which", lambda _: "/usr/bin/docker")
+    monkeypatch.setattr(exec_mod.os, "environ", {})
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CACHE", str(tmp_path))
+    fake_run, saved_to = _fake_docker_subprocess()
+    monkeypatch.setattr(exec_mod.subprocess, "run", fake_run)
+
+    # First call populates the cache.
+    first = _resolve_docker_cache("img:latest")
+    assert first and saved_to
+    saved_to.clear()
+    # Second call with the same image ID must hit the cache: no `docker save`.
+    second = _resolve_docker_cache("img:latest")
+    assert second == first
+    assert saved_to == [], "docker save must not run on a cache hit"
+
+
+def test_resolve_docker_cache_rebuilds_when_image_id_changes(tmp_path, monkeypatch):
+    from superseded.review import executor as exec_mod
+    from superseded.review.executor import _resolve_docker_cache
+
+    monkeypatch.setattr(exec_mod.shutil, "which", lambda _: "/usr/bin/docker")
+    monkeypatch.setattr(exec_mod.os, "environ", {})
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CACHE", str(tmp_path))
+
+    state = {"id": "sha256:aaaa1111"}
+
+    def fake_run(argv, **kw):
+        if "inspect" in argv:
+            return _completed(stdout=state["id"] + "\n")
+        if "save" in argv and "-o" in argv:
+            target = argv[argv.index("-o") + 1]
+            Path(target).write_text("tar")
+            return _completed()
+        return _completed()
+
+    monkeypatch.setattr(exec_mod.subprocess, "run", fake_run)
+
+    first = _resolve_docker_cache("img:latest")
+    assert first is not None
+    # Simulate a rebuild: same tag, new image ID.
+    state["id"] = "sha256:bbbb2222"
+    second = _resolve_docker_cache("img:latest")
+    assert second is not None
+    assert second != first, "a rebuilt image must produce a new cache entry"
+
+
+def test_resolve_docker_cache_returns_none_when_docker_missing(tmp_path, monkeypatch):
+    from superseded.review import executor as exec_mod
+    from superseded.review.executor import _resolve_docker_cache
+
+    monkeypatch.setattr(exec_mod.shutil, "which", lambda _: None)
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CACHE", str(tmp_path))
+
+    # `_docker_image_id` calls subprocess.run directly; ensure it cannot succeed.
+    def fake_run(argv, **kw):
+        return _completed(returncode=1, stderr="no docker")
+
+    monkeypatch.setattr(exec_mod.subprocess, "run", fake_run)
+    assert _resolve_docker_cache("img:latest") is None
+
+
+def test_smolvm_session_promotes_docker_to_file_via_cache(tmp_path, monkeypatch):
+    """A docker-tag image with a populated cache boots via `--image <cachepath>`
+    (file path), never the `--image -` stdin stream."""
+    from superseded.review import executor as exec_mod
+    from superseded.review.executor import SmolvmExecutor
+
+    monkeypatch.setattr(exec_mod.shutil, "which", lambda _: "/usr/bin/docker")
+    monkeypatch.setattr(exec_mod.os, "environ", {"HOME": str(tmp_path)})
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CACHE", str(tmp_path / "cache"))
+    docker_run, _ = _fake_docker_subprocess()
+    create_argv_seen: list[list[str]] = []
+
+    def capturing_run(argv, **kw):
+        if "create" in argv:
+            create_argv_seen.append(list(argv))
+            return _completed()
+        # delegate inspect/save to the docker fake so the cache can populate
+        return docker_run(argv, **kw)
+
+    monkeypatch.setattr(exec_mod.subprocess, "run", capturing_run)
+
+    # A bare docker tag (not an existing path) resolves to boot_source="docker".
+    ex = SmolvmExecutor(
+        agent_name="claude-code",
+        image="superseded-smolvm-opencode:latest",
+        name="smol-1",
+        cwd=tmp_path,
+    )
+    with ex.session():
+        pass
+
+    assert create_argv_seen, "machine create was not invoked"
+    create_call = create_argv_seen[0]
+    assert "--image" in create_call
+    assert "--image -" not in create_call, (
+        "must boot from the cached file path, not stdin streaming"
+    )
+    # the resolved --image value points into the cache dir, not the docker tag
+    img_idx = create_call.index("--image") + 1
+    assert str(tmp_path / "cache") in create_call[img_idx]
+
+
+def test_smolvm_session_falls_back_to_streaming_when_cache_fails(tmp_path, monkeypatch):
+    """If the cache cannot be populated (docker save fails), the session keeps
+    boot_source="docker" and streams `--image -` as before."""
+    from superseded.review import executor as exec_mod
+    from superseded.review.executor import SmolvmExecutor
+
+    monkeypatch.setattr(exec_mod.shutil, "which", lambda _: "/usr/bin/docker")
+    monkeypatch.setattr(exec_mod.os, "environ", {"HOME": str(tmp_path)})
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CACHE", str(tmp_path / "cache"))
+    # docker inspect ok, but `docker save` fails.
+    fake_run, _ = _fake_docker_subprocess(save_ok=False)
+    monkeypatch.setattr(exec_mod.subprocess, "run", fake_run)
+
+    # `docker save` failure path doesn't reach `machine create` here because the
+    # stdin-stream fallback runs through a Popen that isn't wired by fake_run;
+    # we only assert the promotion did NOT happen (boot_source stays docker).
+    ex = SmolvmExecutor(
+        agent_name="claude-code",
+        image="superseded-smolvm-opencode:latest",
+        name="smol-1",
+        cwd=tmp_path,
+    )
+    sess = ex.session()
+    assert sess._boot_source == "docker", "save failure must leave boot source as docker"
+    assert sess._image == "superseded-smolvm-opencode:latest"
