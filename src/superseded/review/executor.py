@@ -569,7 +569,6 @@ class _SmolvmSession:
 
     def _cli_start(self) -> None:
         create_argv = [
-            self._smolvm_binary,
             "machine",
             "create",
             "--name",
@@ -588,7 +587,7 @@ class _SmolvmSession:
             )
             try:
                 create = subprocess.run(
-                    [*create_argv, "--image", "-"],
+                    [self._smolvm_binary, *create_argv, "--image", "-"],
                     stdin=docker.stdout,
                     capture_output=True,
                     text=True,
