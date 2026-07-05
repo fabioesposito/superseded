@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import subprocess
+import sys
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -253,3 +255,88 @@ def test_make_sandbox_executor_unknown_agent_passes_through(tmp_path):
         with ex.session():
             pass
     assert mock_run.call_args_list[0].args[0][4] == "custom-agent"
+
+
+def _install_fake_smol(
+    monkeypatch, *, machine_create=None, write_file=None, exec_result=None, delete=None
+):
+    """Inject a fake `smol` package into sys.modules for one test.
+
+    Returns a dict of the mock objects the test can assert against:
+       {"Machine": ..., "MachineConfig": ..., "MountSpec": ...,
+        "ResourceSpec": ..., "ExecOptions": ..., "machine_inst": ...}
+    """
+    machine_inst = types.SimpleNamespace(
+        name="superseded-probe",
+        write_file=MagicMock(side_effect=write_file or (lambda p, d, m=None: None)),
+        exec=MagicMock(side_effect=exec_result or (lambda c, o=None: None)),
+        delete=MagicMock(side_effect=delete or (lambda: None)),
+        state=MagicMock(return_value="running"),
+    )
+    machine_create_mock = MagicMock(return_value=machine_inst)
+    captured = {}
+
+    class _Machine:
+        @staticmethod
+        def create(config=None, conn=None):
+            captured["config"] = config
+            return machine_create_mock(config) if machine_create else machine_inst
+
+    class _MachineConfig:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+            captured["MachineConfig_kwargs"] = kw
+
+    class _MountSpec:
+        def __init__(self, source, target, read_only=False, readonly=None):
+            self.source = source
+            self.target = target
+            self.read_only = read_only
+            captured.setdefault("MountSpec_instances", []).append(self)
+
+    class _ResourceSpec:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+            captured["ResourceSpec_kwargs"] = kw
+
+    class _ExecOptions:
+        def __init__(self, env=None, workdir=None, timeout=None):
+            self.env = env
+            self.workdir = workdir
+            self.timeout = timeout
+            captured.setdefault("ExecOptions_instances", []).append(self)
+
+    fake = types.ModuleType("smol")
+    fake.Machine = _Machine
+    fake.MachineConfig = _MachineConfig
+    fake.MountSpec = _MountSpec
+    fake.ResourceSpec = _ResourceSpec
+    fake.ExecOptions = _ExecOptions
+    monkeypatch.setitem(sys.modules, "smol", fake)
+    captured.update(
+        {
+            "Machine": _Machine,
+            "MachineConfig": _MachineConfig,
+            "MountSpec": _MountSpec,
+            "ResourceSpec": _ResourceSpec,
+            "ExecOptions": _ExecOptions,
+            "machine_inst": machine_inst,
+        }
+    )
+    return captured
+
+
+def test_smolvm_executor_available_true_when_image_set_and_smol_importable(monkeypatch):
+    _install_fake_smol(monkeypatch)
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="ghcr.io/x/claude:1", name="superseded-x")
+    assert ex.available(MagicMock()) is True
+
+
+def test_smolvm_executor_available_false_when_image_empty(monkeypatch):
+    _install_fake_smol(monkeypatch)
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="", name="superseded-x")
+    assert ex.available(MagicMock()) is False
