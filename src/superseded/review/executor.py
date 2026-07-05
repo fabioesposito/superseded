@@ -357,7 +357,25 @@ class _SmolvmSession:
         return None
 
     def run(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
-        raise NotImplementedError
+        _, _, _, _, exec_options_cls = _smol()
+        prompt_guest = f"/tmp/_smol_prompt_{uuid.uuid4().hex[:8]}.txt"
+        shell = f"cd /workspace && {shlex.join(cmd)} < {shlex.quote(prompt_guest)}"
+        try:
+            self._machine.write_file(prompt_guest, prompt)
+            result = self._machine.exec(
+                ["sh", "-c", shell],
+                exec_options_cls(env=dict(self._keys), workdir="/workspace", timeout=timeout),
+            )
+        except Exception as err:
+            self._errored = True
+            raise AgentRunError(f"smol exec failed: {err}") from err
+        if result.exit_code != 0:
+            self._errored = True
+            stderr = result.stderr.strip()
+            raise AgentRunError(
+                f"Agent '{cmd[0]}' exited {result.exit_code}" + (f": {stderr}" if stderr else "")
+            )
+        return result.stdout
 
 
 class SmolvmExecutor:

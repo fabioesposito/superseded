@@ -267,6 +267,8 @@ def _install_fake_smol(
        {"Machine": ..., "MachineConfig": ..., "MountSpec": ...,
         "ResourceSpec": ..., "ExecOptions": ..., "machine_inst": ...}
     """
+    if isinstance(exec_result, MagicMock):
+        exec_result.return_value = exec_result
     machine_inst = types.SimpleNamespace(
         name="superseded-probe",
         write_file=MagicMock(side_effect=write_file or (lambda p, d, m=None: None)),
@@ -410,3 +412,63 @@ def test_smolvm_session_exit_swallow_delete_failure(tmp_path, monkeypatch, caplo
         pass
     captured["machine_inst"].delete.assert_called_once()
     assert any("smol delete failed" in r.getMessage() for r in caplog.records)
+
+
+def test_smolvm_session_run_uses_prompt_file_and_exec(tmp_path, monkeypatch):
+    captured = _install_fake_smol(
+        monkeypatch, exec_result=MagicMock(exit_code=0, stdout="[]", stderr="")
+    )
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with ex.session() as sess:
+        out = sess.run(["claude", "-p"], "the-prompt", timeout=42)
+    assert out == "[]"
+    wf_call = captured["machine_inst"].write_file.call_args
+    assert wf_call.args[0].startswith("/tmp/_smol_prompt_")
+    assert wf_call.args[0].endswith(".txt")
+    assert wf_call.args[1] == "the-prompt"
+    exec_call = captured["machine_inst"].exec.call_args
+    argv = exec_call.args[0]
+    assert argv[0] == "sh" and argv[1] == "-c"
+    assert argv[2].startswith("cd /workspace && claude -p < /tmp/_smol_prompt_")
+    assert argv[2].endswith(".txt")
+    opts = exec_call.args[1]
+    assert opts.workdir == "/workspace"
+    assert opts.timeout == 42
+    assert isinstance(opts.env, dict)
+
+
+def test_smolvm_session_run_forwards_only_set_provider_keys(tmp_path, monkeypatch):
+    captured = _install_fake_smol(
+        monkeypatch, exec_result=MagicMock(exit_code=0, stdout="[]", stderr="")
+    )
+    monkeypatch.setattr("superseded.review.executor.os.environ", {"ANTHROPIC_API_KEY": "k-xyz"})
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with ex.session() as sess:
+        sess.run(["claude", "-p"], "p", timeout=10)
+    opts = captured["machine_inst"].exec.call_args.args[1]
+    assert opts.env == {"ANTHROPIC_API_KEY": "k-xyz"}
+
+
+def test_smolvm_session_run_nonzero_raises(tmp_path, monkeypatch):
+    _install_fake_smol(monkeypatch, exec_result=MagicMock(exit_code=2, stdout="", stderr="boom"))
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with ex.session() as sess, pytest.raises(AgentRunError, match="boom"):
+        sess.run(["claude"], "p", timeout=10)
+
+
+def test_smolvm_session_run_exec_exception_raises_agent_run_error(tmp_path, monkeypatch):
+    _install_fake_smol(
+        monkeypatch,
+        exec_result=lambda c, o=None: (_ for _ in ()).throw(RuntimeError("vm dead")),
+    )
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with ex.session() as sess, pytest.raises(AgentRunError, match="smol exec failed"):
+        sess.run(["claude"], "p", timeout=10)
