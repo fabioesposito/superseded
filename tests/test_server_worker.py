@@ -1012,3 +1012,15 @@ async def test_run_review_for_job_defaults_no_sandbox(tmp_path):
         )
 
     assert captured.get("executor") is None
+
+
+def test_sandbox_settings_has_smolvm_fields_with_defaults():
+    from superseded.server.worker import SandboxSettings
+
+    s = SandboxSettings()
+    assert s.kind == "sbx"
+    assert s.smolvm_binary == "smolvm"
+    assert s.smolvm_image is None
+    assert s.smolvm_image_claude is None
+    assert s.smolvm_image_opencode is None
+    assert s.smolvm_image_codex is None

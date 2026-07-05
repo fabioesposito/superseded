@@ -52,13 +52,19 @@ class ReviewOutcome:
 
 @dataclass
 class SandboxSettings:
-    """Whether/how the server runs agents inside sbx sandboxes."""
+    """Whether/how the server runs agents inside a sandbox microVM."""
 
     enabled: bool = False
-    binary: str = "sbx"
+    kind: str = "sbx"  # "sbx" | "smolvm"
+    binary: str = "sbx"  # sbx
     timeout: int = 600
     keep_on_error: bool = False
-    io_mode: str = "exec"
+    io_mode: str = "exec"  # sbx only
+    smolvm_binary: str = "smolvm"  # unused by SDK; kept for messages
+    smolvm_image: str | None = None  # host-wide override
+    smolvm_image_claude: str | None = None  # per-agent
+    smolvm_image_opencode: str | None = None  # per-agent
+    smolvm_image_codex: str | None = None  # per-agent
 
 
 def build_check_run_title(result: ReviewResult) -> str:
