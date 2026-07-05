@@ -332,6 +332,9 @@ def _install_fake_smol(
 
 def test_smolvm_executor_available_true_when_image_set_and_smol_importable(monkeypatch):
     _install_fake_smol(monkeypatch)
+    from superseded.review import executor as exec_mod
+
+    monkeypatch.setattr(exec_mod, "SMOLVM_AVAILABLE", True)
     from superseded.review.executor import SmolvmExecutor
 
     ex = SmolvmExecutor(agent_name="claude-code", image="ghcr.io/x/claude:1", name="superseded-x")
