@@ -684,9 +684,10 @@
             </div>
             <div class="install-cmd reveal">
                 <span class="prompt">$</span>
-                <code>pip install superseded</code>
-                <button class="copy" onclick="navigator.clipboard.writeText('pip install superseded')">Copy</button>
+                <code>uv tool install git+https://github.com/fabioesposito/superseded</code>
+                <button class="copy" onclick="navigator.clipboard.writeText('uv tool install git+https://github.com/fabioesposito/superseded')">Copy</button>
             </div>
+            <p class="reveal" style="opacity:.6;font-size:.85rem;margin-top:.5rem">Requires Python 3.14+ and at least one AI CLI (claude-code, opencode, or codex).</p>
             <div class="quality-curve reveal">
                 <svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg">
                     <line x1="60" y1="20" x2="60" y2="165" stroke="#e2e5ef" stroke-width="1"/>
@@ -776,7 +777,7 @@
                 <div class="loop-stat-icon">&#x2193;</div>
                 <div class="loop-stat-text">
                     <strong>Fewer false positives over time</strong>
-                    <span>Teams see significantly less noise after two weeks of feedback</span>
+                    <span>Dismissed findings stop resurfacing as memory accumulates</span>
                 </div>
             </div>
         </div>
@@ -844,7 +845,7 @@
                 <div class="feature-card"><div class="feature-icon">&#x2665;</div><h3>GitHub Action</h3><p>Composite Action POSTs to your review server. No agents or secrets in CI &mdash; the server does the work.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x2660;</div><h3>Server mode</h3><p>Self-hosted GitHub App. Multiple repos, webhook-driven, configurable concurrency.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x25cb;</div><h3>Structured output</h3><p>JSON for piping, markdown for docs, terminal table for quick scanning.</p></div>
-                <div class="feature-card"><div class="feature-icon">&#x25a3;</div><h3>Static analysis</h3><p>Auto-detects linters (ruff, mypy, eslint, bandit) and injects signals before AI review.</p></div>
+                <div class="feature-card"><div class="feature-icon">&#x25a3;</div><h3>Static analysis</h3><p>Auto-detects linters (ruff, mypy, eslint, tsc, bandit, gitleaks, go vet) and injects signals before AI review.</p></div>
             </div>
         </div>
     </section>
@@ -854,7 +855,7 @@
             <h2 class="reveal">Start reviewing in 30 seconds</h2>
             <p class="cta-sub reveal">Install and run your first review.</p>
             <div class="cta-commands reveal">
-                <div class="cta-cmd"><span class="prompt">$</span> pip install superseded</div>
+                <div class="cta-cmd"><span class="prompt">$</span> uv tool install git+https://github.com/fabioesposito/superseded</div>
                 <div class="cta-cmd"><span class="prompt">$</span> superseded review --diff HEAD~1..HEAD</div>
             </div>
             <div class="cta-actions reveal">

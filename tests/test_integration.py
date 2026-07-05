@@ -8,6 +8,7 @@ import aiosqlite
 from click.testing import CliRunner
 
 from superseded.cli import _run_review, cli
+from superseded.config import Config
 from superseded.models import Finding, ReviewResult
 
 _SCHEMA = """\
@@ -228,6 +229,55 @@ def test_review_wires_memory_persistence_and_comment_ids(
     assert store.dismissed_calls >= 1
     assert finding.id in store.findings
     assert store.comment_ids.get(9001) == finding.id
+    mock_post.assert_called_once()
+
+
+@patch("superseded.cli.load_config")
+@patch("superseded.cli._resolve_pr_review_diff")
+@patch("superseded.cli.post_review_to_pr")
+@patch("superseded.cli.MemoryStore")
+@patch("superseded.cli.current_repo")
+@patch("superseded.cli.ReviewEngine")
+@patch("superseded.cli._build_learned_context")
+@patch("superseded.cli.gather_context")
+@patch("superseded.cli.fetch_pr_description")
+@patch("superseded.cli.fetch_diff")
+def test_review_post_to_pr_in_config_posts_without_flag(
+    mock_fetch,
+    mock_desc,
+    mock_gather,
+    mock_learned,
+    mock_engine_cls,
+    mock_repo,
+    mock_store_cls,
+    mock_post,
+    mock_resolve,
+    mock_load_config,
+):
+    """post_to_pr: true in the config file posts even without the --post flag."""
+    mock_load_config.return_value = Config(post_to_pr=True)
+    mock_fetch.return_value = "diff"
+    mock_resolve.return_value = ("diff", "full", None)
+    mock_gather.return_value = {
+        "file_context": "ctx",
+        "static_signals": None,
+        "usage_signals": None,
+        "conventions_signals": None,
+        "spec_signals": None,
+    }
+    mock_learned.return_value = None
+    mock_desc.return_value = "PR body"
+    mock_engine = MagicMock()
+    mock_engine_cls.select.return_value = mock_engine
+    mock_engine.review.return_value = ReviewResult(findings=[_make_finding()])
+    mock_repo.return_value = "owner/repo"
+    mock_store_cls.return_value = FakeStore()
+    mock_post.return_value = [9001]
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--pr", "123"])
+
+    assert result.exit_code == 0, result.output
     mock_post.assert_called_once()
 
 

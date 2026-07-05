@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from superseded.audit.guidelines import assemble_learned_context
+from superseded.audit.guidelines import assemble_learned_context, format_memory_context
 from superseded.audit.reflector import PatternReflector
 from superseded.audit.stats import StatsAggregator
 from superseded.config import Config
@@ -473,12 +473,18 @@ async def _run_review_for_job(
             usage_retrieval=config.usage_retrieval,
             conventions=config.conventions,
             spec_retrieval=config.spec_retrieval,
+            graph=config.graph,
         )
         file_context = context["file_context"]
         static_signals = context["static_signals"]
         usage_signals = context["usage_signals"]
         conventions_signals = context["conventions_signals"]
         spec_signals = context["spec_signals"]
+
+        memory_context: str | None = None
+        if store is not None:
+            dismissed = await store.get_dismissed_findings(repo_key)
+            memory_context = format_memory_context(dismissed)
 
         learned_context: str | None = None
         if config.learned_review and store is not None:
@@ -522,6 +528,7 @@ async def _run_review_for_job(
             diff=diff,
             pr_description=pr_description,
             file_context=file_context,
+            memory_context=memory_context,
             static_signals=static_signals,
             usage_signals=usage_signals,
             conventions_signals=conventions_signals,
@@ -575,7 +582,11 @@ async def _run_review_for_job(
                 engine_for_reflection = ReviewEngine.select(
                     config.agent, model=config.model, config=config
                 )
-                reflector = PatternReflector(agent=engine_for_reflection.agent, store=store)
+                reflector = PatternReflector(
+                    agent=engine_for_reflection.agent,
+                    store=store,
+                    threshold=config.reflection_threshold,
+                )
                 await reflector.maybe_reflect(repo_key, cwd=repo_path)
 
         conclusion = "success" if payload["event"] != "REQUEST_CHANGES" else "failure"

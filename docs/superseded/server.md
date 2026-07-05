@@ -1,6 +1,6 @@
 # Server Mode & GitHub Integration
 
-Superseded can run as a **background server** that automatically reviews pull requests via GitHub webhooks, or as a **one-shot GitHub Action** in your CI pipeline.
+Superseded can run as a **background server** that automatically reviews pull requests via GitHub webhooks, or be triggered **on-demand from CI** via a composite GitHub Action that hands the PR off to a running server.
 
 ## Server Mode
 
@@ -150,50 +150,48 @@ docker build -f docker/Dockerfile --build-arg AI_CLIS=@anthropic-ai/claude-code 
 
 ## GitHub Action
 
-Superseded is packaged as a Docker-based GitHub Action (`action.yml`).
+The GitHub Action (`action.yml`) is a **composite** Action — a single `curl` step
+that POSTs `{owner, repo, pr_number, passes?}` to your running review server's
+`/review/pr` endpoint. The server runs the agents in sandboxes and posts the
+review via its GitHub App. No Docker image is built in CI and no agent
+credentials live on the runner — the server owns agent/model/credentials.
 
 ### Usage
 
 ```yaml
-name: AI Code Review
+# .github/workflows/review.yml
+name: Code Review
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-
 jobs:
   review:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: your-org/superseded@main
+      - uses: fabioesposito/superseded@v1
         with:
-          agent: claude-code
-          model: claude-sonnet-4-6
-          passes: security,correctness,performance,style,architecture
-          post: true
+          server-url: https://reviews.example.com
+          server-key: ${{ secrets.SUPERSEDED_SERVER_KEY }}
+          passes: security,correctness,performance
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # env vars override the inputs (useful for org-wide secrets):
+          # SUPERSEDED_SERVER_URL: https://reviews.example.com
+          # SUPERSEDED_SERVER_KEY: ${{ secrets.SUPERSEDED_SERVER_KEY }}
 ```
 
 ### Action Inputs
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `agent` | No | `opencode` | AI CLI to use |
-| `model` | No | — | Model ID |
-| `passes` | No | — | Comma-separated passes (defaults to all enabled) |
-| `post` | No | `false` | Post review as inline comments |
+| `server-url` | No* | — | Base URL of the running review server |
+| `server-key` | No* | — | Bearer API key for the `/review/pr` endpoint (map from a secret) |
+| `passes` | No | — | Comma-separated passes to run (the server default applies if omitted) |
 
-### Action Environment Variables
+\* `server-url` and `server-key` are each optional as inputs but one way or
+another both must be supplied — the step fails if either is empty.
 
-| Variable | Purpose |
-|---|---|
-| `GITHUB_TOKEN` | Auto-provided — used for `gh pr diff` and posting comments |
-| `ANTHROPIC_API_KEY` | Required for `claude-code` agent |
-| `OPENAI_API_KEY` | Required for `codex` agent |
-
-The Action uses the `GITHUB_EVENT_PULL_REQUEST_NUMBER` environment variable (set by GitHub) to determine the PR to review.
+`SUPERSEDED_SERVER_URL` / `SUPERSEDED_SERVER_KEY` env vars override the
+`server-url` / `server-key` inputs. The PR number is read from the
+`GITHUB_EVENT_PULL_REQUEST_NUMBER` variable GitHub sets automatically; no
+`permissions:` block is needed because the server's App performs all GitHub
+writes.

@@ -75,7 +75,7 @@ workflow (the server's App does all GitHub writes).
 name: Code Review
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
 jobs:
   review:
     runs-on: ubuntu-latest
@@ -329,7 +329,7 @@ Dismissed findings are injected into future review prompts so the tool avoids re
 - **GitHub integration** — Post findings as inline PR review comments. Critical issues request changes, suggestions post as comments
 - **Pluggable agents** — Use Claude Code, OpenCode, or Codex. Choose per-review or configure as default
 - **Structured output** — JSON for piping, markdown for docs, terminal table for quick scanning
-- **CI-native** — Docker-based GitHub Action. Runs on every PR, posts results as review comments
+- **CI-native** — Composite GitHub Action hands each PR to your review server; no agents or secrets in CI
 - **Server mode** — Self-hosted GitHub App. Multiple repos, webhook-driven, configurable concurrency
 - **Sandbox isolation** — Every server-mode review runs inside an ephemeral microVM (Docker Sandboxes or smolvm). One VM per PR, destroyed when the review finishes
 - **Static analysis pre-pass** — Auto-detects linters (ruff, mypy, eslint, bandit, gitleaks, go vet) and injects deterministic signals before AI review
@@ -374,7 +374,7 @@ Selection precedence for `agent`/`model`: **env vars > CLI flags > config**:
   |-------|---------|------|
   | **claude-code** | `npm install -g @anthropic-ai/claude-code` | `ANTHROPIC_API_KEY` |
   | **opencode** | `curl -fsSL https://opencode.ai/install.sh \| sh` | Provider-specific |
-  | **codex** | `pip install openai-codex` | `CODEX_API_KEY` |
+  | **codex** | `npm install -g @openai/codex` | `CODEX_API_KEY` |
 - **git** (required) — comes standard on most systems
 - **GitHub CLI (`gh`)** (required for `--pr` and `--post`): `gh auth login` must be authenticated
 - **gitleaks** (optional) — static analysis for secrets/hardcoded keys; runs automatically when on PATH. Install: `brew install gitleaks` or https://github.com/gitleaks/gitleaks

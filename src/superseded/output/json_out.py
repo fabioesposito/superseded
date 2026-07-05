@@ -6,5 +6,8 @@ from superseded.models import ReviewResult
 
 
 def format_json(result: ReviewResult) -> str:
-    data = [f.model_dump() for f in result.findings]
+    data = {
+        "findings": [f.model_dump() for f in result.findings],
+        "warnings": list(result.warnings),
+    }
     return json.dumps(data, indent=2)

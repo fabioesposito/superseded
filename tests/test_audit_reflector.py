@@ -84,6 +84,27 @@ async def test_below_threshold(mock_agent, mock_store):
 
 
 @pytest.mark.asyncio
+async def test_threshold_param_lowers_minimum_feedback(mock_agent, mock_store):
+    """threshold=1 triggers reflection with fewer than the default 5 feedback items."""
+    mock_store.get_reflection_state = AsyncMock(return_value=0)
+    mock_store.set_reflection_state = AsyncMock()
+    _setup_mock_store_db(mock_store, _make_feedback_rows(3))
+
+    rules = [
+        {"rule": "Do not flag naming conventions in test files", "evidence": "e", "confidence": 0.7}
+    ]
+    mock_agent.parse_output.return_value = rules
+
+    with patch("superseded.audit.reflector.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stdout="json output", stderr="")
+        reflector = PatternReflector(mock_agent, mock_store, threshold=1)
+        result = await reflector.maybe_reflect("owner/repo")
+
+    assert len(result) == 1
+    mock_run.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_processes_feedback(mock_agent, mock_store):
     """Valid feedback triggers agent call and returns parsed rules."""
     mock_store.get_reflection_state = AsyncMock(return_value=0)

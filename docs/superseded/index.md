@@ -18,9 +18,10 @@ Superseded is a CLI tool that runs **five parallel AI code review passes** over 
 
 ```bash
 # 1. Install
-pip install superseded
-# or with uv
-uv add superseded
+uv tool install git+https://github.com/fabioesposito/superseded
+# or, from a source checkout:
+#   git clone https://github.com/fabioesposito/superseded
+#   cd superseded && uv sync && uv tool install .
 
 # 2. Detect your AI CLI and write config
 superseded init

@@ -51,16 +51,29 @@ def test_json_output():
     result = make_result()
     out = format_json(result)
     data = json.loads(out)
-    assert len(data) == 1
-    assert data[0]["severity"] == "critical"
+    assert len(data["findings"]) == 1
+    assert data["findings"][0]["severity"] == "critical"
 
 
 def test_json_output_includes_id():
     result = make_result()
     out = format_json(result)
     data = json.loads(out)
-    assert "id" in data[0]
-    assert data[0]["id"].startswith("security-")
+    assert "id" in data["findings"][0]
+    assert data["findings"][0]["id"].startswith("security-")
+
+
+def test_json_output_includes_warnings():
+    result = ReviewResult(findings=[], warnings=["pass 'security' failed: boom"])
+    data = json.loads(format_json(result))
+    assert data["findings"] == []
+    assert data["warnings"] == ["pass 'security' failed: boom"]
+
+
+def test_json_output_warnings_empty_when_none():
+    result = make_result()
+    data = json.loads(format_json(result))
+    assert data["warnings"] == []
 
 
 def test_markdown_output():

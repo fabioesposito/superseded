@@ -268,6 +268,77 @@ async def test_run_review_for_job_forwards_conventions_and_specs():
 
 
 @pytest.mark.asyncio
+async def test_run_review_for_job_injects_memory_context_and_graph(tmp_path):
+    """Server path must forward the graph flag and inject dismissed-findings memory.
+
+    Closes the gap between the advertised self-improvement loop ("every dismissed
+    finding sharpens the next review") and the server path, which previously
+    omitted both graph retrieval and memory_context.
+    """
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    await store.init()
+    async with store:
+        await store.record_finding(
+            finding_id="sec-old",
+            repo="owner/repo",
+            pass_name="security",
+            severity="suggestion",
+            file="old.py",
+            line=9,
+            title="Missing type hints",
+            description="dismissed before",
+        )
+        await store.record_feedback(finding_id="sec-old", action="dismiss")
+
+    captured: dict = {}
+    fake_engine = MagicMock()
+    fake_engine.review.side_effect = lambda **kw: captured.update(kw) or ReviewResult(findings=[])
+
+    github = FakeGitHubApp()
+    github.post_review = AsyncMock(return_value=[])
+    repo_manager = FakeRepoManager()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
+    job = ReviewJob(1, "owner", "repo", 7, "abc", "def")
+
+    def fake_gather(diff, root, **kwargs):
+        captured["gather_kwargs"] = kwargs
+        return {
+            "file_context": None,
+            "static_signals": None,
+            "usage_signals": None,
+            "conventions_signals": None,
+            "spec_signals": None,
+        }
+
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo",
+            new_callable=AsyncMock,
+            return_value=tmp_path,
+        ),
+        patch("superseded.config.load_config", return_value=Config()),
+        patch("superseded.review.engine.ReviewEngine.select", return_value=fake_engine),
+        patch("superseded.server.worker.gather_context", side_effect=fake_gather),
+    ):
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="t",
+            job=job,
+            correlation_id="c",
+            store=store,
+        )
+
+    assert captured["gather_kwargs"].get("graph") is True
+    mem = captured.get("memory_context")
+    assert mem is not None
+    assert "Missing type hints" in mem
+
+
+@pytest.mark.asyncio
 async def test_run_review_skips_clone_when_disk_full():
     from superseded.server.worker import _run_review_for_job
 

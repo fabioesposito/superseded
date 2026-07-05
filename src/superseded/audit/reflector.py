@@ -84,9 +84,12 @@ def _build_reflection_prompt(accepted: list[dict], dismissed: list[dict]) -> str
 
 
 class PatternReflector:
-    def __init__(self, agent: Agent, store: MemoryStore) -> None:
+    def __init__(
+        self, agent: Agent, store: MemoryStore, threshold: int = REFLECTION_THRESHOLD
+    ) -> None:
         self._agent = agent
         self._store = store
+        self._threshold = threshold
 
     async def maybe_reflect(self, repo: str, cwd: str | Path | None = None) -> list[dict]:
         """If unprocessed feedback >= threshold, run reflection pass.
@@ -115,7 +118,7 @@ class PatternReflector:
             )
             rows = await cursor.fetchall()
 
-        if len(rows) < REFLECTION_THRESHOLD:
+        if len(rows) < self._threshold:
             return []
 
         accepted: list[dict] = []

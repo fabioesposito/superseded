@@ -40,7 +40,7 @@ superseded review --pr 123 --format markdown   # for docs/PR bodies
 
 **Table** (default): Columns for severity (colored icon), pass name, file, line, title. Summary footer with per-severity counts.
 
-**JSON**: Array of finding objects, each with `id`, `pass_name`, `severity`, `file`, `line`, `end_line`, `title`, `description`, `suggestion`, `confidence`, `reasoning`.
+**JSON**: An object `{"findings": [...], "warnings": [...]}`. Each finding has `id`, `pass_name`, `severity`, `file`, `line`, `end_line`, `title`, `description`, `suggestion`, `confidence`, `reasoning`. The `warnings` array lists any passes that failed and were skipped (empty when all passes succeeded), so a `findings: []` result is never confused with a clean run — pipe with `jq '.findings[]'` and check `.warnings` for pass failures.
 
 **Markdown**: Grouped by severity with collapsible reasoning details. Suitable for pasting into issue bodies.
 
