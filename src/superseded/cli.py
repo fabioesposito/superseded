@@ -822,10 +822,16 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
     store = make_store(config.database_url, max_size=config.max_concurrent_reviews + 2)
     sandbox = SandboxSettings(
         enabled=config.sandbox_enabled,
+        kind=config.sandbox_kind,
         binary=config.sbx_binary,
         timeout=config.sandbox_timeout,
         keep_on_error=config.sandbox_keep_on_error,
         io_mode=config.sandbox_io_mode,
+        smolvm_binary=config.smolvm_binary,
+        smolvm_image=config.smolvm_image,
+        smolvm_image_claude=config.smolvm_image_claude,
+        smolvm_image_opencode=config.smolvm_image_opencode,
+        smolvm_image_codex=config.smolvm_image_codex,
     )
     worker = ReviewWorker(
         github=github,

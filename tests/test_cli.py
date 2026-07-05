@@ -673,3 +673,47 @@ def test_run_review_sandbox_builds_sandbox_executor(tmp_path, monkeypatch):
     )
     ex = captured.get("executor")
     assert isinstance(ex, SandboxExecutor)
+
+
+def test_serve_threads_smolvm_sandbox_fields(monkeypatch):
+    """SandboxSettings built by `serve` carries kind+smolvm_image_* from ServerConfig."""
+    import pathlib
+    import tempfile
+
+    pk = pathlib.Path(tempfile.mkstemp(suffix=".pem")[1])
+    pk.write_text("dummy")
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "123456")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whs")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(pk))
+    monkeypatch.setenv("SUPERSEDED_SANDBOX", "1")
+    monkeypatch.setenv("SUPERSEDED_SANDBOX_KIND", "smolvm")
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE", "gcr/x/all:1")
+
+    captured = {}
+
+    from superseded.server import worker as worker_mod
+
+    real_init = worker_mod.ReviewWorker.__init__
+
+    def spy(self, **kw):
+        captured["sandbox"] = kw.get("sandbox")
+        return real_init(self, **kw)
+
+    monkeypatch.setattr(worker_mod.ReviewWorker, "__init__", spy)
+
+    import contextlib
+
+    import uvicorn  # noqa: F401
+
+    monkeypatch.setattr("uvicorn.run", lambda **k: None)
+
+    from click.testing import CliRunner
+
+    from superseded.cli import cli
+
+    runner = CliRunner()
+    with contextlib.suppress(Exception):
+        runner.invoke(cli, ["serve", "--host", "127.0.0.1", "--port", "0"])
+    assert "sandbox" in captured
+    assert captured["sandbox"].kind == "smolvm"
+    assert captured["sandbox"].smolvm_image == "gcr/x/all:1"
