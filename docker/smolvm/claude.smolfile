@@ -1,0 +1,21 @@
+# Reference Smolfile for running claude-code inside a smolvm microVM.
+#
+# The superseded server does NOT read this file. It builds the equivalent
+# MachineConfig in Python (src/superseded/review/executor.py:_SmolvmSession.
+# __enter__). This file exists for local dev/test of the agent image:
+#
+#   docker/smolvm/build.sh claude
+#   export ANTHROPIC_API_KEY=sk-ant-...
+#   smolvm machine run -s docker/smolvm/claude.smolfile -v "$PWD":/workspace -- \
+#       claude -p --model claude-sonnet-4-6 < my-prompt.txt
+#
+# The `[secrets]` block forwards the host's ANTHROPIC_API_KEY into the guest
+# process env at launch (resolved by the smolvm CLI under trusted-local scope;
+# never persisted in any VM record).
+
+image = "superseded-smolvm-claude:latest"
+net = true
+workdir = "/workspace"
+
+[secrets]
+ANTHROPIC_API_KEY = { from_env = "ANTHROPIC_API_KEY" }

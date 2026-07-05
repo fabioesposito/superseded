@@ -241,6 +241,21 @@ export SUPERSEDED_SMOLVM_IMAGE_CLAUDE=ghcr.io/your-org/superseded-claude:latest
 # export SUPERSEDED_SMOLVM_IMAGE=ghcr.io/your-org/superseded-all:latest
 ```
 
+**Build the images yourself** with the checked-in presets under `docker/smolvm/`:
+
+```bash
+docker/smolvm/build.sh                 # builds superseded-smolvm-{claude,opencode,codex}:latest
+docker/smolvm/build.sh claude          # one agent only
+export SUPERSEDED_SMOLVM_IMAGE_CLAUDE=superseded-smolvm-claude:latest
+```
+
+Each image is a slim Node.js base with just the named agent CLI on `PATH`
+(superseded itself stays on the host). Companion `*.smolfile` presets next to
+the Dockerfile declare the runtime shape (image, `/workspace` mount,
+provider-key secret refs) for local dev/test via `smolvm machine run -s
+docker/smolvm/claude.smolfile ...` — the server does not read them; it builds
+the equivalent `MachineConfig` in Python.
+
 The server boots the OCI image as a microVM via the embedded `smol` SDK (libkrun,
 in-process — no daemon, no CLI on `PATH`), mounts the per-job repo checkout at
 `/workspace`, runs the 5 passes as concurrent `m.exec()` calls against the same

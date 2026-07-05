@@ -1,0 +1,14 @@
+# Reference Smolfile for running opencode inside a smolvm microVM.
+# See claude.smolfile for usage. Build first: docker/smolvm/build.sh opencode
+#
+# opencode can target multiple providers; superseded injects both ANTHROPIC and
+# OPENAI keys (whichever is set on the host) so the same image works regardless
+# of which underlying model the operator configures opencode to call.
+
+image = "superseded-smolvm-opencode:latest"
+net = true
+workdir = "/workspace"
+
+[secrets]
+ANTHROPIC_API_KEY = { from_env = "ANTHROPIC_API_KEY" }
+OPENAI_API_KEY = { from_env = "OPENAI_API_KEY" }
