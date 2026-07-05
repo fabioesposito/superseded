@@ -95,9 +95,48 @@ def resolve_sandbox(cli_value: bool | None, config: Config) -> bool:
     return config.sandbox
 
 
+def _resolve_smolvm_image(agent_name: str) -> str | None:
+    per_agent_var = f"SUPERSEDED_SMOLVM_IMAGE_{agent_name.upper().replace('-', '_')}"
+    return os.environ.get(per_agent_var) or os.environ.get("SUPERSEDED_SMOLVM_IMAGE")
+
+
+def _opencode_auth_files() -> dict[str, str]:
+    """Read the host's opencode auth.json and map it to the smolvm guest path.
+
+    opencode stores provider credentials at ``$XDG_DATA_HOME/opencode/auth.json``.
+    The smolvm guest images run as root (HOME=/root), so the file is materialized
+    there. Only auth.json is seeded — no host config/plugins leak into the guest.
+    """
+    data_home = os.environ.get(
+        "XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")
+    )
+    src = Path(data_home) / "opencode" / "auth.json"
+    if not src.is_file():
+        return {}
+    try:
+        content = src.read_text()
+    except OSError:
+        return {}
+    return {"/root/.local/share/opencode/auth.json": content}
+
+
 def _select_executor(sandbox: bool, *, agent_name: str, timeout: int) -> AgentExecutor:
     if not sandbox:
         return SubprocessExecutor()
+    kind = os.environ.get("SUPERSEDED_SANDBOX_KIND", "sbx").strip().lower()
+    if kind == "smolvm":
+        resolved_image = _resolve_smolvm_image(agent_name)
+        provider_files: dict[str, str] = {}
+        if agent_name == "opencode":
+            provider_files = _opencode_auth_files()
+        return make_sandbox_executor(
+            kind="smolvm",
+            agent_name=agent_name,
+            name=f"superseded-local-{uuid.uuid4().hex[:10]}",
+            timeout=timeout,
+            resolved_image=resolved_image,
+            provider_files=provider_files,
+        )
     return make_sandbox_executor(
         agent_name=agent_name,
         name=f"superseded-local-{uuid.uuid4().hex[:10]}",
@@ -411,10 +450,18 @@ def _run_review(
     executor = _select_executor(sandbox, agent_name=agent_name, timeout=pass_timeout)
     if not executor.available(engine.agent):
         if sandbox:
-            msg = (
-                "Error: 'sbx' (Docker Sandboxes) not found on PATH. "
-                "Install docker-sbx to use --sandbox."
-            )
+            kind = os.environ.get("SUPERSEDED_SANDBOX_KIND", "sbx").strip().lower()
+            if kind == "smolvm":
+                msg = (
+                    "Error: smolvm sandbox unavailable. Install the extra "
+                    "(`uv sync --extra sandbox`) and set SUPERSEDED_SMOLVM_IMAGE "
+                    f"or SUPERSEDED_SMOLVM_IMAGE_{agent_name.upper().replace('-', '_')}."
+                )
+            else:
+                msg = (
+                    "Error: 'sbx' (Docker Sandboxes) not found on PATH. "
+                    "Install docker-sbx to use --sandbox."
+                )
         else:
             msg = (
                 f"Error: Agent CLI '{engine.agent.name}' not found on PATH. "

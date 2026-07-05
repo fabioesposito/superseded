@@ -4,9 +4,11 @@ import contextlib
 import importlib.util
 import logging
 import os
+import posixpath
 import shlex
 import shutil
 import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -272,6 +274,7 @@ def make_sandbox_executor(
     io_mode: str = "exec",
     smolvm_binary: str = "smolvm",
     resolved_image: str | None = None,
+    provider_files: dict[str, str] | None = None,
 ) -> SandboxExecutor | SmolvmExecutor:
     """Build the configured sandbox executor.
 
@@ -303,6 +306,8 @@ def make_sandbox_executor(
             cwd=cwd,
             timeout=timeout,
             keep_on_error=keep_on_error,
+            provider_files=provider_files,
+            smolvm_binary=smolvm_binary,
         )
     raise ValueError(f"unknown sandbox kind: {kind!r}")
 
@@ -332,8 +337,59 @@ def _filter_provider_keys(mapping: dict[str, str], environ: dict[str, str]) -> d
     return {guest: environ[host] for guest, host in mapping.items() if host in environ}
 
 
+def _relocate_under_root(guest_path: str, new_root: str) -> str:
+    """Rewrite a /root-prefixed guest path to live under ``new_root``.
+
+    auth files are seeded keyed to /root/.local/...; under per-exec HOME
+    isolation they must move to <new_root>/.local/... so opencode finds them.
+    Paths not starting with /root are returned unchanged.
+    """
+    if guest_path == "/root":
+        return new_root
+    if guest_path.startswith("/root/"):
+        return new_root + guest_path[len("/root"):]
+    return guest_path
+
+
+def _resolve_boot_source(image: str, smolvm_binary: str) -> str:
+    """Decide how to materialize ``image`` into a smolvm machine.
+
+    Returns one of:
+      * ``"file"``     - image is a path to a docker-save/rootfs archive on disk
+                        (passed straight to ``smolvm ... --image <path>``).
+      * ``"docker"``   - image is a bare LOCAL docker tag; we stream
+                        ``docker save <tag>`` into ``smolvm ... --image -`` so a
+                        locally-built image works with no tar file and no push.
+      * ``"registry"`` - anything else (e.g. ``ghcr.io/org/img:tag``): the
+                        embedded smol SDK pulls it at boot.
+    """
+    if not image:
+        return "registry"
+    if os.path.exists(image):
+        return "file"
+    if shutil.which("docker"):
+        try:
+            inspect = subprocess.run(
+                ["docker", "image", "inspect", image],
+                capture_output=True,
+                timeout=30,
+            )
+        except Exception:
+            return "registry"
+        if inspect.returncode == 0:
+            return "docker"
+    return "registry"
+
+
 class _SmolvmSession:
-    """One smolvm machine, shared across the concurrent passes of a review."""
+    """One smolvm machine, shared across the concurrent passes of a review.
+
+    Two boot modes, selected automatically from the image reference:
+      * local file (a docker-save archive / rootfs tar/dir on disk) → shell out to
+        the ``smolvm`` CLI, which supports local image archives; the embedded SDK
+        does not (it only pulls registry refs).
+      * registry reference (e.g. ``ghcr.io/org/img:tag``) → embedded ``smol`` SDK.
+    """
 
     def __init__(
         self,
@@ -344,6 +400,8 @@ class _SmolvmSession:
         timeout: int,
         keep_on_error: bool,
         keys: dict[str, str],
+        auth_files: dict[str, str] | None = None,
+        smolvm_binary: str = "smolvm",
     ) -> None:
         self._image = image
         self._name = name
@@ -351,10 +409,183 @@ class _SmolvmSession:
         self._timeout = timeout
         self._keep_on_error = keep_on_error
         self._keys = keys
+        self._auth_files = auth_files or {}
+        self._smolvm_binary = smolvm_binary
         self._machine = None
         self._errored = False
+        # Boot source: how the image reaches the VM.
+        #  - "file":     image is a path to a docker-save/rootfs archive on disk
+        #  - "docker":   image is a bare local docker tag → pipe `docker save`
+        #                into `smolvm ... --image -` (no tar file, no push/pull)
+        #  - "registry": image is a registry ref → embedded smol SDK pulls it
+        self._boot_source = _resolve_boot_source(image, smolvm_binary)
 
+    @property
+    def _cli_mode(self) -> bool:
+        return self._boot_source in ("file", "docker")
+
+    # -- lifecycle ----------------------------------------------------------
     def __enter__(self) -> _SmolvmSession:
+        if self._cli_mode:
+            self._cli_start()
+            # CLI mode seeds auth per-exec under an isolated HOME (see _cli_run),
+            # so there is nothing to seed at session start.
+        else:
+            self._sdk_start()
+            for guest_path, content in self._auth_files.items():
+                self._seed_file_sdk(guest_path, content)
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if self._keep_on_error and self._errored:
+            logger.warning("keep_on_error: leaving smolvm %s for inspection", self._name)
+            return None
+        try:
+            if self._cli_mode:
+                subprocess.run(
+                    [self._smolvm_binary, "machine", "delete", "--name", self._name, "-f"],
+                    check=False,
+                    capture_output=True,
+                    timeout=max(30, self._timeout),
+                )
+            elif self._machine is not None:
+                self._machine.delete()
+        except Exception:
+            logger.warning("smol delete failed for machine %s", self._name)
+        return None
+
+    # -- run ----------------------------------------------------------------
+    def run(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
+        # CLI mode persists files across execs under /root; the VM's /tmp is
+        # ephemeral per exec there. SDK mode runs in one continuous VM where
+        # /tmp is stable, so it keeps the historic /tmp location.
+        prefix = "/root" if self._cli_mode else "/tmp"
+        prompt_guest = f"{prefix}/_smol_prompt_{uuid.uuid4().hex[:8]}.txt"
+        if self._cli_mode:
+            return self._cli_run(cmd, prompt, prompt_guest, timeout=timeout)
+        return self._sdk_run(cmd, prompt, prompt_guest, timeout=timeout)
+
+    # -- CLI mode -----------------------------------------------------------
+    def _cli(self, *args: str, **run_kw) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [self._smolvm_binary, *args],
+            capture_output=True,
+            text=True,
+            **run_kw,
+        )
+
+    def _cli_start(self) -> None:
+        create_argv = [
+            self._smolvm_binary,
+            "machine", "create",
+            "--name", self._name,
+            "--net",
+            "-v", f"{self._cwd}:/workspace",
+        ]
+        if self._boot_source == "docker":
+            # Stream `docker save <tag>` into smolvm via stdin (`--image -`): a
+            # locally-built image boots with no tar file on disk and no push/pull.
+            docker = subprocess.Popen(
+                ["docker", "save", self._image],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            try:
+                create = subprocess.run(
+                    [*create_argv, "--image", "-"],
+                    stdin=docker.stdout,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+            finally:
+                if docker.stdout:
+                    docker.stdout.close()
+                docker.wait(timeout=120)
+            if create.returncode != 0:
+                raise AgentRunError(f"smolvm create failed: {(create.stderr or create.stdout).strip()}")
+        else:
+            create = self._cli(*create_argv, "--image", self._image, timeout=300)
+            if create.returncode != 0:
+                raise AgentRunError(f"smolvm create failed: {(create.stderr or create.stdout).strip()}")
+        start = self._cli("machine", "start", "--name", self._name, timeout=180)
+        if start.returncode != 0:
+            raise AgentRunError(f"smolvm start failed: {(start.stderr or start.stdout).strip()}")
+
+    def _seed_file_sdk(self, guest_path: str, content: str) -> None:
+        guest_dir = posixpath.dirname(guest_path)
+        try:
+            _, _, _, _, exec_options_cls = _smol()
+            if guest_dir:
+                self._machine.exec(["mkdir", "-p", guest_dir], exec_options_cls())
+            self._machine.write_file(guest_path, content)
+        except Exception as err:
+            logger.warning("smolvm: failed to seed %s: %s", guest_path, err)
+
+    def _cli_run(self, cmd: list[str], prompt: str, prompt_guest: str, *, timeout: int) -> str:
+        shell = f"{shlex.join(cmd)} < {shlex.quote(prompt_guest)}"
+        argv = [self._smolvm_binary, "machine", "exec", "--name", self._name, "-w", "/workspace"]
+        # Passes run concurrently against one shared VM. opencode touches several
+        # SQLite DBs (state, cache, data) that error with "database is locked"
+        # when two invocations share them, so give each exec a fully isolated
+        # HOME and re-seed auth.json into it. /workspace (the repo checkout) is
+        # the only shared, read-only-ish path; everything writable is per-exec.
+        suffix = uuid.uuid4().hex[:8]
+        home = f"/root/.home-{suffix}"
+        env = dict(self._keys)
+        env.setdefault("HOME", home)
+        # Relocate auth files (keyed under /root/...) into the per-exec HOME.
+        for guest_path, content in self._auth_files.items():
+            target = _relocate_under_root(guest_path, home)
+            self._cli_write_guest_file(target, content)
+        for k, v in env.items():
+            argv += ["-e", f"{k}={v}"]
+        argv += ["--timeout", f"{timeout}s", "--", "sh", "-c", shell]
+        try:
+            self._cli_write_guest_file(prompt_guest, prompt)
+            result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout + 30)
+        except subprocess.TimeoutExpired as err:
+            self._errored = True
+            raise AgentRunError(f"smolvm exec timed out after {timeout}s") from err
+        except Exception as err:
+            self._errored = True
+            raise AgentRunError(f"smolvm exec failed: {err}") from err
+        if result.returncode != 0:
+            self._errored = True
+            stderr = result.stderr.strip()
+            raise AgentRunError(
+                f"Agent '{cmd[0]}' exited {result.returncode}" + (f": {stderr}" if stderr else "")
+            )
+        return result.stdout
+
+    def _cli_write_guest_file(self, guest_path: str, content: str) -> None:
+        """Copy host-written bytes to a guest path via `smolvm machine cp`.
+
+        Creates the parent directory first. Best-effort: failures are logged
+        but not fatal (a missing auth file surfaces as an auth error downstream).
+        """
+        guest_dir = posixpath.dirname(guest_path)
+        try:
+            if guest_dir:
+                self._cli(
+                    "machine", "exec", "--name", self._name, "--", "mkdir", "-p", guest_dir,
+                    timeout=60,
+                )
+            with tempfile.NamedTemporaryFile("w", suffix=".seed", delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            try:
+                self._cli(
+                    "machine", "cp", tmp_path, f"{self._name}:{guest_path}",
+                    timeout=120,
+                )
+            finally:
+                os.unlink(tmp_path)
+        except Exception as err:
+            logger.warning("smolvm: failed to seed %s: %s", guest_path, err)
+
+    # -- SDK mode (registry images) ----------------------------------------
+    def _sdk_start(self) -> None:
         machine_cls, machine_cfg_cls, mount_spec_cls, resource_spec_cls, _ = _smol()
         try:
             self._machine = machine_cls.create(
@@ -367,22 +598,9 @@ class _SmolvmSession:
             )
         except Exception as err:
             raise AgentRunError(f"smol Machine.create failed: {err}") from err
-        return self
 
-    def __exit__(self, *exc: object) -> None:
-        if self._keep_on_error and self._errored:
-            logger.warning("keep_on_error: leaving smolvm %s for inspection", self._name)
-            return None
-        try:
-            if self._machine is not None:
-                self._machine.delete()
-        except Exception:
-            logger.warning("smol delete failed for machine %s", self._name)
-        return None
-
-    def run(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
+    def _sdk_run(self, cmd: list[str], prompt: str, prompt_guest: str, *, timeout: int) -> str:
         _, _, _, _, exec_options_cls = _smol()
-        prompt_guest = f"/tmp/_smol_prompt_{uuid.uuid4().hex[:8]}.txt"
         shell = f"cd /workspace && {shlex.join(cmd)} < {shlex.quote(prompt_guest)}"
         try:
             self._machine.write_file(prompt_guest, prompt)
@@ -419,6 +637,8 @@ class SmolvmExecutor:
         timeout: int = DEFAULT_SANDBOX_TIMEOUT,
         keep_on_error: bool = False,
         provider_keys_mapping: dict[str, str] | None = None,
+        provider_files: dict[str, str] | None = None,
+        smolvm_binary: str = "smolvm",
     ) -> None:
         self._agent_name = agent_name
         self._image = image
@@ -427,9 +647,16 @@ class SmolvmExecutor:
         self._timeout = timeout
         self._keep_on_error = keep_on_error
         self._keys = provider_keys_mapping or dict(_DEFAULT_PROVIDER_KEYS)
+        self._provider_files = provider_files or {}
+        self._smolvm_binary = smolvm_binary
 
     def available(self, agent: Agent) -> bool:
-        return SMOLVM_AVAILABLE and self._image != ""
+        # CLI modes (local file or local docker tag) need only the smolvm binary
+        # (plus docker for the tag case); SDK/registry mode needs the smol extra.
+        # Either is acceptable; a missing image ref is always unavailable.
+        if not self._image:
+            return False
+        return shutil.which(self._smolvm_binary) is not None or SMOLVM_AVAILABLE
 
     def session(
         self, cwd: str | Path | None = None, *, env: dict[str, str] | None = None
@@ -446,4 +673,6 @@ class SmolvmExecutor:
             timeout=self._timeout,
             keep_on_error=self._keep_on_error,
             keys=_filter_provider_keys(self._keys, os.environ),
+            auth_files=self._provider_files,
+            smolvm_binary=self._smolvm_binary,
         )

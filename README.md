@@ -241,6 +241,14 @@ export SUPERSEDED_SMOLVM_IMAGE_CLAUDE=ghcr.io/your-org/superseded-claude:latest
 # export SUPERSEDED_SMOLVM_IMAGE=ghcr.io/your-org/superseded-all:latest
 ```
 
+The `SUPERSEDED_SMOLVM_IMAGE_<AGENT>` value can be any of:
+
+| Value | How it boots |
+|---|---|
+| a path to a file on disk (e.g. `/tmp/img.tar`) | passed straight to `smolvm ... --image <path>` |
+| a **bare local docker tag** (e.g. `superseded-smolvm-opencode:latest`) | `docker save <tag>` is streamed into `smolvm ... --image -` — no tar file, no registry push/pull |
+| a registry reference (e.g. `ghcr.io/org/img:tag`) | pulled at boot by the embedded `smol` SDK |
+
 **Build the images yourself** with the checked-in presets under `docker/smolvm/`:
 
 ```bash
@@ -263,6 +271,33 @@ machine, then deletes it. Provider keys live only in the server's process
 environment and are forwarded into each exec call as guest env — they never
 persist on disk inside the VM. Network egress is open by default; lock it down
 per agent by building the image with the agent's own egress controls.
+
+#### smolvm from the local CLI (`superseded review --sandbox`)
+
+`--sandbox` honors `SUPERSEDED_SANDBOX_KIND`, so you can run a smolvm-sandboxed
+review without standing up the server — handy for trying a review exactly as the
+server would run it. Build an image, point the env var at the **bare docker tag**,
+and run:
+
+```bash
+docker/smolvm/build.sh opencode
+export SUPERSEDED_SANDBOX=1
+export SUPERSEDED_SANDBOX_KIND=smolvm
+export SUPERSEDED_SMOLVM_IMAGE_OPENCODE=superseded-smolvm-opencode:latest
+superseded review --diff HEAD~1..HEAD --agent opencode --model opencode/big-pickle --sandbox
+```
+
+No `docker save`, tar file, or registry push is required — the executor detects
+the local tag and streams `docker save <tag>` into `smolvm machine create --image -`.
+
+**Credentials inside the VM.** The server path injects `ANTHROPIC_API_KEY` /
+`OPENAI_API_KEY` from its environment. The local smolvm path additionally seeds
+the host's opencode credentials: when `--agent opencode` is used, the host's
+`~/.local/share/opencode/auth.json` is materialized into each pass's isolated
+guest `HOME` so provider-plan models (e.g. `opencode/big-pickle`) authenticate
+without an API key env var. Each concurrent pass gets its own guest `HOME` to
+avoid opencode's SQLite state DBs colliding ("database is locked").
+
 
 ### Feedback
 
