@@ -262,6 +262,7 @@ class SandboxExecutor:
 
 def make_sandbox_executor(
     *,
+    kind: str = "sbx",
     agent_name: str,
     name: str,
     cwd: str | Path | None = None,
@@ -269,18 +270,41 @@ def make_sandbox_executor(
     keep_on_error: bool = False,
     binary: str = "sbx",
     io_mode: str = "exec",
-) -> SandboxExecutor:
-    """Build a SandboxExecutor, mapping superseded agent names to sbx agent names."""
-    sbx_agent = SBX_AGENT_MAP.get(agent_name, agent_name)
-    return SandboxExecutor(
-        binary=binary,
-        agent_name=sbx_agent,
-        name=name,
-        cwd=cwd,
-        timeout=timeout,
-        keep_on_error=keep_on_error,
-        io_mode=io_mode,
-    )
+    smolvm_binary: str = "smolvm",
+    resolved_image: str | None = None,
+) -> SandboxExecutor | SmolvmExecutor:
+    """Build the configured sandbox executor.
+
+    ``kind="sbx"`` (default) shells out to the ``sbx`` CLI; ``kind="smolvm"``
+    uses the embedded ``smol`` SDK and requires ``resolved_image``.
+    """
+    if kind == "sbx":
+        sbx_agent = SBX_AGENT_MAP.get(agent_name, agent_name)
+        return SandboxExecutor(
+            binary=binary,
+            agent_name=sbx_agent,
+            name=name,
+            cwd=cwd,
+            timeout=timeout,
+            keep_on_error=keep_on_error,
+            io_mode=io_mode,
+        )
+    if kind == "smolvm":
+        if not resolved_image:
+            raise ValueError(
+                "smolvm executor requires resolved_image "
+                "(set SUPERSEDED_SMOLVM_IMAGE or the per-agent "
+                "SUPERSEDED_SMOLVM_IMAGE_<AGENT> env)."
+            )
+        return SmolvmExecutor(
+            agent_name=agent_name,
+            image=resolved_image,
+            name=name,
+            cwd=cwd,
+            timeout=timeout,
+            keep_on_error=keep_on_error,
+        )
+    raise ValueError(f"unknown sandbox kind: {kind!r}")
 
 
 _DEFAULT_PROVIDER_KEYS: dict[str, str] = {

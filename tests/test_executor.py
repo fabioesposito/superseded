@@ -472,3 +472,59 @@ def test_smolvm_session_run_exec_exception_raises_agent_run_error(tmp_path, monk
     ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
     with ex.session() as sess, pytest.raises(AgentRunError, match="smol exec failed"):
         sess.run(["claude"], "p", timeout=10)
+
+
+def test_make_sandbox_executor_defaults_to_sbx(tmp_path):
+    from superseded.review.executor import SandboxExecutor, make_sandbox_executor
+
+    ex = make_sandbox_executor(agent_name="claude-code", name="n1", cwd=tmp_path)
+    assert isinstance(ex, SandboxExecutor)
+
+
+def test_make_sandbox_executor_kind_sbx_returns_sandbox_executor(tmp_path):
+    from superseded.review.executor import SandboxExecutor, make_sandbox_executor
+
+    ex = make_sandbox_executor(kind="sbx", agent_name="claude-code", name="n1", cwd=tmp_path)
+    assert isinstance(ex, SandboxExecutor)
+
+
+def test_make_sandbox_executor_kind_smolvm_returns_smolvm_executor(monkeypatch, tmp_path):
+    _install_fake_smol(monkeypatch)
+    from superseded.review.executor import SmolvmExecutor, make_sandbox_executor
+
+    ex = make_sandbox_executor(
+        kind="smolvm",
+        agent_name="claude-code",
+        name="n1",
+        cwd=tmp_path,
+        resolved_image="ghcr.io/x/c:1",
+    )
+    assert isinstance(ex, SmolvmExecutor)
+    assert ex._image == "ghcr.io/x/c:1"
+    assert ex._name == "n1"
+    assert ex._cwd == tmp_path
+
+
+def test_make_sandbox_executor_kind_smolvm_without_image_raises(tmp_path):
+    from superseded.review.executor import make_sandbox_executor
+
+    with pytest.raises(ValueError, match="resolved_image"):
+        make_sandbox_executor(
+            kind="smolvm", agent_name="claude-code", name="n1", cwd=tmp_path, resolved_image=None
+        )
+
+
+def test_make_sandbox_executor_kind_smolvm_empty_image_raises(tmp_path):
+    from superseded.review.executor import make_sandbox_executor
+
+    with pytest.raises(ValueError, match="resolved_image"):
+        make_sandbox_executor(
+            kind="smolvm", agent_name="claude-code", name="n1", cwd=tmp_path, resolved_image=""
+        )
+
+
+def test_make_sandbox_executor_kind_unknown_raises(tmp_path):
+    from superseded.review.executor import make_sandbox_executor
+
+    with pytest.raises(ValueError, match="unknown sandbox kind"):
+        make_sandbox_executor(kind="other", agent_name="claude-code", name="n1", cwd=tmp_path)
