@@ -306,7 +306,7 @@ def make_sandbox_executor(
             cwd=cwd,
             timeout=timeout,
             keep_on_error=keep_on_error,
-            provider_files=provider_files,
+            provider_files=provider_files if provider_files is not None else agent_credential_files(agent_name),
             smolvm_binary=smolvm_binary,
         )
     raise ValueError(f"unknown sandbox kind: {kind!r}")
@@ -316,6 +316,41 @@ _DEFAULT_PROVIDER_KEYS: dict[str, str] = {
     "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY": "OPENAI_API_KEY",
 }
+
+
+def agent_credential_files(agent_name: str) -> dict[str, str]:
+    """Return ``{guest_path: content}`` for the host credential files an agent
+    CLI reads from ``$HOME``, so they can be materialized inside the sandbox VM.
+
+    Only files that exist on the host are returned. Guest paths are anchored
+    under ``/root`` so the per-exec HOME relocation (``_relocate_under_root``)
+    rewrites them into each pass's isolated guest HOME.
+
+    Auth caveats (the env-key injection via ``_DEFAULT_PROVIDER_KEYS`` is the
+    reliable fallback; this file-seeding is additive):
+      * opencode     - ``$XDG_DATA_HOME/opencode/auth.json`` holds the real
+                       provider keys; seeds cleanly.
+      * claude-code  - ``~/.claude.json`` carries UI prefs/userID only; the OAuth
+                       token lives in the OS keychain, so this seeds the file but
+                       does NOT by itself authenticate (use ``ANTHROPIC_API_KEY``).
+      * codex        - ``~/.codex/auth.json`` only exists after ``codex login``;
+                       absent until then (use ``OPENAI_API_KEY`` / ``CODEX_API_KEY``).
+    """
+    home = os.path.expanduser("~")
+    data_home = os.environ.get("XDG_DATA_HOME", os.path.join(home, ".local", "share"))
+    candidates: dict[str, str] = {}  # guest_path -> host_path
+    if agent_name == "opencode":
+        candidates["/root/.local/share/opencode/auth.json"] = os.path.join(data_home, "opencode", "auth.json")
+    elif agent_name == "claude-code":
+        candidates["/root/.claude.json"] = os.path.join(home, ".claude.json")
+    elif agent_name == "codex":
+        candidates["/root/.codex/auth.json"] = os.path.join(home, ".codex", "auth.json")
+    out: dict[str, str] = {}
+    for guest_path, host_path in candidates.items():
+        if os.path.isfile(host_path):
+            with contextlib.suppress(OSError):
+                out[guest_path] = Path(host_path).read_text()
+    return out
 
 SMOLVM_AVAILABLE = importlib.util.find_spec("smol") is not None
 

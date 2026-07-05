@@ -100,42 +100,21 @@ def _resolve_smolvm_image(agent_name: str) -> str | None:
     return os.environ.get(per_agent_var) or os.environ.get("SUPERSEDED_SMOLVM_IMAGE")
 
 
-def _opencode_auth_files() -> dict[str, str]:
-    """Read the host's opencode auth.json and map it to the smolvm guest path.
-
-    opencode stores provider credentials at ``$XDG_DATA_HOME/opencode/auth.json``.
-    The smolvm guest images run as root (HOME=/root), so the file is materialized
-    there. Only auth.json is seeded — no host config/plugins leak into the guest.
-    """
-    data_home = os.environ.get(
-        "XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share")
-    )
-    src = Path(data_home) / "opencode" / "auth.json"
-    if not src.is_file():
-        return {}
-    try:
-        content = src.read_text()
-    except OSError:
-        return {}
-    return {"/root/.local/share/opencode/auth.json": content}
-
-
 def _select_executor(sandbox: bool, *, agent_name: str, timeout: int) -> AgentExecutor:
     if not sandbox:
         return SubprocessExecutor()
     kind = os.environ.get("SUPERSEDED_SANDBOX_KIND", "sbx").strip().lower()
     if kind == "smolvm":
         resolved_image = _resolve_smolvm_image(agent_name)
-        provider_files: dict[str, str] = {}
-        if agent_name == "opencode":
-            provider_files = _opencode_auth_files()
+        # provider_files (per-agent host credentials) are resolved centrally by
+        # make_sandbox_executor from agent_name — opencode/claude-code/codex all
+        # get their ~/.config files seeded into the guest HOME automatically.
         return make_sandbox_executor(
             kind="smolvm",
             agent_name=agent_name,
             name=f"superseded-local-{uuid.uuid4().hex[:10]}",
             timeout=timeout,
             resolved_image=resolved_image,
-            provider_files=provider_files,
         )
     return make_sandbox_executor(
         agent_name=agent_name,

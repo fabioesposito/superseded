@@ -292,11 +292,18 @@ the local tag and streams `docker save <tag>` into `smolvm machine create --imag
 
 **Credentials inside the VM.** The server path injects `ANTHROPIC_API_KEY` /
 `OPENAI_API_KEY` from its environment. The local smolvm path additionally seeds
-the host's opencode credentials: when `--agent opencode` is used, the host's
-`~/.local/share/opencode/auth.json` is materialized into each pass's isolated
-guest `HOME` so provider-plan models (e.g. `opencode/big-pickle`) authenticate
-without an API key env var. Each concurrent pass gets its own guest `HOME` to
-avoid opencode's SQLite state DBs colliding ("database is locked").
+each agent's host credential file into the guest HOME so provider-plan logins
+authenticate without an API-key env var:
+
+| Agent | Host file seeded | Caveat |
+|---|---|---|
+| opencode | `$XDG_DATA_HOME/opencode/auth.json` | holds real provider keys — authenticates directly |
+| claude-code | `~/.claude.json` | UI prefs only; the OAuth token lives in the OS keychain, so set `ANTHROPIC_API_KEY` for headless VM auth |
+| codex | `~/.codex/auth.json` | only present after `codex login`; otherwise set `OPENAI_API_KEY` / `CODEX_API_KEY` |
+
+Files are seeded only when present on the host. Each concurrent pass gets its
+own isolated guest `HOME` (with the credential file relocated into it) to avoid
+opencode's SQLite state DBs colliding ("database is locked").
 
 
 ### Feedback

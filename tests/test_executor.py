@@ -349,6 +349,68 @@ def test_smolvm_executor_available_false_when_image_empty(monkeypatch):
     assert ex.available(MagicMock()) is False
 
 
+def test_agent_credential_files_seeds_only_existing_host_files(tmp_path, monkeypatch):
+    from superseded.review.executor import agent_credential_files
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    # opencode auth present, claude.json present (no secret, but file exists),
+    # codex auth absent.
+    oc = fake_home / ".local" / "share" / "opencode" / "auth.json"
+    oc.parent.mkdir(parents=True)
+    oc.write_text('{"opencode":{"key":"x"}}')
+    (fake_home / ".claude.json").write_text('{"userID":"u"}')
+
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+
+    opencode = agent_credential_files("opencode")
+    assert "/root/.local/share/opencode/auth.json" in opencode
+    assert opencode["/root/.local/share/opencode/auth.json"] == '{"opencode":{"key":"x"}}'
+
+    claude = agent_credential_files("claude-code")
+    assert "/root/.claude.json" in claude
+
+    codex = agent_credential_files("codex")
+    assert codex == {}  # no ~/.codex/auth.json on host
+
+    # All seeded guest paths are /root-anchored so per-exec HOME relocation works.
+    for agent in ("opencode", "claude-code", "codex"):
+        for guest_path in agent_credential_files(agent):
+            assert guest_path.startswith("/root/")
+
+
+def test_make_sandbox_executor_smolvm_defaults_provider_files_from_agent(tmp_path, monkeypatch):
+    # make_sandbox_executor should seed per-agent credential files by default
+    # when provider_files is None (so the server path gets them for free).
+    from superseded.review.executor import make_sandbox_executor
+
+    fake_home = tmp_path / "home"
+    (fake_home / ".local" / "share" / "opencode").mkdir(parents=True)
+    (fake_home / ".local" / "share" / "opencode" / "auth.json").write_text("{}")
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+
+    ex = make_sandbox_executor(
+        kind="smolvm",
+        agent_name="opencode",
+        name="x",
+        cwd=tmp_path,
+        resolved_image="img",
+    )
+    assert ex._provider_files == {"/root/.local/share/opencode/auth.json": "{}"}
+    # explicit provider_files overrides the default
+    ex2 = make_sandbox_executor(
+        kind="smolvm",
+        agent_name="opencode",
+        name="y",
+        cwd=tmp_path,
+        resolved_image="img",
+        provider_files={"/root/custom": "v"},
+    )
+    assert ex2._provider_files == {"/root/custom": "v"}
+
+
 def test_smolvm_session_enter_creates_machine_with_workspace_mount(tmp_path, monkeypatch):
     captured = _install_fake_smol(monkeypatch)
     from superseded.review.executor import SmolvmExecutor
