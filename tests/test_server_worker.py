@@ -1024,3 +1024,45 @@ def test_sandbox_settings_has_smolvm_fields_with_defaults():
     assert s.smolvm_image_claude is None
     assert s.smolvm_image_opencode is None
     assert s.smolvm_image_codex is None
+
+
+def test_agent_smolvm_image_resolves_per_agent_field():
+    from superseded.server.worker import SandboxSettings, _agent_smolvm_image
+
+    s = SandboxSettings(smolvm_image_claude="ghcr.io/x/c:1")
+    assert _agent_smolvm_image(s, "claude-code") == "ghcr.io/x/c:1"
+    assert _agent_smolvm_image(s, "opencode") is None
+    assert _agent_smolvm_image(s, "codex") is None
+
+
+def test_agent_smolvm_image_host_wide_override_wins():
+    from superseded.server.worker import SandboxSettings, _agent_smolvm_image
+
+    s = SandboxSettings(smolvm_image="ghcr.io/x/all:1", smolvm_image_claude="ghcr.io/x/c:1")
+    assert _agent_smolvm_image(s, "claude-code") == "ghcr.io/x/all:1"
+    assert _agent_smolvm_image(s, "opencode") == "ghcr.io/x/all:1"
+
+
+def test_agent_smolvm_image_unknown_agent_returns_none():
+    from superseded.server.worker import SandboxSettings, _agent_smolvm_image
+
+    s = SandboxSettings()
+    assert _agent_smolvm_image(s, "custom-agent") is None
+
+
+def test_sandbox_unavailable_msg_sbx():
+    from superseded.server.worker import SandboxSettings, _sandbox_unavailable_msg
+
+    s = SandboxSettings(kind="sbx", binary="sbx")
+    msg = _sandbox_unavailable_msg(s)
+    assert "sbx" in msg
+    assert "docker-sbx" in msg
+
+
+def test_sandbox_unavailable_msg_smolvm():
+    from superseded.server.worker import SandboxSettings, _sandbox_unavailable_msg
+
+    s = SandboxSettings(kind="smolvm")
+    msg = _sandbox_unavailable_msg(s)
+    assert "smolmachines" in msg
+    assert "uv sync --extra sandbox" in msg

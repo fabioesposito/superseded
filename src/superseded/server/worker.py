@@ -67,6 +67,38 @@ class SandboxSettings:
     smolvm_image_codex: str | None = None  # per-agent
 
 
+_SMOLVM_AGENT_IMAGE_FIELD: dict[str, str] = {
+    "claude-code": "smolvm_image_claude",
+    "opencode": "smolvm_image_opencode",
+    "codex": "smolvm_image_codex",
+}
+
+
+def _agent_smolvm_image(sandbox: SandboxSettings, agent_name: str) -> str | None:
+    """Resolve the smolvm image for ``agent_name``.
+
+    Host-wide ``smolvm_image`` overrides the per-agent field.
+    """
+    if sandbox.smolvm_image:
+        return sandbox.smolvm_image
+    field = _SMOLVM_AGENT_IMAGE_FIELD.get(agent_name)
+    return getattr(sandbox, field) if field else None
+
+
+def _sandbox_unavailable_msg(sandbox: SandboxSettings) -> str:
+    if sandbox.kind == "smolvm":
+        return (
+            "sandbox unavailable: smolmachines extra not installed or no image "
+            "configured. Run `uv sync --extra sandbox` and set "
+            "SUPERSEDED_SMOLVM_IMAGE (or the per-agent "
+            "SUPERSEDED_SMOLVM_IMAGE_<AGENT>) to run smolvm-sandboxed reviews."
+        )
+    return (
+        f"sandbox unavailable: '{sandbox.binary}' not found on PATH "
+        "(install docker-sbx to run sandboxed reviews)."
+    )
+
+
 def build_check_run_title(result: ReviewResult) -> str:
     total = len(result.findings)
     summary = result.summary
