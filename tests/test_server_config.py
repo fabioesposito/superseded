@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import pytest
 
 from superseded.server.config import ServerConfig
+
+
+def _set_required_server_env(monkeypatch):
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "123456")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whs")
+    pk = Path(tempfile.mkstemp(suffix=".pem")[1])
+    pk.write_text("dummy")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(pk))
 
 
 def test_server_config_is_configured():
@@ -237,3 +246,41 @@ def test_server_config_sandbox_from_env(monkeypatch, tmp_path):
     assert config.sandbox_enabled is False
     assert config.sandbox_timeout == 900
     assert config.sandbox_io_mode == "cp"
+
+
+def test_from_env_sandbox_kind_smolvm(monkeypatch):
+    _set_required_server_env(monkeypatch)
+    monkeypatch.setenv("SUPERSEDED_SANDBOX_KIND", "smolvm")
+    cfg = ServerConfig.from_env()
+    assert cfg.sandbox_kind == "smolvm"
+
+
+def test_from_env_sandbox_kind_default_is_sbx(monkeypatch):
+    _set_required_server_env(monkeypatch)
+    cfg = ServerConfig.from_env()
+    assert cfg.sandbox_kind == "sbx"
+
+
+def test_from_env_smolvm_binary(monkeypatch):
+    _set_required_server_env(monkeypatch)
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_BINARY", "/opt/smolvm/bin/smol")
+    cfg = ServerConfig.from_env()
+    assert cfg.smolvm_binary == "/opt/smolvm/bin/smol"
+
+
+def test_from_env_smolvm_images_per_agent(monkeypatch):
+    _set_required_server_env(monkeypatch)
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CLAUDE", "gcr/x/c:1")
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_OPENCODE", "gcr/x/o:1")
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CODEX", "gcr/x/d:1")
+    cfg = ServerConfig.from_env()
+    assert cfg.smolvm_image_claude == "gcr/x/c:1"
+    assert cfg.smolvm_image_opencode == "gcr/x/o:1"
+    assert cfg.smolvm_image_codex == "gcr/x/d:1"
+
+
+def test_from_env_smolvm_image_host_wide(monkeypatch):
+    _set_required_server_env(monkeypatch)
+    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE", "gcr/x/all:1")
+    cfg = ServerConfig.from_env()
+    assert cfg.smolvm_image == "gcr/x/all:1"
