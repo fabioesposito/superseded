@@ -801,12 +801,12 @@
         <div class="container">
             <div class="section-label reveal">Isolation by design</div>
             <h2 class="reveal">Every review runs<br>inside its <em>own vault</em></h2>
-            <p class="section-sub reveal">Each agent executes inside an ephemeral Docker Sandbox microVM &mdash; a private filesystem, a private network, a hard boundary. Your host is never touched, and nothing leaks between reviews.</p>
+            <p class="section-sub reveal">Each agent executes inside an ephemeral microVM &mdash; a private filesystem, a private kernel, a hard boundary. Choose Docker Sandboxes (sbx) on Linux/KVM, or smolvm (embedded smolmachines SDK) on macOS, Linux, or Windows. Your host is never touched, and nothing leaks between reviews.</p>
 
             <div class="vault reveal">
                 <span class="vault-host">host machine</span>
                 <div class="vault-vm">
-                    <span class="vault-vm-label">sbx microVM &middot; one per review</span>
+                    <span class="vault-vm-label">microVM &middot; one per review</span>
                     <div class="vault-row">
                         <div class="vault-chip">
                             <span class="glyph">&#x25b8;</span>
@@ -820,14 +820,14 @@
                 </div>
                 <div class="vault-egress">
                     <span class="lock">&#x29bf;</span>
-                    egress allowlisted &middot; provider keys injected by the host proxy, never inside
+                    provider keys injected per-review &middot; never on disk inside the VM
                 </div>
             </div>
 
             <div class="iso-points reveal">
                 <div class="iso-point"><div class="num">01</div><h3>Per-review microVM</h3><p>A fresh sandbox spins up for every PR. No shared state, no leftovers.</p></div>
                 <div class="iso-point"><div class="num">02</div><h3>Host untouched</h3><p>Private filesystem and kernel. The agent cannot reach your machine.</p></div>
-                <div class="iso-point"><div class="num">03</div><h3>Egress controlled</h3><p>Outbound traffic is allowlisted. No exfiltration path.</p></div>
+                <div class="iso-point"><div class="num">03</div><h3>Two backends</h3><p>Docker Sandboxes (sbx, Linux/KVM) or smolvm (smolmachines SDK, macOS/Linux/Windows).</p></div>
                 <div class="iso-point"><div class="num">04</div><h3>Zero leakage</h3><p>The sandbox is destroyed after the review. Nothing persists.</p></div>
             </div>
         </div>

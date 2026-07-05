@@ -97,8 +97,9 @@ Set `server-url`/`server-key` (or the `SUPERSEDED_SERVER_URL`/`SUPERSEDED_SERVER
 
 The `opencode` agent delegates auth to opencode itself, which reads any provider
 key from the environment. On the server, configure the provider key in the
-server's environment (or via `sbx secret set` for sandboxed runs); for the local
-CLI, add the key to your shell env and reference it from an `opencode.json`
+server's environment — sandboxed runs pick it up from there (sbx via
+`sbx secret set -g`, smolvm via the server env directly); for the local CLI,
+add the key to your shell env and reference it from an `opencode.json`
 committed at the repo root.
 
 **1. Commit an `opencode.json`** using `{env:VAR}` substitution:
@@ -212,6 +213,41 @@ model: null    # null = use each repo's .superseded.yaml
 | `SUPERSEDED_BEHIND_PROXY` | Set `1` when TLS terminates at an upstream reverse proxy (allows binding `0.0.0.0` without in-process TLS) |
 | `SUPERSEDED_DATABASE_URL` | `postgresql://...` for Postgres; omit for SQLite |
 | `SUPERSEDED_SERVER_AGENT` / `SUPERSEDED_SERVER_MODEL` | Override each repo's agent/model |
+| `SUPERSEDED_SANDBOX` | `1`/`0` to run agents inside a sandbox microVM (default: `1` on the server) |
+| `SUPERSEDED_SANDBOX_KIND` | `sbx` (default, Docker Sandboxes) or `smolvm` (smolmachines SDK) — see [Sandbox backends](#sandbox-backends) |
+| `SUPERSEDED_SANDBOX_TIMEOUT` | Per-pass timeout inside the sandbox (seconds, default: `600`) |
+| `SUPERSEDED_SANDBOX_KEEP_ON_ERROR` | `1` to leave the sandbox alive for inspection when a pass fails |
+| `SUPERSEDED_SMOLVM_IMAGE_<AGENT>` | Per-agent OCI image for smolvm (e.g. `SUPERSEDED_SMOLVM_IMAGE_CLAUDE`); or `SUPERSEDED_SMOLVM_IMAGE` for one host-wide image |
+
+### Sandbox backends
+
+By default, server-mode reviews run each agent pass inside an ephemeral microVM.
+Two backends are supported; pick one per deployment via `SUPERSEDED_SANDBOX_KIND`.
+
+| Backend | Kind | Hosts | Credential flow |
+|---|---|---|---|
+| **Docker Sandboxes** (default) | `sbx` | Linux with KVM | `sbx secret set -g` injects via the host proxy; keys never enter the VM |
+| **smolvm** (alternative) | `smolvm` | macOS (Hypervisor.framework), Linux (KVM), Windows (WHP) | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` from the server's env, injected per-exec into the VM |
+
+**sbx (default).** Install [`docker-sbx`](https://docs.docker.com/ai/sandboxes/), add the operator to the `kvm` group, run `sbx login`, and store provider keys once via `sbx secret set -g anthropic` / `-g openai`. Each review job creates one sandbox via `sbx create`; the 5 passes run as concurrent `sbx exec` calls into it; `sbx rm` tears it down.
+
+**smolvm (alternative).** Use this on macOS, Windows, or Linux hosts where you want the embedded `smol` SDK instead of the `sbx` CLI. Install the extra and supply a per-agent OCI image whose `PATH` contains the agent CLI:
+
+```bash
+uv sync --extra sandbox
+export SUPERSEDED_SANDBOX_KIND=smolvm
+export SUPERSEDED_SMOLVM_IMAGE_CLAUDE=ghcr.io/your-org/superseded-claude:latest
+# or one host-wide image for all three agents:
+# export SUPERSEDED_SMOLVM_IMAGE=ghcr.io/your-org/superseded-all:latest
+```
+
+The server boots the OCI image as a microVM via the embedded `smol` SDK (libkrun,
+in-process — no daemon, no CLI on `PATH`), mounts the per-job repo checkout at
+`/workspace`, runs the 5 passes as concurrent `m.exec()` calls against the same
+machine, then deletes it. Provider keys live only in the server's process
+environment and are forwarded into each exec call as guest env — they never
+persist on disk inside the VM. Network egress is open by default; lock it down
+per agent by building the image with the agent's own egress controls.
 
 ### Feedback
 
@@ -238,6 +274,7 @@ Dismissed findings are injected into future review prompts so the tool avoids re
 - **Structured output** — JSON for piping, markdown for docs, terminal table for quick scanning
 - **CI-native** — Docker-based GitHub Action. Runs on every PR, posts results as review comments
 - **Server mode** — Self-hosted GitHub App. Multiple repos, webhook-driven, configurable concurrency
+- **Sandbox isolation** — Every server-mode review runs inside an ephemeral microVM (Docker Sandboxes or smolvm). One VM per PR, destroyed when the review finishes
 - **Static analysis pre-pass** — Auto-detects linters (ruff, mypy, eslint, bandit, gitleaks, go vet) and injects deterministic signals before AI review
 - **Cross-file usage retrieval** — Extracts symbols from changed code, uses ripgrep to find callers across the repo
 - **Reasoning trail** — Each finding includes agent rationale. Collapsible details in markdown and PR comments
