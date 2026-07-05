@@ -1109,7 +1109,7 @@ def test_run_review_smolvm_dispatch_builds_smolvm_executor(monkeypatch, tmp_path
     assert ex._image == "ghcr.io/x/c:1"
 
 
-def test_run_review_smolvm_image_unset_raises_runtime_error():
+def test_run_review_smolvm_image_unset_raises_value_error():
     """Direct construction (mirrors what the worker does) without an image
     must raise loudly — no silent fallback."""
     from superseded.review.executor import make_sandbox_executor
