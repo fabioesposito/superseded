@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 import subprocess
+import sys
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -253,3 +256,278 @@ def test_make_sandbox_executor_unknown_agent_passes_through(tmp_path):
         with ex.session():
             pass
     assert mock_run.call_args_list[0].args[0][4] == "custom-agent"
+
+
+def _install_fake_smol(
+    monkeypatch, *, machine_create=None, write_file=None, exec_result=None, delete=None
+):
+    """Inject a fake `smol` package into sys.modules for one test.
+
+    Returns a dict of the mock objects the test can assert against:
+       {"Machine": ..., "MachineConfig": ..., "MountSpec": ...,
+        "ResourceSpec": ..., "ExecOptions": ..., "machine_inst": ...}
+    """
+    if isinstance(exec_result, MagicMock):
+        exec_result.return_value = exec_result
+    machine_inst = types.SimpleNamespace(
+        name="superseded-probe",
+        write_file=MagicMock(side_effect=write_file or (lambda p, d, m=None: None)),
+        exec=MagicMock(side_effect=exec_result or (lambda c, o=None: None)),
+        delete=MagicMock(side_effect=delete or (lambda: None)),
+        state=MagicMock(return_value="running"),
+    )
+    captured = {}
+
+    class _Machine:
+        @staticmethod
+        def create(config=None, conn=None):
+            captured["config"] = config
+            if machine_create is not None:
+                return machine_create(config)
+            return machine_inst
+
+    class _MachineConfig:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+            captured["MachineConfig_kwargs"] = kw
+
+    class _MountSpec:
+        def __init__(self, source, target, read_only=False, readonly=None):
+            self.source = source
+            self.target = target
+            self.read_only = read_only
+            captured.setdefault("MountSpec_instances", []).append(self)
+
+    class _ResourceSpec:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+            captured["ResourceSpec_kwargs"] = kw
+
+    class _ExecOptions:
+        def __init__(self, env=None, workdir=None, timeout=None):
+            self.env = env
+            self.workdir = workdir
+            self.timeout = timeout
+            captured.setdefault("ExecOptions_instances", []).append(self)
+
+    fake = types.ModuleType("smol")
+    fake.Machine = _Machine
+    fake.MachineConfig = _MachineConfig
+    fake.MountSpec = _MountSpec
+    fake.ResourceSpec = _ResourceSpec
+    fake.ExecOptions = _ExecOptions
+    monkeypatch.setitem(sys.modules, "smol", fake)
+    captured.update(
+        {
+            "Machine": _Machine,
+            "MachineConfig": _MachineConfig,
+            "MountSpec": _MountSpec,
+            "ResourceSpec": _ResourceSpec,
+            "ExecOptions": _ExecOptions,
+            "machine_inst": machine_inst,
+        }
+    )
+    return captured
+
+
+def test_smolvm_executor_available_true_when_image_set_and_smol_importable(monkeypatch):
+    _install_fake_smol(monkeypatch)
+    from superseded.review import executor as exec_mod
+
+    monkeypatch.setattr(exec_mod, "SMOLVM_AVAILABLE", True)
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="ghcr.io/x/claude:1", name="superseded-x")
+    assert ex.available(MagicMock()) is True
+
+
+def test_smolvm_executor_available_false_when_image_empty(monkeypatch):
+    _install_fake_smol(monkeypatch)
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="", name="superseded-x")
+    assert ex.available(MagicMock()) is False
+
+
+def test_smolvm_session_enter_creates_machine_with_workspace_mount(tmp_path, monkeypatch):
+    captured = _install_fake_smol(monkeypatch)
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(
+        agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path, timeout=30
+    )
+    with ex.session():
+        pass
+    mc_kwargs = captured["MachineConfig_kwargs"]
+    assert mc_kwargs["name"] == "smol-1"
+    assert mc_kwargs["image"] == "img"
+    [mount] = captured["MountSpec_instances"]
+    assert mount.source == str(tmp_path)
+    assert mount.target == "/workspace"
+    assert mount.read_only is False
+    rs_kwargs = captured["ResourceSpec_kwargs"]
+    assert rs_kwargs.get("network") is True
+
+
+def test_smolvm_session_enter_failure_raises_agent_run_error(tmp_path, monkeypatch):
+    _install_fake_smol(
+        monkeypatch,
+        machine_create=lambda cfg: (_ for _ in ()).throw(RuntimeError("kvm unavailable")),
+    )
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with pytest.raises(AgentRunError, match=r"smol Machine\.create failed"), ex.session():
+        pass
+
+
+def test_smolvm_session_exit_calls_delete(tmp_path, monkeypatch):
+    captured = _install_fake_smol(monkeypatch)
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with ex.session():
+        pass
+    captured["machine_inst"].delete.assert_called_once()
+
+
+def test_smolvm_session_exit_keeps_machine_on_error_when_keep_on_error(tmp_path, monkeypatch):
+    captured = _install_fake_smol(monkeypatch)
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(
+        agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path, keep_on_error=True
+    )
+    sess = ex.session()
+    sess._errored = True
+    sess.__exit__(None, None, None)
+    captured["machine_inst"].delete.assert_not_called()
+
+
+def test_smolvm_session_exit_swallow_delete_failure(tmp_path, monkeypatch, caplog):
+    captured = _install_fake_smol(
+        monkeypatch, delete=lambda: (_ for _ in ()).throw(RuntimeError("nope"))
+    )
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with caplog.at_level(logging.WARNING, logger="superseded.review.executor"), ex.session():
+        pass
+    captured["machine_inst"].delete.assert_called_once()
+    assert any("smol delete failed" in r.getMessage() for r in caplog.records)
+
+
+def test_smolvm_session_run_uses_prompt_file_and_exec(tmp_path, monkeypatch):
+    captured = _install_fake_smol(
+        monkeypatch, exec_result=MagicMock(exit_code=0, stdout="[]", stderr="")
+    )
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with ex.session() as sess:
+        out = sess.run(["claude", "-p"], "the-prompt", timeout=42)
+    assert out == "[]"
+    wf_call = captured["machine_inst"].write_file.call_args
+    assert wf_call.args[0].startswith("/tmp/_smol_prompt_")
+    assert wf_call.args[0].endswith(".txt")
+    assert wf_call.args[1] == "the-prompt"
+    exec_call = captured["machine_inst"].exec.call_args
+    argv = exec_call.args[0]
+    assert argv[0] == "sh" and argv[1] == "-c"
+    assert argv[2].startswith("cd /workspace && claude -p < /tmp/_smol_prompt_")
+    assert argv[2].endswith(".txt")
+    opts = exec_call.args[1]
+    assert opts.workdir == "/workspace"
+    assert opts.timeout == 42
+    assert isinstance(opts.env, dict)
+
+
+def test_smolvm_session_run_forwards_only_set_provider_keys(tmp_path, monkeypatch):
+    captured = _install_fake_smol(
+        monkeypatch, exec_result=MagicMock(exit_code=0, stdout="[]", stderr="")
+    )
+    monkeypatch.setattr("superseded.review.executor.os.environ", {"ANTHROPIC_API_KEY": "k-xyz"})
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with ex.session() as sess:
+        sess.run(["claude", "-p"], "p", timeout=10)
+    opts = captured["machine_inst"].exec.call_args.args[1]
+    assert opts.env == {"ANTHROPIC_API_KEY": "k-xyz"}
+
+
+def test_smolvm_session_run_nonzero_raises(tmp_path, monkeypatch):
+    _install_fake_smol(monkeypatch, exec_result=MagicMock(exit_code=2, stdout="", stderr="boom"))
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with ex.session() as sess, pytest.raises(AgentRunError, match="boom"):
+        sess.run(["claude"], "p", timeout=10)
+
+
+def test_smolvm_session_run_exec_exception_raises_agent_run_error(tmp_path, monkeypatch):
+    _install_fake_smol(
+        monkeypatch,
+        exec_result=lambda c, o=None: (_ for _ in ()).throw(RuntimeError("vm dead")),
+    )
+    from superseded.review.executor import SmolvmExecutor
+
+    ex = SmolvmExecutor(agent_name="claude-code", image="img", name="smol-1", cwd=tmp_path)
+    with ex.session() as sess, pytest.raises(AgentRunError, match="smol exec failed"):
+        sess.run(["claude"], "p", timeout=10)
+
+
+def test_make_sandbox_executor_defaults_to_sbx(tmp_path):
+    from superseded.review.executor import SandboxExecutor, make_sandbox_executor
+
+    ex = make_sandbox_executor(agent_name="claude-code", name="n1", cwd=tmp_path)
+    assert isinstance(ex, SandboxExecutor)
+
+
+def test_make_sandbox_executor_kind_sbx_returns_sandbox_executor(tmp_path):
+    from superseded.review.executor import SandboxExecutor, make_sandbox_executor
+
+    ex = make_sandbox_executor(kind="sbx", agent_name="claude-code", name="n1", cwd=tmp_path)
+    assert isinstance(ex, SandboxExecutor)
+
+
+def test_make_sandbox_executor_kind_smolvm_returns_smolvm_executor(monkeypatch, tmp_path):
+    _install_fake_smol(monkeypatch)
+    from superseded.review.executor import SmolvmExecutor, make_sandbox_executor
+
+    ex = make_sandbox_executor(
+        kind="smolvm",
+        agent_name="claude-code",
+        name="n1",
+        cwd=tmp_path,
+        resolved_image="ghcr.io/x/c:1",
+    )
+    assert isinstance(ex, SmolvmExecutor)
+    assert ex._image == "ghcr.io/x/c:1"
+    assert ex._name == "n1"
+    assert ex._cwd == tmp_path
+
+
+def test_make_sandbox_executor_kind_smolvm_without_image_raises(tmp_path):
+    from superseded.review.executor import make_sandbox_executor
+
+    with pytest.raises(ValueError, match="resolved_image"):
+        make_sandbox_executor(
+            kind="smolvm", agent_name="claude-code", name="n1", cwd=tmp_path, resolved_image=None
+        )
+
+
+def test_make_sandbox_executor_kind_smolvm_empty_image_raises(tmp_path):
+    from superseded.review.executor import make_sandbox_executor
+
+    with pytest.raises(ValueError, match="resolved_image"):
+        make_sandbox_executor(
+            kind="smolvm", agent_name="claude-code", name="n1", cwd=tmp_path, resolved_image=""
+        )
+
+
+def test_make_sandbox_executor_kind_unknown_raises(tmp_path):
+    from superseded.review.executor import make_sandbox_executor
+
+    with pytest.raises(ValueError, match="unknown sandbox kind"):
+        make_sandbox_executor(kind="other", agent_name="claude-code", name="n1", cwd=tmp_path)

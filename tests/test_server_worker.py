@@ -1012,3 +1012,207 @@ async def test_run_review_for_job_defaults_no_sandbox(tmp_path):
         )
 
     assert captured.get("executor") is None
+
+
+def test_sandbox_settings_has_smolvm_fields_with_defaults():
+    from superseded.server.worker import SandboxSettings
+
+    s = SandboxSettings()
+    assert s.kind == "sbx"
+    assert s.smolvm_binary == "smolvm"
+    assert s.smolvm_image is None
+    assert s.smolvm_image_claude is None
+    assert s.smolvm_image_opencode is None
+    assert s.smolvm_image_codex is None
+
+
+def test_agent_smolvm_image_resolves_per_agent_field():
+    from superseded.server.worker import SandboxSettings, _agent_smolvm_image
+
+    s = SandboxSettings(smolvm_image_claude="ghcr.io/x/c:1")
+    assert _agent_smolvm_image(s, "claude-code") == "ghcr.io/x/c:1"
+    assert _agent_smolvm_image(s, "opencode") is None
+    assert _agent_smolvm_image(s, "codex") is None
+
+
+def test_agent_smolvm_image_host_wide_override_wins():
+    from superseded.server.worker import SandboxSettings, _agent_smolvm_image
+
+    s = SandboxSettings(smolvm_image="ghcr.io/x/all:1", smolvm_image_claude="ghcr.io/x/c:1")
+    assert _agent_smolvm_image(s, "claude-code") == "ghcr.io/x/all:1"
+    assert _agent_smolvm_image(s, "opencode") == "ghcr.io/x/all:1"
+
+
+def test_agent_smolvm_image_unknown_agent_returns_none():
+    from superseded.server.worker import SandboxSettings, _agent_smolvm_image
+
+    s = SandboxSettings()
+    assert _agent_smolvm_image(s, "custom-agent") is None
+
+
+def test_sandbox_unavailable_msg_sbx():
+    from superseded.server.worker import SandboxSettings, _sandbox_unavailable_msg
+
+    s = SandboxSettings(kind="sbx", binary="sbx")
+    msg = _sandbox_unavailable_msg(s)
+    assert "sbx" in msg
+    assert "docker-sbx" in msg
+
+
+def test_sandbox_unavailable_msg_smolvm():
+    from superseded.server.worker import SandboxSettings, _sandbox_unavailable_msg
+
+    s = SandboxSettings(kind="smolvm")
+    msg = _sandbox_unavailable_msg(s)
+    assert "smolmachines" in msg
+    assert "uv sync --extra sandbox" in msg
+
+
+def test_run_review_smolvm_dispatch_builds_smolvm_executor(monkeypatch, tmp_path):
+    """When sandbox.kind=smolvm + image set + smol importable, the worker
+    constructs a SmolvmExecutor via make_sandbox_executor(kind='smolvm')."""
+    import sys
+    import types
+
+    machine_inst = types.SimpleNamespace(
+        name="superseded-x",
+        write_file=lambda p, d, m=None: None,
+        exec=lambda c, o=None: types.SimpleNamespace(exit_code=0, stdout="[]", stderr=""),
+        delete=lambda: None,
+        state=lambda: "running",
+    )
+    fake = types.ModuleType("smol")
+    fake.Machine = type("M", (), {"create": staticmethod(lambda c=None, conn=None: machine_inst)})
+    fake.MachineConfig = type("MC", (), {"__init__": lambda self, **k: None})
+    fake.MountSpec = type("MS", (), {"__init__": lambda self, **k: None})
+    fake.ResourceSpec = type("RS", (), {"__init__": lambda self, **k: None})
+    fake.ExecOptions = type("EO", (), {"__init__": lambda self, **k: None})
+    monkeypatch.setitem(sys.modules, "smol", fake)
+
+    from superseded.review import executor as exec_mod
+    from superseded.review.executor import SmolvmExecutor, make_sandbox_executor
+
+    monkeypatch.setattr(exec_mod, "SMOLVM_AVAILABLE", True)
+    ex = make_sandbox_executor(
+        kind="smolvm",
+        agent_name="claude-code",
+        name="superseded-x",
+        cwd=tmp_path,
+        resolved_image="ghcr.io/x/c:1",
+        timeout=600,
+        keep_on_error=False,
+        binary="sbx",
+        io_mode="exec",
+        smolvm_binary="smolvm",
+    )
+    assert isinstance(ex, SmolvmExecutor)
+    assert ex._image == "ghcr.io/x/c:1"
+
+
+def test_run_review_smolvm_image_unset_raises_value_error():
+    """Direct construction (mirrors what the worker does) without an image
+    must raise loudly — no silent fallback."""
+    from superseded.review.executor import make_sandbox_executor
+
+    with pytest.raises(ValueError, match="resolved_image"):
+        make_sandbox_executor(
+            kind="smolvm", agent_name="claude-code", name="n1", resolved_image=None
+        )
+
+
+@pytest.mark.asyncio
+async def test_smolvm_worker_dispatch(monkeypatch, tmp_path):
+    """Drives _run_review_for_job with sandbox.kind=smolvm; asserts the
+    executor built is a SmolvmExecutor with the right image, cwd, name."""
+    import sys
+    import types
+
+    machine_inst = types.SimpleNamespace(
+        name="superseded-smolvm-1",
+        write_file=lambda p, d, m=None: None,
+        exec=lambda c, o=None: types.SimpleNamespace(
+            exit_code=0, stdout='{"findings":[]}', stderr=""
+        ),
+        delete=lambda: None,
+        state=lambda: "running",
+    )
+    fake = types.ModuleType("smol")
+    fake.Machine = type("M", (), {"create": staticmethod(lambda c=None, conn=None: machine_inst)})
+    fake.MachineConfig = type("MC", (), {"__init__": lambda self, **k: None})
+    fake.MountSpec = type("MS", (), {"__init__": lambda self, **k: None})
+    fake.ResourceSpec = type("RS", (), {"__init__": lambda self, **k: None})
+    fake.ExecOptions = type("EO", (), {"__init__": lambda self, **k: None})
+    monkeypatch.setitem(sys.modules, "smol", fake)
+    from superseded.review import executor as exec_mod
+
+    monkeypatch.setattr(exec_mod, "SMOLVM_AVAILABLE", True)
+
+    captured_executor: dict = {}
+
+    class FakeEngine:
+        agent = types.SimpleNamespace(is_available=lambda: True)
+
+        def review(self, **kw):
+            captured_executor["executor"] = kw.get("executor")
+            from superseded.models import ReviewResult
+
+            return ReviewResult(findings=[], summary={})
+
+    monkeypatch.setattr(
+        "superseded.server.worker.ReviewEngine.select", lambda *a, **k: FakeEngine()
+    )
+
+    monkeypatch.setattr(
+        "superseded.server.worker.checkout_repo", AsyncMock(return_value=str(tmp_path))
+    )
+    monkeypatch.setattr(
+        "superseded.server.worker.gather_context",
+        lambda *a, **k: {
+            "file_context": "",
+            "static_signals": "",
+            "usage_signals": "",
+            "conventions_signals": "",
+            "spec_signals": "",
+        },
+    )
+
+    github = MagicMock()
+    github.fetch_pr_diff = AsyncMock(return_value="")
+    github.fetch_pr_description = AsyncMock(return_value="")
+    github.compare_diff = AsyncMock(return_value=("", "ahead"))
+    github.post_review = AsyncMock(return_value=[])
+    github.fetch_repo_file = AsyncMock(return_value=None)
+
+    repo_manager = MagicMock()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path)
+    repo_manager.disk_usage = MagicMock(return_value=0.1)
+    repo_manager.cleanup = MagicMock()
+
+    from superseded.server.worker import SandboxSettings, _run_review_for_job
+
+    job = ReviewJob(
+        installation_id=1,
+        owner="o",
+        repo="r",
+        pr_number=1,
+        head_sha="aaa",
+        base_sha="bbb",
+        job_id="smolvm-1",
+    )
+    sandbox = SandboxSettings(enabled=True, kind="smolvm", smolvm_image_claude="ghcr.io/x/c:1")
+
+    await _run_review_for_job(
+        github=github,
+        repo_manager=repo_manager,
+        token="t",
+        job=job,
+        correlation_id="c",
+        server_agent="claude-code",
+        sandbox=sandbox,
+    )
+    ex = captured_executor["executor"]
+    from superseded.review.executor import SmolvmExecutor
+
+    assert isinstance(ex, SmolvmExecutor)
+    assert ex._image == "ghcr.io/x/c:1"
+    assert ex._name == "superseded-smolvm-1"

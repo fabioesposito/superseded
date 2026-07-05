@@ -52,13 +52,51 @@ class ReviewOutcome:
 
 @dataclass
 class SandboxSettings:
-    """Whether/how the server runs agents inside sbx sandboxes."""
+    """Whether/how the server runs agents inside a sandbox microVM."""
 
     enabled: bool = False
-    binary: str = "sbx"
+    kind: str = "sbx"  # "sbx" | "smolvm"
+    binary: str = "sbx"  # sbx
     timeout: int = 600
     keep_on_error: bool = False
-    io_mode: str = "exec"
+    io_mode: str = "exec"  # sbx only
+    smolvm_binary: str = "smolvm"  # unused by SDK; kept for messages
+    smolvm_image: str | None = None  # host-wide override
+    smolvm_image_claude: str | None = None  # per-agent
+    smolvm_image_opencode: str | None = None  # per-agent
+    smolvm_image_codex: str | None = None  # per-agent
+
+
+_SMOLVM_AGENT_IMAGE_FIELD: dict[str, str] = {
+    "claude-code": "smolvm_image_claude",
+    "opencode": "smolvm_image_opencode",
+    "codex": "smolvm_image_codex",
+}
+
+
+def _agent_smolvm_image(sandbox: SandboxSettings, agent_name: str) -> str | None:
+    """Resolve the smolvm image for ``agent_name``.
+
+    Host-wide ``smolvm_image`` overrides the per-agent field.
+    """
+    if sandbox.smolvm_image:
+        return sandbox.smolvm_image
+    field = _SMOLVM_AGENT_IMAGE_FIELD.get(agent_name)
+    return getattr(sandbox, field) if field else None
+
+
+def _sandbox_unavailable_msg(sandbox: SandboxSettings) -> str:
+    if sandbox.kind == "smolvm":
+        return (
+            "sandbox unavailable: smolmachines extra not installed or no image "
+            "configured. Run `uv sync --extra sandbox` and set "
+            "SUPERSEDED_SMOLVM_IMAGE (or the per-agent "
+            "SUPERSEDED_SMOLVM_IMAGE_<AGENT>) to run smolvm-sandboxed reviews."
+        )
+    return (
+        f"sandbox unavailable: '{sandbox.binary}' not found on PATH "
+        "(install docker-sbx to run sandboxed reviews)."
+    )
 
 
 def build_check_run_title(result: ReviewResult) -> str:
@@ -453,19 +491,29 @@ async def _run_review_for_job(
         if sandbox is not None and sandbox.enabled:
             from superseded.review.executor import make_sandbox_executor
 
+            resolved_image: str | None = None
+            if sandbox.kind == "smolvm":
+                resolved_image = _agent_smolvm_image(sandbox, config.agent)
+                if not resolved_image:
+                    raise RuntimeError(
+                        f"smolvm sandbox selected for agent {config.agent!r} "
+                        "but no image configured (set SUPERSEDED_SMOLVM_IMAGE or "
+                        f"SUPERSEDED_SMOLVM_IMAGE_"
+                        f"{config.agent.upper().replace('-', '_')})."
+                    )
             executor = make_sandbox_executor(
+                kind=sandbox.kind,
                 agent_name=config.agent,
                 name=f"superseded-{job.job_id}",
                 timeout=sandbox.timeout,
                 keep_on_error=sandbox.keep_on_error,
                 binary=sandbox.binary,
                 io_mode=sandbox.io_mode,
+                smolvm_binary=sandbox.smolvm_binary,
+                resolved_image=resolved_image if sandbox.kind == "smolvm" else None,
             )
             if not executor.available(engine.agent):
-                raise RuntimeError(
-                    f"sandbox unavailable: '{sandbox.binary}' not found on PATH "
-                    "(install docker-sbx to run sandboxed reviews)."
-                )
+                raise RuntimeError(_sandbox_unavailable_msg(sandbox))
 
         _server_env = {k: v for k, v in os.environ.items() if not k.startswith("SUPERSEDED_")}
         result = await asyncio.to_thread(

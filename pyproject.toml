@@ -24,6 +24,9 @@ dev = [
 
 [project.optional-dependencies]
 graph = ["code-review-graph"]
+sandbox = [
+    "smolmachines>=1.4.5",
+]
 
 [project.scripts]
 superseded = "superseded.cli:cli"

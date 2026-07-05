@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import logging
+import os
 import shlex
 import shutil
 import subprocess
@@ -260,6 +262,7 @@ class SandboxExecutor:
 
 def make_sandbox_executor(
     *,
+    kind: str = "sbx",
     agent_name: str,
     name: str,
     cwd: str | Path | None = None,
@@ -267,15 +270,180 @@ def make_sandbox_executor(
     keep_on_error: bool = False,
     binary: str = "sbx",
     io_mode: str = "exec",
-) -> SandboxExecutor:
-    """Build a SandboxExecutor, mapping superseded agent names to sbx agent names."""
-    sbx_agent = SBX_AGENT_MAP.get(agent_name, agent_name)
-    return SandboxExecutor(
-        binary=binary,
-        agent_name=sbx_agent,
-        name=name,
-        cwd=cwd,
-        timeout=timeout,
-        keep_on_error=keep_on_error,
-        io_mode=io_mode,
-    )
+    smolvm_binary: str = "smolvm",
+    resolved_image: str | None = None,
+) -> SandboxExecutor | SmolvmExecutor:
+    """Build the configured sandbox executor.
+
+    ``kind="sbx"`` (default) shells out to the ``sbx`` CLI; ``kind="smolvm"``
+    uses the embedded ``smol`` SDK and requires ``resolved_image``.
+    """
+    if kind == "sbx":
+        sbx_agent = SBX_AGENT_MAP.get(agent_name, agent_name)
+        return SandboxExecutor(
+            binary=binary,
+            agent_name=sbx_agent,
+            name=name,
+            cwd=cwd,
+            timeout=timeout,
+            keep_on_error=keep_on_error,
+            io_mode=io_mode,
+        )
+    if kind == "smolvm":
+        if not resolved_image:
+            raise ValueError(
+                "smolvm executor requires resolved_image "
+                "(set SUPERSEDED_SMOLVM_IMAGE or the per-agent "
+                "SUPERSEDED_SMOLVM_IMAGE_<AGENT> env)."
+            )
+        return SmolvmExecutor(
+            agent_name=agent_name,
+            image=resolved_image,
+            name=name,
+            cwd=cwd,
+            timeout=timeout,
+            keep_on_error=keep_on_error,
+        )
+    raise ValueError(f"unknown sandbox kind: {kind!r}")
+
+
+_DEFAULT_PROVIDER_KEYS: dict[str, str] = {
+    "ANTHROPIC_API_KEY": "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY": "OPENAI_API_KEY",
+}
+
+SMOLVM_AVAILABLE = importlib.util.find_spec("smol") is not None
+
+
+def _smol() -> tuple[type, type, type, type, type]:
+    """Lazily import smol types; raise AgentRunError if the extra isn't installed."""
+    try:
+        from smol import ExecOptions, Machine, MachineConfig, MountSpec, ResourceSpec
+    except ImportError as err:
+        raise AgentRunError(
+            "smolmachines extra not installed; run `uv sync --extra sandbox` "
+            "to enable smolvm sandbox mode."
+        ) from err
+    return Machine, MachineConfig, MountSpec, ResourceSpec, ExecOptions
+
+
+def _filter_provider_keys(mapping: dict[str, str], environ: dict[str, str]) -> dict[str, str]:
+    """Return the {guest_env: host_value} subset whose host env var is actually set."""
+    return {guest: environ[host] for guest, host in mapping.items() if host in environ}
+
+
+class _SmolvmSession:
+    """One smolvm machine, shared across the concurrent passes of a review."""
+
+    def __init__(
+        self,
+        *,
+        image: str,
+        name: str,
+        cwd: str,
+        timeout: int,
+        keep_on_error: bool,
+        keys: dict[str, str],
+    ) -> None:
+        self._image = image
+        self._name = name
+        self._cwd = cwd
+        self._timeout = timeout
+        self._keep_on_error = keep_on_error
+        self._keys = keys
+        self._machine = None
+        self._errored = False
+
+    def __enter__(self) -> _SmolvmSession:
+        machine_cls, machine_cfg_cls, mount_spec_cls, resource_spec_cls, _ = _smol()
+        try:
+            self._machine = machine_cls.create(
+                machine_cfg_cls(
+                    name=self._name,
+                    image=self._image,
+                    mounts=[mount_spec_cls(source=self._cwd, target="/workspace", read_only=False)],
+                    resources=resource_spec_cls(network=True),
+                )
+            )
+        except Exception as err:
+            raise AgentRunError(f"smol Machine.create failed: {err}") from err
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if self._keep_on_error and self._errored:
+            logger.warning("keep_on_error: leaving smolvm %s for inspection", self._name)
+            return None
+        try:
+            if self._machine is not None:
+                self._machine.delete()
+        except Exception:
+            logger.warning("smol delete failed for machine %s", self._name)
+        return None
+
+    def run(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
+        _, _, _, _, exec_options_cls = _smol()
+        prompt_guest = f"/tmp/_smol_prompt_{uuid.uuid4().hex[:8]}.txt"
+        shell = f"cd /workspace && {shlex.join(cmd)} < {shlex.quote(prompt_guest)}"
+        try:
+            self._machine.write_file(prompt_guest, prompt)
+            result = self._machine.exec(
+                ["sh", "-c", shell],
+                exec_options_cls(env=dict(self._keys), workdir="/workspace", timeout=timeout),
+            )
+        except Exception as err:
+            self._errored = True
+            raise AgentRunError(f"smol exec failed: {err}") from err
+        if result.exit_code != 0:
+            self._errored = True
+            stderr = result.stderr.strip()
+            raise AgentRunError(
+                f"Agent '{cmd[0]}' exited {result.exit_code}" + (f": {stderr}" if stderr else "")
+            )
+        return result.stdout
+
+
+class SmolvmExecutor:
+    """Runs agent CLIs inside a smolvm microVM via the embedded smol SDK.
+
+    One Machine per session; provider keys injected per exec via
+    ``ExecOptions.env`` (resolved from the server's own process environment).
+    """
+
+    def __init__(
+        self,
+        *,
+        agent_name: str,
+        image: str,
+        name: str,
+        cwd: str | Path | None = None,
+        timeout: int = DEFAULT_SANDBOX_TIMEOUT,
+        keep_on_error: bool = False,
+        provider_keys_mapping: dict[str, str] | None = None,
+    ) -> None:
+        self._agent_name = agent_name
+        self._image = image
+        self._name = name
+        self._cwd = cwd
+        self._timeout = timeout
+        self._keep_on_error = keep_on_error
+        self._keys = provider_keys_mapping or dict(_DEFAULT_PROVIDER_KEYS)
+
+    def available(self, agent: Agent) -> bool:
+        return SMOLVM_AVAILABLE and self._image != ""
+
+    def session(
+        self, cwd: str | Path | None = None, *, env: dict[str, str] | None = None
+    ) -> Session:
+        resolved = cwd if cwd is not None else self._cwd
+        if resolved is None:
+            raise ValueError(
+                "SmolvmExecutor requires a cwd (the repo checkout) for the machine workspace mount."
+            )
+        return _SmolvmSession(
+            image=self._image,
+            name=self._name,
+            cwd=str(resolved),
+            timeout=self._timeout,
+            keep_on_error=self._keep_on_error,
+            keys=_filter_provider_keys(self._keys, os.environ),
+        )
