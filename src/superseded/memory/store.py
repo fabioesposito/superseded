@@ -34,6 +34,26 @@ async def _apply_sqlite_pragmas(db: aiosqlite.Connection) -> None:
     await db.execute("PRAGMA journal_mode=WAL")
 
 
+def _recover_wal(db_path: Path) -> None:
+    """Checkpoint stale WAL state left by interrupted processes.
+
+    When a previous run is killed during an aiosqlite write, the WAL file may
+    contain uncheckpointed frames.  Opening a sync connection with a busy
+    timeout and running ``wal_checkpoint(PASSIVE)`` replays committed frames
+    and shrinks the WAL so the next async connection does not hit
+    ``SQLITE_BUSY`` during migration or the first write.
+    """
+    if not db_path.exists():
+        return
+    with contextlib.suppress(Exception):
+        conn = sqlite3.connect(str(db_path), timeout=_BUSY_TIMEOUT_MS / 1000)
+        try:
+            conn.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+            conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        finally:
+            conn.close()
+
+
 def _is_locked_error(err: BaseException) -> bool:
     return isinstance(err, sqlite3.OperationalError) and "locked" in str(err).lower()
 
@@ -91,6 +111,7 @@ class MemoryStore:
         if self._conn is not None:
             return
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        _recover_wal(self.db_path)
         url = f"sqlite+aiosqlite:///{self.db_path.resolve()}"
         await asyncio.to_thread(alembic_runner.upgrade, url)
         with contextlib.suppress(OSError):
@@ -146,6 +167,7 @@ class MemoryStore:
         if self._conn is not None:
             return  # open() already migrated.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        _recover_wal(self.db_path)
         url = f"sqlite+aiosqlite:///{self.db_path.resolve()}"
         await asyncio.to_thread(alembic_runner.upgrade, url)
         async with aiosqlite.connect(self.db_path) as db:

@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import signal
 import subprocess
 import sys
 import uuid
@@ -452,119 +453,140 @@ def _run_review(
         store = MemoryStore()
         asyncio.run(store.init())
 
-    head_sha: str | None = None
+    _prev_sigint = signal.getsignal(signal.SIGINT)
 
-    if progressive_active:
-        assert repo is not None
-        assert store is not None
-        try:
-            diff, mode, head_sha = _resolve_pr_review_diff(pr=pr, repo=repo, store=store, full=full)
-        except RuntimeError as err:
-            click.echo(f"Error: {err}", err=True)
-            sys.exit(1)
-        if mode == "noop":
-            _status("No new commits since last review.")
-            empty = ReviewResult(findings=[], warnings=[])
-            if fmt == "json":
-                click.echo(format_json(empty))
-            elif fmt == "markdown":
-                click.echo(format_markdown(empty))
-            else:
-                click.echo(format_table(empty))
-            return
-        _status("Gathering context...")
-    else:
-        if pr is not None and not memory_enabled:
-            _status("memory disabled; running full review (progressive review needs memory)")
-        _status("Fetching diff...")
-        try:
-            diff = fetch_diff(pr=pr, diff_range=diff_range, files=files, staged=staged)
-        except ValueError as err:
-            click.echo(f"Error: {err}", err=True)
-            sys.exit(2)
-        except RuntimeError as err:
-            click.echo(f"Error: {err}", err=True)
-            sys.exit(1)
-        _status("Gathering context...")
-
-    root = repo_root()
-
-    enable_static = config.static_analysis and not no_static
-    enable_usage = config.usage_retrieval and not no_usage
-    enable_conventions = config.conventions and not no_conventions
-    enable_specs = config.spec_retrieval and not no_specs
-    enable_graph = resolve_graph(graph, config)
-
-    pr_description = fetch_pr_description(pr) if pr is not None else None
-
-    context = gather_context(
-        diff,
-        root,
-        static_analysis=enable_static,
-        usage_retrieval=enable_usage,
-        conventions=enable_conventions,
-        spec_retrieval=enable_specs,
-        graph=enable_graph,
-    )
-    file_context = context["file_context"]
-    static_signals = context["static_signals"]
-    usage_signals = context["usage_signals"]
-    conventions_signals = context["conventions_signals"]
-    spec_signals = context["spec_signals"]
-
-    memory_context: str | None = None
-    if store is not None and repo:
-        dismissed = asyncio.run(_load_dismissed(store, repo))
-        memory_context = format_memory_context(dismissed)
-
-    learned_context: str | None = None
-    if config.learned_review and store is not None and repo:
-        learned_context = asyncio.run(_build_learned_context(store, engine, repo, config, root))
-
-    _status(f"Running review with {agent_name} (timeout {pass_timeout}s per pass)...")
-    try:
-        result = engine.review(
-            diff=diff,
-            pr_description=pr_description,
-            file_context=file_context,
-            memory_context=memory_context,
-            static_signals=static_signals,
-            usage_signals=usage_signals,
-            conventions_signals=conventions_signals,
-            spec_signals=spec_signals,
-            learned_context=learned_context,
-            passes=passes,
-            timeout=pass_timeout,
-            progress=_progress,
-            cwd=str(root),
-            executor=executor,
-        )
-    except RuntimeError as err:
-        click.echo(f"Error: {err}", err=True)
-        sys.exit(1)
-
-    if fmt == "json":
-        click.echo(format_json(result))
-    elif fmt == "markdown":
-        click.echo(format_markdown(result))
-    else:
-        click.echo(format_table(result))
-
-    for w in result.warnings:
-        click.echo(f"\nWarning: {w}", err=True)
-
-    if store is not None and repo:
-        asyncio.run(_persist_findings(store, result, repo))
-
-    if head_sha is not None and store is not None and repo is not None and pr is not None:
-        asyncio.run(_set_watermark(store, repo, pr, head_sha))
-
-    if post and pr is not None:
-        _status("Posting to GitHub PR...")
-        comment_ids = post_review_to_pr(pr=pr, result=result, diff=diff)
+    def _sigint_handler(signum: int, frame: object) -> None:
         if store is not None:
-            asyncio.run(_link_comment_ids(store, result, comment_ids))
-        _status(f"Done. Posted {len(comment_ids)} comment(s).")
+            with contextlib.suppress(Exception):
+                asyncio.run(store.close())
+        if callable(_prev_sigint):
+            _prev_sigint(signum, frame)
+        else:
+            raise KeyboardInterrupt
+
+    signal.signal(signal.SIGINT, _sigint_handler)
+
+    try:
+        head_sha: str | None = None
+
+        if progressive_active:
+            assert repo is not None
+            assert store is not None
+            try:
+                diff, mode, head_sha = _resolve_pr_review_diff(
+                    pr=pr, repo=repo, store=store, full=full
+                )
+            except RuntimeError as err:
+                click.echo(f"Error: {err}", err=True)
+                sys.exit(1)
+            if mode == "noop":
+                _status("No new commits since last review.")
+                empty = ReviewResult(findings=[], warnings=[])
+                if fmt == "json":
+                    click.echo(format_json(empty))
+                elif fmt == "markdown":
+                    click.echo(format_markdown(empty))
+                else:
+                    click.echo(format_table(empty))
+                return
+            _status("Gathering context...")
+        else:
+            if pr is not None and not memory_enabled:
+                _status("memory disabled; running full review (progressive review needs memory)")
+            _status("Fetching diff...")
+            try:
+                diff = fetch_diff(pr=pr, diff_range=diff_range, files=files, staged=staged)
+            except ValueError as err:
+                click.echo(f"Error: {err}", err=True)
+                sys.exit(2)
+            except RuntimeError as err:
+                click.echo(f"Error: {err}", err=True)
+                sys.exit(1)
+            _status("Gathering context...")
+
+        root = repo_root()
+
+        enable_static = config.static_analysis and not no_static
+        enable_usage = config.usage_retrieval and not no_usage
+        enable_conventions = config.conventions and not no_conventions
+        enable_specs = config.spec_retrieval and not no_specs
+        enable_graph = resolve_graph(graph, config)
+
+        pr_description = fetch_pr_description(pr) if pr is not None else None
+
+        context = gather_context(
+            diff,
+            root,
+            static_analysis=enable_static,
+            usage_retrieval=enable_usage,
+            conventions=enable_conventions,
+            spec_retrieval=enable_specs,
+            graph=enable_graph,
+        )
+        file_context = context["file_context"]
+        static_signals = context["static_signals"]
+        usage_signals = context["usage_signals"]
+        conventions_signals = context["conventions_signals"]
+        spec_signals = context["spec_signals"]
+
+        memory_context: str | None = None
+        if store is not None and repo:
+            dismissed = asyncio.run(_load_dismissed(store, repo))
+            memory_context = format_memory_context(dismissed)
+
+        learned_context: str | None = None
+        if config.learned_review and store is not None and repo:
+            learned_context = asyncio.run(_build_learned_context(store, engine, repo, config, root))
+
+        _status(f"Running review with {agent_name} (timeout {pass_timeout}s per pass)...")
+        try:
+            result = engine.review(
+                diff=diff,
+                pr_description=pr_description,
+                file_context=file_context,
+                memory_context=memory_context,
+                static_signals=static_signals,
+                usage_signals=usage_signals,
+                conventions_signals=conventions_signals,
+                spec_signals=spec_signals,
+                learned_context=learned_context,
+                passes=passes,
+                timeout=pass_timeout,
+                progress=_progress,
+                cwd=str(root),
+                executor=executor,
+            )
+        except RuntimeError as err:
+            click.echo(f"Error: {err}", err=True)
+            sys.exit(1)
+
+        if fmt == "json":
+            click.echo(format_json(result))
+        elif fmt == "markdown":
+            click.echo(format_markdown(result))
+        else:
+            click.echo(format_table(result))
+
+        for w in result.warnings:
+            click.echo(f"\nWarning: {w}", err=True)
+
+        if store is not None and repo:
+            asyncio.run(_persist_findings(store, result, repo))
+
+        if head_sha is not None and store is not None and repo is not None and pr is not None:
+            asyncio.run(_set_watermark(store, repo, pr, head_sha))
+
+        if post and pr is not None:
+            _status("Posting to GitHub PR...")
+            comment_ids = post_review_to_pr(pr=pr, result=result, diff=diff)
+            if store is not None:
+                asyncio.run(_link_comment_ids(store, result, comment_ids))
+            _status(f"Done. Posted {len(comment_ids)} comment(s).")
+    finally:
+        signal.signal(signal.SIGINT, _prev_sigint)
+        if store is not None:
+            with contextlib.suppress(Exception):
+                asyncio.run(store.close())
 
 
 async def _load_dismissed(store: MemoryStore, repo: str) -> list[dict]:
