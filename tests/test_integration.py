@@ -856,3 +856,21 @@ def test_learned_context_none_when_no_memory(mock_desc, mock_ctx, mock_engine_cl
     assert result.exit_code == 0, result.output
     kwargs = mock_engine.review.call_args.kwargs
     assert kwargs.get("learned_context") is None
+
+
+def test_migrate_command_creates_schema(tmp_path):
+    db = tmp_path / "migrate.db"
+    env = {"SUPERSEDED_DATABASE_URL": f"sqlite:///{db}"}
+    runner = CliRunner()
+    result = runner.invoke(cli, ["migrate"], env=env)
+    assert result.exit_code == 0, result.output
+    assert "0002" in result.output
+
+    async def _has_findings() -> bool:
+        async with aiosqlite.connect(db) as c:
+            cur = await c.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='findings'"
+            )
+            return await cur.fetchone() is not None
+
+    assert asyncio.run(_has_findings())

@@ -696,6 +696,31 @@ def _run_init(force: bool, agent_override: str | None, config_path: Path | None)
 
 
 @cli.command()
+@click.option(
+    "--database-url",
+    "database_url",
+    default=None,
+    help="Database URL (default: local SQLite at .superseded/memory.db). Env: SUPERSEDED_DATABASE_URL.",
+)
+@click.pass_context
+def migrate(ctx: click.Context, database_url: str | None) -> None:
+    """Run database migrations to head and print the resulting revision."""
+    from superseded.memory import alembic_runner
+
+    setup_logging(
+        resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
+        resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
+    )
+
+    url = database_url or os.environ.get("SUPERSEDED_DATABASE_URL")
+    if not url:
+        url = f"sqlite:///{MemoryStore().db_path.resolve()}"
+
+    rev = alembic_runner.upgrade(url)
+    click.echo(rev)
+
+
+@cli.command()
 @click.option("--check", is_flag=True, help="Check for feedback on past reviews")
 @click.option(
     "--pr",

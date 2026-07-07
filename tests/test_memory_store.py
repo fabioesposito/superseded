@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 
 import pytest
 
@@ -83,52 +82,6 @@ def test_reasoning_empty_by_default(store):
     result = asyncio.run(_get())
     assert result is not None
     assert result["reasoning"] == ""
-
-
-def test_migration_adds_reasoning_column(tmp_path):
-    import aiosqlite
-
-    db_path = tmp_path / "old.db"
-    asyncio.run(_init_old_db(db_path))
-
-    store = MemoryStore(db_path=db_path)
-    asyncio.run(store.init())
-
-    async def _check():
-        async with aiosqlite.connect(db_path) as db:
-            cursor = await db.execute("PRAGMA table_info(findings)")
-            cols = {row[1] for row in await cursor.fetchall()}
-            return "reasoning" in cols
-
-    assert asyncio.run(_check())
-
-
-async def _init_old_db(db_path: Path) -> None:
-    import aiosqlite
-
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    async with aiosqlite.connect(db_path) as db:
-        await db.executescript("""
-            CREATE TABLE IF NOT EXISTS findings (
-                id TEXT PRIMARY KEY,
-                repo TEXT,
-                pass TEXT,
-                severity TEXT,
-                file TEXT,
-                line INTEGER,
-                title TEXT,
-                description TEXT,
-                dismissed BOOLEAN DEFAULT FALSE,
-                comment_id INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS feedback (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                finding_id TEXT REFERENCES findings(id),
-                action TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
 
 
 def test_record_finding_upserts_on_change(store):
@@ -234,66 +187,48 @@ def test_dismissed_findings_include_reasoning(store):
     assert dismissed[0]["reasoning"] == "N+1 query"
 
 
-def test_init_runs_migration_once(tmp_path):
-    """Repeated init() must not re-run ALTER TABLE migration within a store instance."""
-    store = MemoryStore(db_path=tmp_path / "once.db")
-    calls = {"n": 0}
-    real_migrate = store._migrate
-
-    async def counting_migrate(db):
-        calls["n"] += 1
-        await real_migrate(db)
-
-    store._migrate = counting_migrate
-    asyncio.run(store.init())
-    asyncio.run(store.init())
-    asyncio.run(store.init())
-    assert calls["n"] == 1
-
-
 async def test_open_reuses_single_connection(tmp_path):
-    """While a long-lived connection is open, methods must NOT open new connections."""
-    import aiosqlite
-
-    store = MemoryStore(db_path=tmp_path / "reuse.db")
-    connects = {"n": 0}
-    real_connect = aiosqlite.connect
-
-    def counting_connect(path):
-        connects["n"] += 1
-        return real_connect(path)
-
+    """While a long-lived connection is open, query methods reuse it (no new connects)."""
     import superseded.memory.store as store_mod
 
-    orig = store_mod.aiosqlite.connect
+    store = MemoryStore(db_path=tmp_path / "reuse.db")
+    await store.open()  # alembic upgrade happens here, before counting begins
+
+    connects = {"n": 0}
+    real_connect = store_mod.aiosqlite.connect
+
+    def counting_connect(*args, **kwargs):
+        connects["n"] += 1
+        return real_connect(*args, **kwargs)
+
     store_mod.aiosqlite.connect = counting_connect
     try:
-        async with store:
-            await store.record_finding(
-                finding_id="a",
-                repo="o/r",
-                pass_name="security",
-                severity="critical",
-                file="x.py",
-                line=1,
-                title="t",
-                description="d",
-            )
-            await store.record_finding(
-                finding_id="b",
-                repo="o/r",
-                pass_name="security",
-                severity="critical",
-                file="x.py",
-                line=2,
-                title="t2",
-                description="d",
-            )
-            await store.record_feedback("a", "dismiss")
-            await store.get_dismissed_findings("o/r")
+        await store.record_finding(
+            finding_id="a",
+            repo="o/r",
+            pass_name="security",
+            severity="critical",
+            file="x.py",
+            line=1,
+            title="t",
+            description="d",
+        )
+        await store.record_finding(
+            finding_id="b",
+            repo="o/r",
+            pass_name="security",
+            severity="critical",
+            file="x.py",
+            line=2,
+            title="t2",
+            description="d2",
+        )
+        await store.record_feedback("a", "dismiss")
+        await store.get_dismissed_findings("o/r")
     finally:
-        store_mod.aiosqlite.connect = orig
-    assert connects["n"] == 1
+        store_mod.aiosqlite.connect = real_connect
+    assert connects["n"] == 0  # no new connects while the long-lived conn is open
+    await store.close()
 
 
 async def test_aenter_aexit_round_trip(tmp_path):
@@ -333,22 +268,3 @@ async def test_watermark_keys_per_repo_and_pr(tmp_path):
     assert await store.get_watermark("owner/repo", 7) == "aaa"
     assert await store.get_watermark("owner/repo", 8) == "bbb"
     assert await store.get_watermark("other/repo", 7) == "ccc"
-
-
-async def test_watermark_table_added_by_migration(tmp_path):
-    """An existing DB (created without the watermark table) must gain it via _migrate."""
-    import aiosqlite
-
-    db_path = tmp_path / "old.db"
-    async with aiosqlite.connect(db_path) as db:
-        await db.executescript(
-            "CREATE TABLE findings (id TEXT PRIMARY KEY);"
-            "CREATE TABLE feedback (id INTEGER PRIMARY KEY AUTOINCREMENT);"
-            "CREATE TABLE installations (id INTEGER PRIMARY KEY AUTOINCREMENT);"
-        )
-        await db.commit()
-
-    store = MemoryStore(db_path=db_path)
-    await store.init()
-    await store.set_watermark("owner/repo", 1, "deadbeef")
-    assert await store.get_watermark("owner/repo", 1) == "deadbeef"

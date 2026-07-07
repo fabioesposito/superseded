@@ -110,3 +110,41 @@ async def test_open_idempotent_and_close_safe(store):
     await store.open()  # second open is a no-op
     await store.close()
     await store.close()  # second close is safe
+
+
+async def test_postgres_open_adopts_pre_alembic_db():
+    """A DB with the legacy schema (no alembic_version) gets stamped + upgraded,
+    and existing data survives."""
+    import asyncpg
+
+    from superseded.memory.postgres import PostgresStore
+
+    # Wipe to a clean slate, then build a partial legacy schema (no alembic_version).
+    conn = await asyncpg.connect(_DSN)
+    try:
+        for table in (
+            "installation_config",
+            "feedback",
+            "findings",
+            "installations",
+            "review_watermarks",
+            "review_stats",
+            "learned_rules",
+            "reflection_state",
+            "alembic_version",
+        ):
+            await conn.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await conn.execute("CREATE TABLE findings (id TEXT PRIMARY KEY, repo TEXT, pass TEXT)")
+        await conn.execute("INSERT INTO findings (id, repo, pass) VALUES ('x', 'o/r', 'security')")
+    finally:
+        await conn.close()
+
+    store = PostgresStore(_DSN, max_size=4)
+    await store.open()
+
+    # Seeded finding must survive adoption.
+    async with store._pool.acquire() as c:
+        count = await c.fetchval("SELECT COUNT(*) FROM findings")
+
+    await store.close()
+    assert count == 1

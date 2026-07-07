@@ -13,97 +13,20 @@ from superseded.memory._stats_sql import STATS_FILE_PATTERN_CASE
 
 DEFAULT_DB_PATH = Path(".superseded/memory.db")
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS findings (
-    id TEXT PRIMARY KEY,
-    repo TEXT,
-    pass TEXT,
-    severity TEXT,
-    file TEXT,
-    line INTEGER,
-    reasoning TEXT DEFAULT '',
-    title TEXT,
-    description TEXT,
-    dismissed BOOLEAN DEFAULT FALSE,
-    comment_id INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS feedback (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    finding_id TEXT REFERENCES findings(id),
-    action TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS installations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    app_installation_id INTEGER UNIQUE NOT NULL,
-    owner TEXT NOT NULL,
-    repos TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS review_watermarks (
-    repo        TEXT    NOT NULL,
-    pr_number   INTEGER NOT NULL,
-    head_sha    TEXT    NOT NULL,
-    reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (repo, pr_number)
-);
-
-CREATE TABLE IF NOT EXISTS review_stats (
-    repo         TEXT    NOT NULL,
-    pass         TEXT    NOT NULL,
-    severity     TEXT    NOT NULL,
-    file_pattern TEXT    NOT NULL DEFAULT '*',
-    total        INTEGER NOT NULL DEFAULT 0,
-    accepted     INTEGER NOT NULL DEFAULT 0,
-    dismissed    INTEGER NOT NULL DEFAULT 0,
-    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (repo, pass, severity, file_pattern)
-);
-
-CREATE TABLE IF NOT EXISTS learned_rules (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    repo            TEXT    NOT NULL,
-    rule_text       TEXT    NOT NULL,
-    evidence_count  INTEGER NOT NULL DEFAULT 0,
-    confidence      REAL    NOT NULL DEFAULT 1.0,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_applied_at TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS reflection_state (
-    repo               TEXT    NOT NULL,
-    last_feedback_id   INTEGER NOT NULL,
-    last_reflection_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (repo)
-);
-
-CREATE TABLE IF NOT EXISTS installation_config (
-    installation_id INTEGER NOT NULL,
-    key             TEXT    NOT NULL,
-    value           TEXT    NOT NULL,
-    PRIMARY KEY (installation_id, key),
-    FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE CASCADE
-);
-"""
-
 
 class MemoryStore:
     """SQLite-backed memory with an optional long-lived connection.
 
     Callers that perform many operations (the CLI persisting N findings, the
     server worker recording a review) should use ``async with store:`` so all
-    operations reuse a single connection. Each ``init()``/``open()`` runs the
-    ALTER TABLE migration exactly once per instance.
+    operations reuse a single connection. Each ``init()``/``open()`` brings the
+    schema to the Alembic head revision via ``alembic_runner.upgrade``
+    (idempotent; safe to call repeatedly).
     """
 
     def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = db_path or DEFAULT_DB_PATH
         self._conn: aiosqlite.Connection | None = None
-        self._migrated = False
 
     async def __aenter__(self) -> MemoryStore:
         await self.open()
@@ -114,17 +37,19 @@ class MemoryStore:
 
     async def open(self) -> None:
         """Open (and migrate) a long-lived connection. Idempotent."""
+        import asyncio
+
+        from superseded.memory import alembic_runner
+
         if self._conn is not None:
             return
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = await aiosqlite.connect(self.db_path)
-        await self._conn.execute("PRAGMA journal_mode=WAL")
-        await self._conn.executescript(SCHEMA)
+        url = f"sqlite+aiosqlite:///{self.db_path.resolve()}"
+        await asyncio.to_thread(alembic_runner.upgrade, url)
         with contextlib.suppress(OSError):
             os.chmod(self.db_path, 0o600)
-        if not self._migrated:
-            await self._migrate(self._conn)
-            self._migrated = True
+        self._conn = await aiosqlite.connect(self.db_path)
+        await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.commit()
 
     async def close(self) -> None:
@@ -142,77 +67,26 @@ class MemoryStore:
             yield db
 
     async def init(self) -> None:
-        """Ensure the schema exists and migration has run once.
+        """Ensure the schema exists and migrations are at head.
 
         Idempotent. Prefer ``async with store:`` for batched work; this is the
         back-compat entrypoint for callers that historically called ``init()``
-        before each operation. Migration runs at most once per instance.
+        before each operation.
         """
+        import asyncio
+
+        from superseded.memory import alembic_runner
+
         if self._conn is not None:
-            return  # open() already created the schema + migrated.
+            return  # open() already migrated.
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        url = f"sqlite+aiosqlite:///{self.db_path.resolve()}"
+        await asyncio.to_thread(alembic_runner.upgrade, url)
         async with aiosqlite.connect(self.db_path) as db:
-            await db.execute("PRAGMA journal_mode=WAL")
-            await db.executescript(SCHEMA)
             with contextlib.suppress(OSError):
                 os.chmod(self.db_path, 0o600)
-            if not self._migrated:
-                await self._migrate(db)
-                self._migrated = True
+            await db.execute("PRAGMA journal_mode=WAL")
             await db.commit()
-
-    async def _migrate(self, db: aiosqlite.Connection) -> None:
-        cursor = await db.execute("PRAGMA table_info(findings)")
-        columns = {row[1] for row in await cursor.fetchall()}
-        if "comment_id" not in columns:
-            await db.execute("ALTER TABLE findings ADD COLUMN comment_id INTEGER")
-        if "reasoning" not in columns:
-            await db.execute("ALTER TABLE findings ADD COLUMN reasoning TEXT DEFAULT ''")
-        await db.execute(
-            "CREATE TABLE IF NOT EXISTS review_watermarks ("
-            "repo TEXT NOT NULL, "
-            "pr_number INTEGER NOT NULL, "
-            "head_sha TEXT NOT NULL, "
-            "reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
-            "PRIMARY KEY (repo, pr_number))"
-        )
-        await db.execute(
-            "CREATE TABLE IF NOT EXISTS review_stats ("
-            "repo TEXT NOT NULL, "
-            "pass TEXT NOT NULL, "
-            "severity TEXT NOT NULL, "
-            "file_pattern TEXT NOT NULL DEFAULT '*', "
-            "total INTEGER NOT NULL DEFAULT 0, "
-            "accepted INTEGER NOT NULL DEFAULT 0, "
-            "dismissed INTEGER NOT NULL DEFAULT 0, "
-            "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
-            "PRIMARY KEY (repo, pass, severity, file_pattern))"
-        )
-        await db.execute(
-            "CREATE TABLE IF NOT EXISTS learned_rules ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "repo TEXT NOT NULL, "
-            "rule_text TEXT NOT NULL, "
-            "evidence_count INTEGER NOT NULL DEFAULT 0, "
-            "confidence REAL NOT NULL DEFAULT 1.0, "
-            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
-            "last_applied_at TIMESTAMP)"
-        )
-        await db.execute(
-            "CREATE TABLE IF NOT EXISTS reflection_state ("
-            "repo TEXT NOT NULL, "
-            "last_feedback_id INTEGER NOT NULL, "
-            "last_reflection_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
-            "PRIMARY KEY (repo))"
-        )
-        await db.execute(
-            "CREATE TABLE IF NOT EXISTS installation_config ("
-            "installation_id INTEGER NOT NULL, "
-            "key TEXT NOT NULL, "
-            "value TEXT NOT NULL, "
-            "PRIMARY KEY (installation_id, key), "
-            "FOREIGN KEY (installation_id) REFERENCES installations(id) ON DELETE CASCADE)"
-        )
 
     async def record_finding(
         self,
