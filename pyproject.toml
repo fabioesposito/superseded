@@ -13,7 +13,7 @@ dependencies = [
     "uvicorn>=0.34.0",
     "httpx>=0.28.0",
     "pyjwt[crypto]>=2.10.0",
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy[asyncio]>=2.0.0",
     "alembic>=1.13.0",
 ]
 

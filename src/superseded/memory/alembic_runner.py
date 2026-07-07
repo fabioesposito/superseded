@@ -11,6 +11,7 @@ Public API:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from importlib.resources import files
 
 from alembic import command
@@ -65,7 +66,8 @@ async def _probe(url: str) -> tuple[bool, bool]:
 
             return await conn.run_sync(_inspect)
     finally:
-        await engine.dispose()
+        with contextlib.suppress(Exception):
+            await engine.dispose()
 
 
 def _current_revision(url: str) -> str | None:
@@ -82,7 +84,8 @@ def _current_revision(url: str) -> str | None:
             async with engine.connect() as conn:
                 return await conn.run_sync(_read)
         finally:
-            await engine.dispose()
+            with contextlib.suppress(Exception):
+                await engine.dispose()
 
     return asyncio.run(_get())
 

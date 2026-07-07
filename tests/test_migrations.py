@@ -156,6 +156,60 @@ def test_normalize_url_sqlite_default_scheme():
     assert alembic_runner.normalize_url("sqlite://") == "sqlite+aiosqlite://"
 
 
+def test_probe_propagates_original_error_not_dispose_error(monkeypatch):
+    """If both the probe op and engine.dispose() raise, the probe error wins.
+
+    Regression: previously dispose() in ``finally`` masked the real error,
+    producing a confusing double-trace (seen when greenlet was missing).
+    """
+    connect_err = RuntimeError("CONNECT_FAILED")
+    dispose_err = RuntimeError("DISPOSE_FAILED")
+
+    class _ConnCtx:
+        async def __aenter__(self):
+            raise connect_err
+
+        async def __aexit__(self, *_):
+            return False
+
+    class _BadEngine:
+        def connect(self):
+            return _ConnCtx()
+
+        async def dispose(self):
+            raise dispose_err
+
+    monkeypatch.setattr(alembic_runner, "create_async_engine", lambda _url: _BadEngine())
+
+    with pytest.raises(RuntimeError, match="CONNECT_FAILED"):
+        asyncio.run(alembic_runner._probe("sqlite+aiosqlite:///x"))
+
+
+def test_current_revision_propagates_original_error_not_dispose_error(monkeypatch):
+    """Same regression guard as above, for _current_revision's inner _get."""
+    connect_err = RuntimeError("CONNECT_FAILED")
+    dispose_err = RuntimeError("DISPOSE_FAILED")
+
+    class _ConnCtx:
+        async def __aenter__(self):
+            raise connect_err
+
+        async def __aexit__(self, *_):
+            return False
+
+    class _BadEngine:
+        def connect(self):
+            return _ConnCtx()
+
+        async def dispose(self):
+            raise dispose_err
+
+    monkeypatch.setattr(alembic_runner, "create_async_engine", lambda _url: _BadEngine())
+
+    with pytest.raises(RuntimeError, match="CONNECT_FAILED"):
+        alembic_runner._current_revision("sqlite+aiosqlite:///x")
+
+
 def test_models_match_head_revision_no_drift(tmp_path):
     """Guardrail: the SQLAlchemy models must match a DB upgraded to head.
 
