@@ -150,6 +150,52 @@ docker build -f docker/Dockerfile --build-arg AI_CLIS=@anthropic-ai/claude-code 
 > clones via `git`) — so `gh` is installed only in the CLI image, not the server
 > image.
 
+## Smolvm Sandbox
+
+The `smolvm` sandbox backend boots agent OCI images as microVMs. Set `SUPERSEDED_SANDBOX_KIND=smolvm` and provide per-agent images via env vars.
+
+### Image Boot Sources
+
+Images resolve to one of three boot sources:
+
+| Source | Trigger | Example | Overhead |
+|---|---|---|---|
+| `file` | Path on disk exists | `SUPERSEDED_SMOLVM_IMAGE=/tmp/opencode.tar` | Minimal — reads archive directly |
+| `docker` | Bare local Docker tag | `SUPERSEDED_SMOLVM_IMAGE=superseded-smolvm-opencode:latest` | ~5s of `docker save` per run (re-serializes image) |
+| `registry` | Anything else (OCI ref) | `SUPERSEDED_SMOLVM_IMAGE=ghcr.io/org/opencode:latest` | Registry pull latency at boot |
+
+### Startup Benchmarks
+
+Measured with `superseded-smolvm-opencode:latest` (808 MB Docker image) on a KVM-capable Linux host:
+
+| Boot source | Create | Start (VM boot) | Total lifecycle |
+|---|---|---|---|
+| docker pipe | 4.9s | 9.5s | 16.3s |
+| file path | 0.8s | 9.1s | 10.7s |
+| registry (SDK) | — | — | (not benchmarked) |
+
+The VM boot itself (~9s) is the dominant fixed cost. The docker pipe adds ~5s of `docker save` overhead because the image is re-serialized on every run even though it hasn't changed.
+
+### Optimizing Startup
+
+Pre-export the image to a tar file once, then point at the file path:
+
+```bash
+docker save superseded-smolvm-opencode:latest -o /var/lib/superseded/images/opencode.tar
+export SUPERSEDED_SMOLVM_IMAGE_OPENCODE=/var/lib/superseded/images/opencode.tar
+```
+
+This cuts startup from ~16s to ~11s by skipping the `docker save` re-serialization.
+
+### Per-Agent Vars
+
+| Env var | Agent |
+|---|---|
+| `SUPERSEDED_SMOLVM_IMAGE_CLAUDE_CODE` | claude-code |
+| `SUPERSEDED_SMOLVM_IMAGE_OPENCODE` | opencode |
+| `SUPERSEDED_SMOLVM_IMAGE_CODEX` | codex |
+| `SUPERSEDED_SMOLVM_IMAGE` | Fallback for all agents |
+
 ## GitHub Action
 
 The GitHub Action (`action.yml`) is a **composite** Action — a single `curl` step
