@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 
 import pytest
 
+from superseded.memory import store as store_mod
 from superseded.memory.store import MemoryStore
 
 
@@ -268,3 +270,163 @@ async def test_watermark_keys_per_repo_and_pr(tmp_path):
     assert await store.get_watermark("owner/repo", 7) == "aaa"
     assert await store.get_watermark("owner/repo", 8) == "bbb"
     assert await store.get_watermark("other/repo", 7) == "ccc"
+
+
+async def test_connection_has_busy_timeout(tmp_path):
+    """Open() must configure a non-zero busy_timeout so concurrent writers wait
+    instead of hard-failing with 'database is locked'."""
+    store = MemoryStore(db_path=tmp_path / "bt.db")
+    await store.open()
+    cursor = await store._conn.execute("PRAGMA busy_timeout")
+    (val,) = await cursor.fetchone()
+    assert val == store_mod._BUSY_TIMEOUT_MS
+    await store.close()
+
+
+async def test_concurrent_writes_wait_instead_of_locking(tmp_path):
+    """Regression for the 'database is locked after abort/error' symptom.
+
+    One connection holds an open write transaction; a second connection writing
+    to the same DB must block-and-retry (busy_timeout) rather than raising
+    'database is locked' immediately. With busy_timeout=0 (the pre-fix default)
+    the second write raises before the holder commits, failing this test.
+    """
+    db = tmp_path / "lock.db"
+    holder = MemoryStore(db_path=db)
+    waiter = MemoryStore(db_path=db)
+    await holder.open()
+    await waiter.open()
+
+    await holder._conn.execute("BEGIN IMMEDIATE")
+    await holder._conn.execute(
+        "INSERT INTO findings (id, repo, pass, severity, file, line, title, description) "
+        "VALUES ('hold', 'o/r', 'security', 'critical', 'x', 1, 't', 'd')"
+    )
+
+    async def _waiter_write():
+        await waiter.record_finding(
+            finding_id="w1",
+            repo="o/r",
+            pass_name="security",
+            severity="critical",
+            file="y.py",
+            line=2,
+            title="t2",
+            description="d2",
+        )
+
+    waiter_task = asyncio.create_task(_waiter_write())
+    await asyncio.sleep(0.3)
+    await holder._conn.execute("COMMIT")
+
+    await asyncio.wait_for(waiter_task, timeout=5.0)
+
+    await holder.close()
+    await waiter.close()
+
+
+async def test_retry_locked_succeeds_after_transient_locks(monkeypatch):
+    """The retry loop re-invokes the callable when a transient lock error occurs
+    and completes once it stops raising."""
+    monkeypatch.setattr(store_mod, "_LOCK_RETRY_BASE_DELAY", 0.0)
+
+    attempts = {"n": 0}
+
+    async def _op() -> None:
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise sqlite3.OperationalError("database is locked")
+
+    await store_mod._retry_locked(_op)
+    assert attempts["n"] == 3
+
+
+async def test_retry_locked_gives_up_after_max(monkeypatch):
+    """After _LOCK_RETRY_MAX attempts the original error is re-raised."""
+    monkeypatch.setattr(store_mod, "_LOCK_RETRY_BASE_DELAY", 0.0)
+
+    attempts = {"n": 0}
+
+    async def _op() -> None:
+        attempts["n"] += 1
+        raise sqlite3.OperationalError("database is locked")
+
+    with pytest.raises(sqlite3.OperationalError, match="locked"):
+        await store_mod._retry_locked(_op)
+    assert attempts["n"] == store_mod._LOCK_RETRY_MAX
+
+
+async def test_retry_locked_does_not_retry_non_lock_errors(monkeypatch):
+    """A non-'locked' OperationalError must surface immediately (no retry)."""
+    monkeypatch.setattr(store_mod, "_LOCK_RETRY_BASE_DELAY", 0.0)
+
+    attempts = {"n": 0}
+
+    async def _op() -> None:
+        attempts["n"] += 1
+        raise sqlite3.OperationalError("no such table: widgets")
+
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        await store_mod._retry_locked(_op)
+    assert attempts["n"] == 1
+
+
+async def test_close_does_not_persist_uncommitted_writes(tmp_path):
+    """close() rolls back any open transaction so an aborted/interrupted write
+    never leaks into the next caller (regression for the shared-conn server path
+    and for CLI runs interrupted mid-persist)."""
+    db = tmp_path / "rb.db"
+    store = MemoryStore(db_path=db)
+    await store.open()
+    await store._conn.execute("BEGIN IMMEDIATE")
+    await store._conn.execute(
+        "INSERT INTO findings (id, repo, pass, severity, file, line, title, description) "
+        "VALUES ('leak', 'o/r', 'security', 'critical', 'f', 1, 't', 'd')"
+    )
+    await store.close()  # no commit
+
+    reopened = MemoryStore(db_path=db)
+    await reopened.open()
+    cursor = await reopened._conn.execute("SELECT COUNT(*) FROM findings WHERE id = 'leak'")
+    (count,) = await cursor.fetchone()
+    await reopened.close()
+    assert count == 0
+
+
+async def test_record_finding_retries_past_a_lock(tmp_path, monkeypatch):
+    """End-to-end: record_finding survives an execute() that raises 'locked'
+    a few times, then commits. Confirms the retry wiring on the hot path."""
+    monkeypatch.setattr(store_mod, "_LOCK_RETRY_BASE_DELAY", 0.0)
+
+    store = MemoryStore(db_path=tmp_path / "retry.db")
+    await store.open()
+
+    real_execute = store._conn.execute
+    state = {"n": 0}
+
+    async def flaky_execute(sql, *params):
+        # Only inject the lock error into the actual finding INSERT, not the
+        # pragma queries that open() already ran before this patch.
+        if "INSERT INTO findings" in sql and state["n"] < 2:
+            state["n"] += 1
+            raise sqlite3.OperationalError("database is locked")
+        return await real_execute(sql, *params)
+
+    # aiosqlite proxy: assigning on the instance shadows the underlying method.
+    store._conn.execute = flaky_execute  # type: ignore[method-assign]
+    try:
+        await store.record_finding(
+            finding_id="rf1",
+            repo="o/r",
+            pass_name="security",
+            severity="critical",
+            file="z.py",
+            line=9,
+            title="t",
+            description="d",
+        )
+    finally:
+        store._conn.execute = real_execute  # type: ignore[method-assign]
+        await store.close()
+
+    assert state["n"] == 2  # it raised twice then succeeded
