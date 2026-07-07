@@ -105,4 +105,4 @@ All feedback and findings live in `.superseded/memory.db` (SQLite, gitignored). 
 | `learned_rules` | AI-inferred rules with confidence scores |
 | `reflection_state` | Tracks which feedback has been processed by the reflector |
 
-The database is auto-created and self-migrating. You can delete it at any time to reset all learning — the tool creates a fresh one on next run.
+The database is auto-created and kept at the latest schema by Alembic migrations, which run automatically every time the store opens (and on server startup). Pre-existing databases from older superseded versions are adopted transparently on first run — no manual step, no data loss. You can delete the file at any time to reset all learning; a fresh one is created on next run. To run or inspect migrations deliberately, use `superseded migrate`.

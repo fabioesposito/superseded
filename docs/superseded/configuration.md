@@ -121,7 +121,7 @@ When enabled, findings are persisted to `.superseded/memory.db` (SQLite). This d
 - Review watermarks (for progressive review)
 - Learned rules from AI reflection
 
-The database is gitignored and should not be committed.
+The database is gitignored and should not be committed. Its schema is managed by Alembic migrations, applied automatically on startup; use `superseded migrate` to run or inspect them deliberately.
 
 Disable with `memory: false` or `--no-memory` to run stateless reviews.
 

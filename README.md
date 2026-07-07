@@ -59,7 +59,13 @@ superseded review --pr 123 --post
 
 # Selective passes
 superseded review --pr 123 --passes security,correctness
+
+# Run/inspect database migrations explicitly (the tool also auto-migrates on startup)
+superseded migrate
+superseded migrate --database-url postgresql://user:pass@host/superseded   # prints the head revision
 ```
+
+The memory database (`.superseded/memory.db`, SQLite) and the server's Postgres backend are managed by Alembic migrations. The schema is brought to the latest revision automatically every time a store opens — you don't normally need to do anything. `superseded migrate` exists for running or inspecting migrations deliberately (e.g. before a server deploy); it prints the resulting revision. Pre-existing databases from older versions are adopted transparently on first run (no manual step, no data loss).
 
 ### GitHub Action
 
@@ -213,6 +219,8 @@ model: null    # null = use each repo's .superseded.yaml
 | `SUPERSEDED_BEHIND_PROXY` | Set `1` when TLS terminates at an upstream reverse proxy (allows binding `0.0.0.0` without in-process TLS) |
 | `SUPERSEDED_DATABASE_URL` | `postgresql://...` for Postgres; omit for SQLite |
 | `SUPERSEDED_SERVER_AGENT` / `SUPERSEDED_SERVER_MODEL` | Override each repo's agent/model |
+
+On startup, `superseded serve` runs pending Alembic migrations against the configured database (SQLite or Postgres) before accepting requests. To run or inspect migrations ahead of a deploy instead, run `superseded migrate --database-url ...` (honors `SUPERSEDED_DATABASE_URL`). Pre-existing databases are auto-adopted on first run.
 | `SUPERSEDED_SANDBOX` | `1`/`0` to run agents inside a sandbox microVM (default: `1` on the server) |
 | `SUPERSEDED_SANDBOX_KIND` | `sbx` (default, Docker Sandboxes) or `smolvm` (smolmachines SDK) — see [Sandbox backends](#sandbox-backends) |
 | `SUPERSEDED_SANDBOX_TIMEOUT` | Per-pass timeout inside the sandbox (seconds, default: `600`) |

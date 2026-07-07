@@ -100,6 +100,8 @@ SUPERSEDED_DATABASE_URL=postgresql://user:pass@host:5432/superseded
 
 This enables concurrent access from multiple server instances. The SQLite path is fine for single-instance deployments.
 
+On startup, `superseded serve` runs pending Alembic migrations against the configured database (SQLite or Postgres) before serving requests. To run or inspect migrations deliberately — e.g. ahead of a deploy, or to diagnose a stuck migration — run `superseded migrate` (honors `SUPERSEDED_DATABASE_URL`, or pass `--database-url`). Pre-existing databases from older versions are auto-adopted on first run with no data loss.
+
 ### Docker / Compose Deployment
 
 Ship the server as a container backed by Postgres. The image is the `api` target
