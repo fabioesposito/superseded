@@ -2,6 +2,8 @@
 # See claude.smolfile for usage. Build first: docker/smolvm/build.sh codex
 
 image = "superseded-smolvm-codex:latest"
+cpus = 4
+mem = 2048
 net = true
 workdir = "/workspace"
 
