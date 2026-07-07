@@ -49,6 +49,14 @@ GRAPH_ENV = "SUPERSEDED_GRAPH"
 SANDBOX_ENV = "SUPERSEDED_SANDBOX"
 LOG_FORMAT_ENV = "SUPERSEDED_LOG_FORMAT"
 LOG_LEVEL_ENV = "SUPERSEDED_LOG_LEVEL"
+VERBOSE_ENV = "VERBOSE"
+_TRUTHY = ("1", "true", "yes", "on")
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in _TRUTHY
+
+
 DEFAULT_TIMEOUT = 600
 KNOWN_PASSES: list[str] = list(get_args(PassName))
 
@@ -128,6 +136,8 @@ def resolve_log_format(flag: str | None, config: Config | None = None) -> str:
 
 
 def resolve_log_level(flag: str | None, config: Config | None = None) -> str:
+    if _env_truthy(VERBOSE_ENV):
+        return "DEBUG"
     return os.environ.get(LOG_LEVEL_ENV) or flag or (config.log_level if config else "WARNING")
 
 
@@ -233,7 +243,8 @@ def _progress(pass_name: str, status: str) -> None:
     "--log-level",
     "log_level",
     default=None,
-    help="Log level (e.g. DEBUG/INFO/WARNING). Env: SUPERSEDED_LOG_LEVEL.",
+    help="Log level (e.g. DEBUG/INFO/WARNING). Env: SUPERSEDED_LOG_LEVEL. "
+    "VERBOSE=1 forces DEBUG (overrides everything).",
 )
 @click.pass_context
 def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> None:
@@ -932,11 +943,14 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
     serve_fmt = (
         os.environ.get(LOG_FORMAT_ENV) or (ctx.obj.get("log_format") if ctx.obj else None) or "json"
     )
-    serve_level = (
-        os.environ.get(LOG_LEVEL_ENV)
-        or (ctx.obj.get("log_level") if ctx.obj else None)
-        or config.log_level
-    )
+    if _env_truthy(VERBOSE_ENV):
+        serve_level = "DEBUG"
+    else:
+        serve_level = (
+            os.environ.get(LOG_LEVEL_ENV)
+            or (ctx.obj.get("log_level") if ctx.obj else None)
+            or config.log_level
+        )
     setup_logging(serve_fmt, serve_level)
 
     _status(f"Starting Superseded server on {config.host}:{config.port}")

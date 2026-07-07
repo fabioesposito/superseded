@@ -542,6 +542,32 @@ def test_log_level_passed_through(mock_setup, monkeypatch):
 
 
 @patch("superseded.cli.setup_logging")
+def test_verbose_env_forces_debug(mock_setup, monkeypatch):
+    monkeypatch.delenv("SUPERSEDED_LOG_LEVEL", raising=False)
+    monkeypatch.setenv("VERBOSE", "1")
+    runner = CliRunner()
+    runner.invoke(cli, ["--log-level", "WARNING", "feedback", "--rules"])
+    assert mock_setup.call_args.args[1] == "DEBUG"
+
+
+@patch("superseded.cli.setup_logging")
+def test_verbose_env_overrides_log_level_env(mock_setup, monkeypatch):
+    monkeypatch.setenv("SUPERSEDED_LOG_LEVEL", "INFO")
+    monkeypatch.setenv("VERBOSE", "true")
+    runner = CliRunner()
+    runner.invoke(cli, ["feedback", "--rules"])
+    assert mock_setup.call_args.args[1] == "DEBUG"
+
+
+@patch("superseded.cli.setup_logging")
+def test_verbose_env_falsy_does_not_force_debug(mock_setup, monkeypatch):
+    monkeypatch.setenv("VERBOSE", "0")
+    runner = CliRunner()
+    runner.invoke(cli, ["--log-level", "INFO", "feedback", "--rules"])
+    assert mock_setup.call_args.args[1] == "INFO"
+
+
+@patch("superseded.cli.setup_logging")
 @patch("superseded.cli._run_review")
 def test_log_format_config_file_used_when_no_flag_or_env(
     mock_review, mock_setup, tmp_path, monkeypatch
