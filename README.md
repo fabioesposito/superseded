@@ -225,7 +225,7 @@ On startup, `superseded serve` runs pending Alembic migrations against the confi
 | `SUPERSEDED_SANDBOX_KIND` | `sbx` (default, Docker Sandboxes) or `smolvm` (smolmachines SDK) — see [Sandbox backends](#sandbox-backends) |
 | `SUPERSEDED_SANDBOX_TIMEOUT` | Per-pass timeout inside the sandbox (seconds, default: `600`) |
 | `SUPERSEDED_SANDBOX_KEEP_ON_ERROR` | `1` to leave the sandbox alive for inspection when a pass fails |
-| `SUPERSEDED_SMOLVM_IMAGE_<AGENT>` | Per-agent OCI image for smolvm (e.g. `SUPERSEDED_SMOLVM_IMAGE_CLAUDE`); or `SUPERSEDED_SMOLVM_IMAGE` for one host-wide image |
+| `SUPERSEDED_SMOLVM_IMAGE_<AGENT>` | Per-agent OCI image for smolvm (e.g. `SUPERSEDED_SMOLVM_IMAGE_CLAUDE_CODE`); or `SUPERSEDED_SMOLVM_IMAGE` for one host-wide image |
 
 ### Sandbox backends
 
@@ -244,7 +244,7 @@ Two backends are supported; pick one per deployment via `SUPERSEDED_SANDBOX_KIND
 ```bash
 uv sync --extra sandbox
 export SUPERSEDED_SANDBOX_KIND=smolvm
-export SUPERSEDED_SMOLVM_IMAGE_CLAUDE=ghcr.io/your-org/superseded-claude:latest
+export SUPERSEDED_SMOLVM_IMAGE_CLAUDE_CODE=ghcr.io/your-org/superseded-claude:latest
 # or one host-wide image for all three agents:
 # export SUPERSEDED_SMOLVM_IMAGE=ghcr.io/your-org/superseded-all:latest
 ```
@@ -262,7 +262,7 @@ The `SUPERSEDED_SMOLVM_IMAGE_<AGENT>` value can be any of:
 ```bash
 docker/smolvm/build.sh                 # builds superseded-smolvm-{claude,opencode,codex}:latest
 docker/smolvm/build.sh claude          # one agent only
-export SUPERSEDED_SMOLVM_IMAGE_CLAUDE=superseded-smolvm-claude:latest
+export SUPERSEDED_SMOLVM_IMAGE_CLAUDE_CODE=superseded-smolvm-claude:latest
 ```
 
 Each image is a slim Node.js base with just the named agent CLI on `PATH`
