@@ -555,21 +555,30 @@ async def _run_review_for_job(
         if store is not None:
             repo_key = f"{job.owner}/{job.repo}"
             async with store:
-                for f in result.findings:
-                    await store.record_finding(
-                        finding_id=f.id,
-                        repo=repo_key,
-                        pass_name=f.pass_name,
-                        severity=f.severity,
-                        file=f.file,
-                        line=f.line,
-                        title=f.title,
-                        description=f.description,
-                        reasoning=f.reasoning,
+                if result.findings:
+                    await store.record_findings_batch(
+                        [
+                            {
+                                "id": f.id,
+                                "pass_name": f.pass_name,
+                                "severity": f.severity,
+                                "file": f.file,
+                                "line": f.line,
+                                "title": f.title,
+                                "description": f.description,
+                                "reasoning": f.reasoning,
+                            }
+                            for f in result.findings
+                        ],
+                        repo_key,
                     )
-                for finding, cid in zip(result.findings, comment_ids, strict=True):
-                    if cid is not None:
-                        await store.set_comment_id(finding.id, cid)
+                pairs = [
+                    (f.id, cid)
+                    for f, cid in zip(result.findings, comment_ids, strict=True)
+                    if cid is not None
+                ]
+                if pairs:
+                    await store.set_comment_ids_batch(pairs)
                 await store.set_watermark(repo_key, job.pr_number, job.head_sha)
 
             if config.learned_review:

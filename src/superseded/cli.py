@@ -571,16 +571,10 @@ def _run_review(
             click.echo(f"\nWarning: {w}", err=True)
 
         if store is not None and repo:
-            asyncio.run(_persist_findings(store, result, repo))
-
-        if head_sha is not None and store is not None and repo is not None and pr is not None:
-            asyncio.run(_set_watermark(store, repo, pr, head_sha))
-
-        if post and pr is not None:
+            asyncio.run(_post_review_store(store, result, repo, head_sha, pr, post, diff))
+        elif post and pr is not None:
             _status("Posting to GitHub PR...")
             comment_ids = post_review_to_pr(pr=pr, result=result, diff=diff)
-            if store is not None:
-                asyncio.run(_link_comment_ids(store, result, comment_ids))
             _status(f"Done. Posted {len(comment_ids)} comment(s).")
     finally:
         signal.signal(signal.SIGINT, _prev_sigint)
@@ -589,39 +583,54 @@ def _run_review(
                 asyncio.run(store.close())
 
 
+async def _post_review_store(
+    store: MemoryStore,
+    result: ReviewResult,
+    repo: str,
+    head_sha: str | None,
+    pr: int | None,
+    post: bool,
+    diff: str,
+) -> None:
+    """Persist findings, watermark, and comment links in one event loop."""
+    async with store:
+        if result.findings:
+            await store.record_findings_batch(
+                [
+                    {
+                        "id": f.id,
+                        "pass_name": f.pass_name,
+                        "severity": f.severity,
+                        "file": f.file,
+                        "line": f.line,
+                        "title": f.title,
+                        "description": f.description,
+                        "reasoning": f.reasoning,
+                    }
+                    for f in result.findings
+                ],
+                repo,
+            )
+
+        if head_sha is not None and pr is not None:
+            await store.set_watermark(repo, pr, head_sha)
+
+        if post and pr is not None:
+            _status("Posting to GitHub PR...")
+            comment_ids = post_review_to_pr(pr=pr, result=result, diff=diff)
+            pairs = [
+                (f.id, cid)
+                for f, cid in zip(result.findings, comment_ids, strict=True)
+                if cid is not None
+            ]
+            if pairs:
+                await store.set_comment_ids_batch(pairs)
+            _status(f"Done. Posted {len(comment_ids)} comment(s).")
+
+
 async def _load_dismissed(store: MemoryStore, repo: str) -> list[dict]:
     async with store:
         return await store.get_dismissed_findings(repo)
-
-
-async def _persist_findings(store: MemoryStore, result: ReviewResult, repo: str) -> None:
-    async with store:
-        for f in result.findings:
-            await store.record_finding(
-                finding_id=f.id,
-                repo=repo,
-                pass_name=f.pass_name,
-                severity=f.severity,
-                file=f.file,
-                line=f.line,
-                title=f.title,
-                description=f.description,
-                reasoning=f.reasoning,
-            )
-
-
-async def _set_watermark(store: MemoryStore, repo: str, pr: int, head_sha: str) -> None:
-    async with store:
-        await store.set_watermark(repo, pr, head_sha)
-
-
-async def _link_comment_ids(
-    store: MemoryStore, result: ReviewResult, comment_ids: list[int | None]
-) -> None:
-    async with store:
-        for finding, comment_id in zip(result.findings, comment_ids, strict=True):
-            if comment_id is not None:
-                await store.set_comment_id(finding.id, comment_id)
 
 
 async def _build_learned_context(

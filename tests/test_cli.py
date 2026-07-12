@@ -129,7 +129,7 @@ def test_format_memory_context_truncates_long_reasoning():
 
 
 def test_persist_findings_passes_reasoning(monkeypatch):
-    from superseded.cli import _persist_findings
+    from superseded.cli import _post_review_store
     from superseded.models import Finding, ReviewResult
 
     f = Finding(
@@ -147,8 +147,8 @@ def test_persist_findings_passes_reasoning(monkeypatch):
 
     calls = []
 
-    async def async_record(**kwargs):
-        calls.append(kwargs)
+    async def async_record_batch(findings, repo):
+        calls.extend(findings)
 
     async def _dummy_aenter(self):
         return self
@@ -157,11 +157,11 @@ def test_persist_findings_passes_reasoning(monkeypatch):
         pass
 
     mock_store = type("FakeStore", (), {"__aenter__": _dummy_aenter, "__aexit__": _dummy_aexit})()
-    mock_store.record_finding = staticmethod(async_record)
+    mock_store.record_findings_batch = async_record_batch
 
     import asyncio
 
-    asyncio.run(_persist_findings(mock_store, result, "owner/repo"))
+    asyncio.run(_post_review_store(mock_store, result, "owner/repo", None, None, False, ""))
     assert len(calls) == 1
     assert calls[0]["reasoning"] == "suspicious input"
 
@@ -248,10 +248,10 @@ def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, mo
 
 
 def test_persist_and_link_batch_into_single_event_loop(monkeypatch):
-    """_persist_findings and _link_comment_ids should each use a single asyncio.run()."""
+    """_post_review_store should persist and link in a single asyncio.run()."""
     import asyncio
 
-    from superseded.cli import _link_comment_ids, _persist_findings
+    from superseded.cli import _post_review_store
     from superseded.models import Finding, ReviewResult
 
     findings = [
@@ -278,10 +278,10 @@ def test_persist_and_link_batch_into_single_event_loop(monkeypatch):
 
     monkeypatch.setattr("asyncio.run", counting_run)
 
-    calls = []
+    batch_calls = []
 
-    async def async_record(**kwargs):
-        calls.append(kwargs)
+    async def async_record_batch(findings_list, repo):
+        batch_calls.extend(findings_list)
 
     async def _dummy_aenter_b(self):
         return self
@@ -294,20 +294,13 @@ def test_persist_and_link_batch_into_single_event_loop(monkeypatch):
         (),
         {"__aenter__": _dummy_aenter_b, "__aexit__": _dummy_aexit_b},
     )()
-    mock_store.record_finding = staticmethod(async_record)
-    mock_store.set_comment_id = AsyncMock()
+    mock_store.record_findings_batch = async_record_batch
+    mock_store.set_comment_ids_batch = AsyncMock()
 
-    asyncio.run(_persist_findings(mock_store, result, "owner/repo"))
-    persist_runs = len(run_calls)
+    asyncio.run(_post_review_store(mock_store, result, "owner/repo", None, None, False, ""))
 
-    asyncio.run(_link_comment_ids(mock_store, result, [10, 20, 30]))
-    total_runs = len(run_calls)
-
-    assert persist_runs == 1, f"Expected 1 asyncio.run() for persist, got {persist_runs}"
-    assert total_runs == persist_runs + 1, (
-        f"Expected 1 asyncio.run() for link, got {total_runs - persist_runs}"
-    )
-    assert len(calls) == 3
+    assert len(run_calls) == 1, f"Expected 1 asyncio.run(), got {len(run_calls)}"
+    assert len(batch_calls) == 3
 
 
 def test_resolve_graph_env_overrides_flag(monkeypatch):

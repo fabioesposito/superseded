@@ -206,11 +206,71 @@ class MemoryStore:
 
         await self._write(_do)
 
+    async def record_findings_batch(
+        self,
+        findings: list[dict],
+        repo: str,
+    ) -> None:
+        """Insert/update many findings in a single transaction.
+
+        Each dict must have keys: id, pass_name, severity, file, line, title,
+        description, reasoning.  Using one transaction instead of N separate
+        ``record_finding`` calls avoids repeated write-lock acquisition, which
+        is the primary trigger for SQLITE_BUSY under concurrent access.
+        """
+        if not findings:
+            return
+
+        async def _do(db: aiosqlite.Connection) -> None:
+            await db.executemany(
+                "INSERT INTO findings "
+                "(id, repo, pass, severity, file, line, title, description, reasoning) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET "
+                "severity = excluded.severity, "
+                "description = excluded.description, "
+                "reasoning = excluded.reasoning "
+                "WHERE excluded.severity != severity "
+                "OR excluded.description != description "
+                "OR excluded.reasoning != reasoning",
+                [
+                    (
+                        f["id"],
+                        repo,
+                        f["pass_name"],
+                        f["severity"],
+                        f["file"],
+                        f["line"],
+                        f["title"],
+                        f["description"],
+                        f.get("reasoning", ""),
+                    )
+                    for f in findings
+                ],
+            )
+            await db.commit()
+
+        await self._write(_do)
+
     async def set_comment_id(self, finding_id: str, comment_id: int) -> None:
         async def _do(db: aiosqlite.Connection) -> None:
             await db.execute(
                 "UPDATE findings SET comment_id = ? WHERE id = ?",
                 (comment_id, finding_id),
+            )
+            await db.commit()
+
+        await self._write(_do)
+
+    async def set_comment_ids_batch(self, pairs: list[tuple[str, int]]) -> None:
+        """Update comment_id for many findings in a single transaction."""
+        if not pairs:
+            return
+
+        async def _do(db: aiosqlite.Connection) -> None:
+            await db.executemany(
+                "UPDATE findings SET comment_id = ? WHERE id = ?",
+                [(cid, fid) for fid, cid in pairs],
             )
             await db.commit()
 

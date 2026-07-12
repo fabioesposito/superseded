@@ -122,10 +122,28 @@ class FakeStore:
             "reasoning": reasoning,
         }
 
+    async def record_findings_batch(self, findings, repo):
+        for f in findings:
+            await self.record_finding(
+                finding_id=f["id"],
+                repo=repo,
+                pass_name=f["pass_name"],
+                severity=f["severity"],
+                file=f["file"],
+                line=f["line"],
+                title=f["title"],
+                description=f["description"],
+                reasoning=f.get("reasoning", ""),
+            )
+
     async def set_comment_id(self, finding_id, comment_id):
         self.comment_ids[comment_id] = finding_id
         if finding_id in self.findings:
             self.findings[finding_id]["comment_id"] = comment_id
+
+    async def set_comment_ids_batch(self, pairs):
+        for finding_id, comment_id in pairs:
+            await self.set_comment_id(finding_id, comment_id)
 
     async def record_feedback_by_comment_id(self, comment_id, action):
         fid = self.comment_ids.get(comment_id)

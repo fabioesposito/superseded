@@ -108,12 +108,52 @@ class PostgresStore:
                 reasoning,
             )
 
+    async def record_findings_batch(self, findings: list[dict], repo: str) -> None:
+        if not findings:
+            return
+        async with self._conn() as conn:
+            await conn.executemany(
+                "INSERT INTO findings "
+                "(id, repo, pass, severity, file, line, title, description, reasoning) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
+                "ON CONFLICT(id) DO UPDATE SET "
+                "severity = EXCLUDED.severity, "
+                "description = EXCLUDED.description, "
+                "reasoning = EXCLUDED.reasoning "
+                "WHERE EXCLUDED.severity IS DISTINCT FROM findings.severity "
+                "OR EXCLUDED.description IS DISTINCT FROM findings.description "
+                "OR EXCLUDED.reasoning IS DISTINCT FROM findings.reasoning",
+                [
+                    (
+                        f["id"],
+                        repo,
+                        f["pass_name"],
+                        f["severity"],
+                        f["file"],
+                        f["line"],
+                        f["title"],
+                        f["description"],
+                        f.get("reasoning", ""),
+                    )
+                    for f in findings
+                ],
+            )
+
     async def set_comment_id(self, finding_id: str, comment_id: int) -> None:
         async with self._conn() as conn:
             await conn.execute(
                 "UPDATE findings SET comment_id = $1 WHERE id = $2",
                 comment_id,
                 finding_id,
+            )
+
+    async def set_comment_ids_batch(self, pairs: list[tuple[str, int]]) -> None:
+        if not pairs:
+            return
+        async with self._conn() as conn:
+            await conn.executemany(
+                "UPDATE findings SET comment_id = $1 WHERE id = $2",
+                [(cid, fid) for fid, cid in pairs],
             )
 
     async def get_finding_by_comment_id(self, comment_id: int) -> dict | None:
