@@ -59,6 +59,12 @@ def _env_truthy(name: str) -> bool:
 
 
 DEFAULT_TIMEOUT = 600
+# Distinct exit code for a partial review: the run completed and produced
+# output, but at least one pass was skipped (e.g. transient provider failure).
+# Lets CI/scripts distinguish clean (0) from infra degradation (3) from a hard
+# error (1) / usage error (2). Only the local CLI path uses process exit codes;
+# the server path surfaces failures via the check-run conclusion instead.
+EXIT_PARTIAL_FAILURE = 3
 KNOWN_PASSES: list[str] = list(get_args(PassName))
 
 try:
@@ -576,6 +582,13 @@ def _run_review(
             _status("Posting to GitHub PR...")
             comment_ids = post_review_to_pr(pr=pr, result=result, diff=diff)
             _status(f"Done. Posted {len(comment_ids)} comment(s).")
+
+        # Surface partial failures via the process exit code so CI can detect
+        # that one or more passes were skipped (e.g. provider hiccups). Emitted
+        # only after output/persistence complete so it never short-circuits
+        # posting or storing. The `finally` block still runs before the exit.
+        if result.warnings:
+            sys.exit(EXIT_PARTIAL_FAILURE)
     finally:
         signal.signal(signal.SIGINT, _prev_sigint)
         if store is not None:

@@ -13,7 +13,7 @@ from superseded.agents.opencode import OpenCodeAgent
 from superseded.models import Finding, ReviewResult
 from superseded.review.executor import AgentExecutor, Session, SubprocessExecutor
 from superseded.review.merger import merge_findings
-from superseded.review.prompts import build_prompt
+from superseded.review.prompts import build_prompt, build_retry_prompt
 
 if TYPE_CHECKING:
     from superseded.config import Config
@@ -58,20 +58,41 @@ class ReviewEngine:
     ) -> list[Finding]:
         if sess is None:
             sess = SubprocessExecutor().session()
-        cmd = self.agent.build_command()
         if progress is not None:
             progress(pass_name, "start")
+        findings, errors = self._run_and_validate(pass_name, prompt, timeout, sess)
+        if errors:
+            # Retry once with a corrective nudge: a schema drift (e.g. severity
+            # "minor") shouldn't silently drop otherwise-valid findings. Only the
+            # items that failed Finding() validation trigger this; a clean `[]`
+            # (no issues, or unparseable output handled in parsing.py) does not.
+            logger.info("Retrying pass %s: %d finding(s) failed validation", pass_name, len(errors))
+            retried, _ = self._run_and_validate(
+                pass_name, build_retry_prompt(prompt, errors), timeout, sess
+            )
+            # Adopt the retry output only if it recovered findings; otherwise
+            # keep the partial first attempt rather than discarding everything.
+            if retried:
+                findings = retried
+        if progress is not None:
+            progress(pass_name, "done")
+        return findings
+
+    def _run_and_validate(
+        self, pass_name: str, prompt: str, timeout: int, sess: Session
+    ) -> tuple[list[Finding], list[str]]:
+        cmd = self.agent.build_command()
         stdout = sess.run(cmd, prompt, timeout=timeout)
         raw_findings = self.agent.parse_output(stdout, pass_name)
-        findings = []
+        findings: list[Finding] = []
+        errors: list[str] = []
         for item in raw_findings:
             try:
                 findings.append(Finding(**item))
             except Exception as err:
+                errors.append(str(err))
                 logger.warning("Skipping malformed finding item in pass %s: %s", pass_name, err)
-        if progress is not None:
-            progress(pass_name, "done")
-        return findings
+        return findings, errors
 
     def review(
         self,

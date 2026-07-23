@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from superseded.review.prompts import JSON_FORMAT_INSTRUCTIONS, build_prompt
+from superseded.review.prompts import JSON_FORMAT_INSTRUCTIONS, build_prompt, build_retry_prompt
 
 
 def test_new_sections_present():
@@ -214,3 +214,65 @@ def test_learned_context_ordering():
     learned_pos = prompt.index("### Learned Review Guidelines")
     pr_pos = prompt.index("### PR Description")
     assert spec_pos < learned_pos < pr_pos
+
+
+def test_severity_calibration_section_present():
+    """The prompt must include concrete anchors so the model calibrates
+    severity instead of guessing (the benchmark saw `severity: "minor"` drift)."""
+    prompt = build_prompt(
+        pass_name="security",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+    )
+    assert "Severity Calibration" in prompt
+
+
+def test_severity_calibration_has_example_per_level():
+    prompt = build_prompt(
+        pass_name="correctness",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+    )
+    # Each severity must carry at least one concrete example anchor.
+    assert "SQL injection" in prompt
+    assert "missing error handling" in prompt
+
+
+def test_severity_calibration_lists_all_four_levels():
+    prompt = build_prompt(
+        pass_name="style",
+        diff="x",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+    )
+    calibration_start = prompt.index("Severity Calibration")
+    # The calibration block sits before the Context section.
+    context_start = prompt.index("## Context")
+    block = prompt[calibration_start:context_start]
+    for level in ("critical", "important", "suggestion", "nit"):
+        assert level in block
+
+
+def test_build_retry_prompt_includes_errors_and_schema():
+    """The corrective reprompt must surface the validation errors and re-state
+    the accepted severity enum so the agent can self-correct."""
+    retry = build_retry_prompt("ORIGINAL PROMPT", ["severity: not-a-severity", "missing title"])
+    assert "ORIGINAL PROMPT" in retry
+    assert "not-a-severity" in retry
+    assert "missing title" in retry
+    # Re-asserts the only valid severities.
+    for level in ("critical", "important", "suggestion", "nit"):
+        assert level in retry
+
+
+def test_build_retry_prompt_truncates_many_errors():
+    errors = [f"err {i}" for i in range(50)]
+    retry = build_retry_prompt("p", errors)
+    # Should not dump all 50 — keep it bounded.
+    assert "err 0" in retry
+    assert "err 49" not in retry

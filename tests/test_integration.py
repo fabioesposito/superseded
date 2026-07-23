@@ -458,7 +458,7 @@ def test_context_enrichment_called(monkeypatch):
     monkeypatch.setattr("superseded.context.gathering.retrieve_usages", fake_usage)
 
     mock_engine = MagicMock()
-    mock_engine.review.return_value = MagicMock(findings=[])
+    mock_engine.review.return_value = ReviewResult(findings=[])
     monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
 
     _run_review(
@@ -502,7 +502,7 @@ def test_context_disabled_skips_enrichment(monkeypatch):
     )
 
     mock_engine = MagicMock()
-    mock_engine.review.return_value = MagicMock(findings=[])
+    mock_engine.review.return_value = ReviewResult(findings=[])
     monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
 
     from superseded.config import Config
@@ -550,7 +550,7 @@ def test_conventions_and_specs_called_and_forwarded(monkeypatch):
     )
 
     mock_engine = MagicMock()
-    mock_engine.review.return_value = MagicMock(findings=[])
+    mock_engine.review.return_value = ReviewResult(findings=[])
     monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
 
     _run_review(
@@ -594,7 +594,7 @@ def test_no_conventions_flag_skips_discover(monkeypatch):
     )
 
     mock_engine = MagicMock()
-    mock_engine.review.return_value = MagicMock(findings=[])
+    mock_engine.review.return_value = ReviewResult(findings=[])
     monkeypatch.setattr("superseded.cli.ReviewEngine.select", lambda *a, **kw: mock_engine)
 
     _run_review(

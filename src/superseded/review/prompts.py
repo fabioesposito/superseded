@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+MAX_RETRY_ERRORS_SHOWN = 8
+
 PASS_INSTRUCTIONS: dict[str, str] = {
     "security": (
         "Focus on: injection vulnerabilities, auth bypass, secret exposure, "
@@ -45,6 +47,23 @@ If no issues found, return: []
 """
 
 
+SEVERITY_CALIBRATION = """
+## Severity Calibration
+Calibrate every finding against these anchors — `severity` must be one of exactly
+`critical`, `important`, `suggestion`, `nit` (no other values are accepted):
+
+- `critical` — exploitable vulnerability or correctness bug causing data loss /
+  outage (e.g. SQL injection, auth bypass, secret logged in plaintext).
+- `important` — likely bug or security weakness that should block merge
+  (e.g. missing error handling, unchecked null deref, race condition).
+- `suggestion` — meaningful improvement to clarity, correctness, or
+  maintainability (e.g. unclear naming, redundant logic, fragile assertion).
+- `nit` — subjective, trivial style preference (e.g. import ordering, whitespace).
+
+When in doubt between two levels, pick the lower one.
+"""
+
+
 def build_prompt(
     pass_name: str,
     diff: str,
@@ -85,6 +104,7 @@ def build_prompt(
 - Enforce the Project Conventions listed below: flag deviations as findings. Use severity `nit`/`suggestion` by default; use `important` only when the deviation breaks correctness or security. Do not flag code that conforms to the conventions.
 - Use the Relevant Design Specs & Plans as authoritative intent. If changed code contradicts a spec, flag it at severity `important` or higher, citing the spec path.
 
+{SEVERITY_CALIBRATION}
 ## Context
 
 ### Project Conventions
@@ -114,4 +134,28 @@ def build_prompt(
 ### Past Feedback (findings dismissed by humans — avoid similar)
 {mem}
 
-{JSON_FORMAT_INSTRUCTIONS}"""
+        {JSON_FORMAT_INSTRUCTIONS}"""
+
+
+def build_retry_prompt(original_prompt: str, errors: list[str]) -> str:
+    """Append a corrective nudge so a pass whose output drifted from the schema
+    (e.g. ``severity: "minor"``) can re-emit valid findings instead of being
+    silently dropped. Bounded to the first ``MAX_RETRY_ERRORS_SHOWN`` errors so a
+    badly malformed response doesn't blow up the prompt.
+    """
+    shown = errors[:MAX_RETRY_ERRORS_SHOWN]
+    bullets = "\n".join(f"- {e}" for e in shown)
+    extra = ""
+    if len(errors) > len(shown):
+        extra = f"\n(and {len(errors) - len(shown)} more)"
+    return (
+        f"{original_prompt}\n\n"
+        "## Output Correction Required\n"
+        f"Your previous response for this review contained {len(errors)} finding(s) "
+        f"that failed validation:\n\n{bullets}{extra}\n\n"
+        "Re-emit your findings as a valid JSON array. Each finding must use a "
+        "`severity` of exactly `critical`, `important`, `suggestion`, or `nit`, "
+        "and include `title`, `description`, `suggestion`, `file`, and `line`. "
+        "Fix every rejected finding and re-include the findings that were already "
+        "valid. Return ONLY the JSON array — no prose."
+    )

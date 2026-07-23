@@ -157,7 +157,16 @@ Per-pass timeout defaults to 600 seconds. Increase for very large diffs:
 superseded review --pr 123 --timeout 900
 ```
 
-If a single pass times out or fails, it logs a warning and the review continues with other passes.
+If a single pass times out or fails, it logs a warning and the review continues with the other passes. A pass whose findings don't match the output schema (e.g. an invalid `severity`) is retried once with a corrective prompt before being skipped.
+
+## Exit Codes
+
+The `review` command exits with:
+
+- `0` — review completed cleanly (with or without findings).
+- `1` — hard error (agent unavailable, diff fetch failed, etc.).
+- `2` — usage / configuration error.
+- `3` — **partial review**: the run completed and emitted output, but at least one pass was skipped (e.g. a transient provider failure). Output is still printed and persisted before this exit, so CI can detect infra degradation without losing the partial results — pair it with `jq '.warnings'` on the JSON output for the list of skipped passes.
 
 ## Memory Disable
 

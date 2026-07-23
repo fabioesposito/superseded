@@ -9,11 +9,15 @@ def deduplicate(finding_groups: list[list[Finding]]) -> list[Finding]:
     # Dedupe by file+line+title so two passes flagging the same issue collapse
     # to a single finding. `Finding.id` embeds `pass_name` and is kept as the
     # persisted identity for the memory store, so dedup uses a separate key.
+    # When the same key appears at different severities, keep the most severe
+    # (lowest rank) so a `critical` from one pass isn't shadowed by a `nit`
+    # from another that happened to run first.
     seen: dict[str, Finding] = {}
     for group in finding_groups:
         for f in group:
             key = f.dedup_key
-            if key not in seen:
+            existing = seen.get(key)
+            if existing is None or SEVERITY_ORDER[f.severity] < SEVERITY_ORDER[existing.severity]:
                 seen[key] = f
     return list(seen.values())
 

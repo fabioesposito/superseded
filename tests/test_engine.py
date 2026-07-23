@@ -48,6 +48,27 @@ def test_engine_deduplicates_across_passes():
     assert result.findings[0].title == "same bug"
 
 
+def test_engine_dedup_keeps_highest_severity():
+    """When two passes flag the same file/line/title at different severities,
+    the higher-severity finding survives dedup (not merely the first seen)."""
+    low = make_finding(severity="suggestion", file="a.py", line=10, title="same bug")
+    high = make_finding(severity="critical", file="a.py", line=10, title="same bug")
+    engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
+    result = engine.merge_findings([[low], [high]])
+    assert len(result.findings) == 1
+    assert result.findings[0].severity == "critical"
+
+
+def test_engine_dedup_keeps_highest_severity_regardless_of_order():
+    """Severity winner must not depend on which pass ran first."""
+    high = make_finding(severity="critical", file="a.py", line=10, title="same bug")
+    low = make_finding(severity="suggestion", file="a.py", line=10, title="same bug")
+    engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
+    result = engine.merge_findings([[high], [low]])
+    assert len(result.findings) == 1
+    assert result.findings[0].severity == "critical"
+
+
 def test_engine_sorts_by_severity():
     f1 = make_finding(severity="nit", line=1)
     f2 = make_finding(severity="critical", line=2)
@@ -129,7 +150,126 @@ def test_run_pass_skips_and_logs_malformed_findings(caplog):
     assert len(findings) == 1
     assert findings[0].file == "a.py"
     assert "malformed" in caplog.text.lower() or "not-a-severity" in caplog.text
-    fake_session.run.assert_called_once()
+    # Malformed findings trigger exactly one corrective retry (2 runs total),
+    # never more. The retry carries the corrective nudge.
+    assert fake_session.run.call_count == 2
+    second_prompt = fake_session.run.call_args_list[1].args[1]
+    assert "Correction" in second_prompt
+
+
+def test_run_pass_retries_once_on_malformed_and_recovers():
+    """A pass whose first response has malformed findings retries once with a
+    corrective prompt; clean findings from the retry are used."""
+    engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
+    valid = {
+        "severity": "critical",
+        "file": "a.py",
+        "line": 1,
+        "end_line": 2,
+        "title": "ok",
+        "description": "d",
+        "suggestion": "s",
+        "pass_name": "security",
+    }
+    bad = {
+        "severity": "minor",
+        "file": "b.py",
+        "line": 1,
+        "end_line": 1,
+        "title": "bad",
+        "description": "d",
+        "suggestion": "s",
+        "pass_name": "security",
+    }
+    recovered = {
+        "severity": "important",
+        "file": "b.py",
+        "line": 1,
+        "end_line": 1,
+        "title": "fixed",
+        "description": "d",
+        "suggestion": "s",
+        "pass_name": "security",
+    }
+    mock_agent = MagicMock()
+    mock_agent.build_command.return_value = ["fake"]
+    mock_agent.parse_output.side_effect = [[valid, bad], [recovered]]
+    engine.agent = mock_agent
+
+    fake_session = MagicMock()
+    fake_session.run.return_value = "x"
+    findings = engine.run_pass("security", "prompt", sess=fake_session)
+
+    assert fake_session.run.call_count == 2
+    # Retry output replaced the partial first attempt.
+    assert len(findings) == 1
+    assert findings[0].title == "fixed"
+    # The corrective prompt was passed on the second run.
+    second_prompt = fake_session.run.call_args_list[1].kwargs.get("input") or (
+        fake_session.run.call_args_list[1].args[1]
+        if len(fake_session.run.call_args_list[1].args) > 1
+        else None
+    )
+    assert second_prompt is not None
+    assert "Correction" in second_prompt or "correction" in second_prompt
+
+
+def test_run_pass_retries_at_most_once():
+    """Even if the retry also produces malformed findings, the pass does not loop."""
+    engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
+    valid = {
+        "severity": "critical",
+        "file": "a.py",
+        "line": 1,
+        "end_line": 2,
+        "title": "ok",
+        "description": "d",
+        "suggestion": "s",
+        "pass_name": "security",
+    }
+    bad = {
+        "severity": "minor",
+        "file": "b.py",
+        "line": 1,
+        "end_line": 1,
+        "title": "bad",
+        "description": "d",
+        "suggestion": "s",
+        "pass_name": "security",
+    }
+    mock_agent = MagicMock()
+    mock_agent.build_command.return_value = ["fake"]
+    mock_agent.parse_output.return_value = [valid, bad]
+    engine.agent = mock_agent
+
+    fake_session = MagicMock()
+    fake_session.run.return_value = "x"
+    engine.run_pass("security", "prompt", sess=fake_session)
+    assert fake_session.run.call_count == 2
+
+
+def test_run_pass_does_not_retry_when_all_valid():
+    """No malformed findings -> exactly one agent run, no retry."""
+    engine = ReviewEngine(agent=MagicMock(), config=MagicMock())
+    valid = {
+        "severity": "critical",
+        "file": "a.py",
+        "line": 1,
+        "end_line": 2,
+        "title": "ok",
+        "description": "d",
+        "suggestion": "s",
+        "pass_name": "security",
+    }
+    mock_agent = MagicMock()
+    mock_agent.build_command.return_value = ["fake"]
+    mock_agent.parse_output.return_value = [valid]
+    engine.agent = mock_agent
+
+    fake_session = MagicMock()
+    fake_session.run.return_value = "x"
+    engine.run_pass("security", "prompt", sess=fake_session)
+    assert fake_session.run.call_count == 1
 
 
 def test_review_raises_when_agent_unavailable(monkeypatch):

@@ -200,6 +200,89 @@ def test_run_review_exits_cleanly_when_agent_unavailable(tmp_path, monkeypatch, 
     assert "agent" in err.lower() or "path" in err.lower()
 
 
+def test_run_review_exits_partial_when_passes_warned(tmp_path, monkeypatch):
+    """When some passes were skipped (warnings present), the CLI must exit with
+    a distinct non-zero code so CI/scripts can tell infra degradation apart from
+    a clean review."""
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n",
+    )
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr(
+        "superseded.context.gathering.compute_file_context", lambda diff, root=None: None
+    )
+    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        "superseded.context.gathering.run_static_analysis", lambda files, root: None
+    )
+    monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/claude")
+
+    from superseded.models import ReviewResult
+
+    def fake_review(self, **kw):
+        return ReviewResult(findings=[], warnings=["pass 'correctness' failed: no provider"])
+
+    monkeypatch.setattr("superseded.review.engine.ReviewEngine.review", fake_review)
+    monkeypatch.setattr("superseded.review.engine.ReviewEngine.run_pass", lambda self, *a, **k: [])
+
+    from superseded.cli import EXIT_PARTIAL_FAILURE, _run_review
+
+    with pytest.raises(SystemExit) as exc:
+        _run_review(
+            pr=None,
+            diff_range="HEAD~1..HEAD",
+            agent=None,
+            model=None,
+            output_format="json",
+            post=False,
+            passes=None,
+        )
+    assert exc.value.code == EXIT_PARTIAL_FAILURE
+
+
+def test_run_review_clean_when_no_warnings(tmp_path, monkeypatch):
+    """No warnings -> no SystemExit; the review completes normally (exit 0)."""
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff",
+        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n",
+    )
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr(
+        "superseded.context.gathering.compute_file_context", lambda diff, root=None: None
+    )
+    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        "superseded.context.gathering.run_static_analysis", lambda files, root: None
+    )
+    monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/claude")
+
+    from superseded.models import ReviewResult
+
+    def fake_review(self, **kw):
+        return ReviewResult(findings=[], warnings=[])
+
+    monkeypatch.setattr("superseded.review.engine.ReviewEngine.review", fake_review)
+    monkeypatch.setattr("superseded.review.engine.ReviewEngine.run_pass", lambda self, *a, **k: [])
+
+    from superseded.cli import _run_review
+
+    # Must NOT raise SystemExit.
+    _run_review(
+        pr=None,
+        diff_range="HEAD~1..HEAD",
+        agent=None,
+        model=None,
+        output_format="json",
+        post=False,
+        passes=None,
+    )
+
+
 def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, monkeypatch):
     """passes.style: false in .superseded.yaml must skip style when --passes is omitted."""
     (tmp_path / ".superseded.yaml").write_text("agent: claude-code\npasses:\n  style: false\n")
