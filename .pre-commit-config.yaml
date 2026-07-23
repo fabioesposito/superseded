@@ -1,0 +1,14 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      - id: ruff
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: code-review-graph
+        name: code-review-graph detect-changes
+        entry: code-review-graph detect-changes --brief
+        language: system
+        pass_filenames: false
+        always_run: true
