@@ -63,8 +63,11 @@ def _seed_agent_auth(agent_name: str, xdg_data_home: Path) -> None:
     if not host_auth.is_file():
         return
     target = xdg_data_home / "opencode" / "auth.json"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(host_auth.read_text())
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(host_auth.read_text())
+    except OSError as err:
+        logger.warning("failed to seed opencode auth.json: %s", err)
 
 
 class _SubprocessSession:

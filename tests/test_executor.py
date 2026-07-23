@@ -870,3 +870,179 @@ def test_smolvm_session_falls_back_to_streaming_when_cache_fails(tmp_path, monke
     sess = ex.session()
     assert sess._boot_source == "docker", "save failure must leave boot source as docker"
     assert sess._image == "superseded-smolvm-opencode:latest"
+
+
+# ---------------------------------------------------------------------------
+# SubprocessSession XDG isolation
+# ---------------------------------------------------------------------------
+
+
+def test_seed_agent_auth_copies_opencode_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """_seed_agent_auth should copy opencode/auth.json to isolated XDG_DATA_HOME."""
+    from superseded.review.executor import _seed_agent_auth
+
+    # Set up fake host XDG_DATA_HOME with auth.json
+    host_xdg = tmp_path / "host_xdg"
+    host_auth_dir = host_xdg / "opencode"
+    host_auth_dir.mkdir(parents=True)
+    host_auth = host_auth_dir / "auth.json"
+    host_auth.write_text('{"api_key": "test-key"}')
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(host_xdg))
+
+    # Create isolated XDG_DATA_HOME
+    isolated_xdg = tmp_path / "isolated_xdg"
+    isolated_xdg.mkdir()
+
+    _seed_agent_auth("opencode", isolated_xdg)
+
+    # Verify auth.json was copied
+    target_auth = isolated_xdg / "opencode" / "auth.json"
+    assert target_auth.exists()
+    assert target_auth.read_text() == '{"api_key": "test-key"}'
+
+
+def test_seed_agent_auth_skips_non_opencode(tmp_path: Path):
+    """_seed_agent_auth should do nothing for non-opencode agents."""
+    from superseded.review.executor import _seed_agent_auth
+
+    isolated_xdg = tmp_path / "isolated_xdg"
+    isolated_xdg.mkdir()
+
+    _seed_agent_auth("claude-code", isolated_xdg)
+
+    # Should not create any subdirectories
+    assert list(isolated_xdg.iterdir()) == []
+
+
+def test_seed_agent_auth_handles_missing_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """_seed_agent_auth should not raise when auth.json doesn't exist."""
+    from superseded.review.executor import _seed_agent_auth
+
+    # Set up fake host XDG_DATA_HOME without auth.json
+    host_xdg = tmp_path / "host_xdg"
+    host_xdg.mkdir()
+    monkeypatch.setenv("XDG_DATA_HOME", str(host_xdg))
+
+    # Create isolated XDG_DATA_HOME
+    isolated_xdg = tmp_path / "isolated_xdg"
+    isolated_xdg.mkdir()
+
+    # Should not raise
+    _seed_agent_auth("opencode", isolated_xdg)
+
+    # Should not create opencode subdirectory
+    assert not (isolated_xdg / "opencode").exists()
+
+
+def test_seed_agent_auth_handles_write_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    """_seed_agent_auth should log warning and continue on write error."""
+    from superseded.review.executor import _seed_agent_auth
+
+    # Set up fake host XDG_DATA_HOME with auth.json
+    host_xdg = tmp_path / "host_xdg"
+    host_auth_dir = host_xdg / "opencode"
+    host_auth_dir.mkdir(parents=True)
+    host_auth = host_auth_dir / "auth.json"
+    host_auth.write_text('{"api_key": "test-key"}')
+
+    monkeypatch.setenv("XDG_DATA_HOME", str(host_xdg))
+
+    # Create isolated XDG_DATA_HOME but make it read-only
+    isolated_xdg = tmp_path / "isolated_xdg"
+    isolated_xdg.mkdir()
+    isolated_xdg.chmod(0o555)
+
+    try:
+        with caplog.at_level(logging.WARNING):
+            # Should not raise
+            _seed_agent_auth("opencode", isolated_xdg)
+
+        # Should log warning
+        assert any(
+            "failed to seed opencode auth.json" in record.message for record in caplog.records
+        )
+    finally:
+        # Restore permissions for cleanup
+        isolated_xdg.chmod(0o755)
+
+
+def test_subprocess_session_isolates_xdg_when_agent_name_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """SubprocessSession should isolate XDG dirs when agent_name is set."""
+    executor = SubprocessExecutor(agent_name="opencode")
+
+    with patch("superseded.review.executor.subprocess.run") as mock_run:
+        mock_run.return_value = _completed(stdout="[]")
+        with executor.session() as sess:
+            sess.run(["opencode"], "prompt", timeout=10)
+
+    # Verify subprocess.run was called with isolated XDG env
+    call_kwargs = mock_run.call_args.kwargs
+    env = call_kwargs.get("env")
+    assert env is not None
+
+    # XDG vars should be set to temp directories
+    assert "XDG_DATA_HOME" in env
+    assert "XDG_CACHE_HOME" in env
+    assert "XDG_STATE_HOME" in env
+
+    # Each should be a unique temp directory
+    xdg_data = env["XDG_DATA_HOME"]
+    xdg_cache = env["XDG_CACHE_HOME"]
+    xdg_state = env["XDG_STATE_HOME"]
+
+    assert xdg_data != xdg_cache != xdg_state
+    assert "superseded-opencode-" in xdg_data
+
+    # Temp directories should be cleaned up after run
+    assert not Path(xdg_data).exists()
+
+
+def test_subprocess_session_without_agent_name_no_isolation():
+    """SubprocessSession without agent_name should not isolate XDG dirs (backward compat)."""
+    executor = SubprocessExecutor()  # No agent_name
+
+    with patch("superseded.review.executor.subprocess.run") as mock_run:
+        mock_run.return_value = _completed(stdout="[]")
+        with executor.session() as sess:
+            sess.run(["claude"], "prompt", timeout=10)
+
+    # Verify subprocess.run was called with original env (not isolated)
+    call_kwargs = mock_run.call_args.kwargs
+    env = call_kwargs.get("env")
+
+    # env should be None (inherits from parent) or the original env dict
+    # (not a new isolated env)
+    assert (
+        env is None
+        or "XDG_DATA_HOME" not in env
+        or env["XDG_DATA_HOME"] == os.environ.get("XDG_DATA_HOME")
+    )
+
+
+def test_subprocess_session_isolates_xdg_per_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Each run() call should get a fresh isolated XDG directory."""
+    executor = SubprocessExecutor(agent_name="opencode")
+
+    xdg_dirs = []
+
+    def capture_env(*args, **kwargs):
+        env = kwargs.get("env")
+        if env and "XDG_DATA_HOME" in env:
+            xdg_dirs.append(env["XDG_DATA_HOME"])
+        return _completed(stdout="[]")
+
+    with (
+        patch("superseded.review.executor.subprocess.run", side_effect=capture_env),
+        executor.session() as sess,
+    ):
+        sess.run(["opencode"], "prompt1", timeout=10)
+        sess.run(["opencode"], "prompt2", timeout=10)
+
+    # Each run should have gotten a different XDG_DATA_HOME
+    assert len(xdg_dirs) == 2
+    assert xdg_dirs[0] != xdg_dirs[1]
