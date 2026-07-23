@@ -113,7 +113,9 @@ class ReviewEngine:
         env: dict[str, str] | None = None,
         executor: AgentExecutor | None = None,
     ) -> ReviewResult:
-        resolved_executor = executor if executor is not None else SubprocessExecutor()
+        resolved_executor = (
+            executor if executor is not None else SubprocessExecutor(agent_name=self.agent.name)
+        )
         if not resolved_executor.available(self.agent):
             raise RuntimeError(
                 f"Agent CLI '{self.agent.name}' not found on PATH. "

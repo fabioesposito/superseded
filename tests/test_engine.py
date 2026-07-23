@@ -6,6 +6,7 @@ import pytest
 
 from superseded.models import Finding, ReviewResult
 from superseded.review.engine import ReviewEngine
+from superseded.review.executor import SubprocessExecutor
 
 
 def make_finding(
@@ -341,3 +342,28 @@ def test_review_defaults_to_subprocess_executor(monkeypatch):
     agent.parse_output.return_value = []
     engine = ReviewEngine(agent=agent, config=MagicMock(is_pass_enabled=lambda n: True))
     engine.review(diff="d", passes=["security"])  # should not raise
+
+
+def test_review_fallback_executor_forwards_agent_name(monkeypatch):
+    """The fallback SubprocessExecutor must receive agent_name for XDG isolation."""
+    captured: dict = {}
+
+    class CapturingExecutor(SubprocessExecutor):
+        def __init__(self, agent_name=None):
+            captured["agent_name"] = agent_name
+            super().__init__(agent_name=agent_name)
+
+    monkeypatch.setattr("superseded.review.engine.SubprocessExecutor", CapturingExecutor)
+    monkeypatch.setattr(
+        "superseded.review.executor.subprocess.run",
+        lambda *a, **kw: MagicMock(returncode=0, stdout="[]", stderr=""),
+    )
+    agent = MagicMock()
+    agent.name = "opencode"
+    agent.is_available.return_value = True
+    agent.build_command.return_value = ["echo"]
+    agent.parse_output.return_value = []
+    engine = ReviewEngine(agent=agent, config=MagicMock(is_pass_enabled=lambda n: True))
+    engine.review(diff="d", passes=["security"])
+
+    assert captured.get("agent_name") == "opencode"

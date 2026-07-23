@@ -44,15 +44,17 @@ class AgentExecutor(Protocol):
     ) -> Session: ...
 
 
-def _seed_agent_auth(agent_name: str, xdg_data_home: Path) -> None:
-    """Copy agent auth files from the host into an isolated XDG_DATA_HOME.
+def _read_host_auth(agent_name: str) -> str | None:
+    """Read the host auth.json content for an agent (called once per session).
 
     Only opencode's auth.json lives under XDG_DATA_HOME (and holds real
     provider keys). claude-code and codex store auth at paths relative to
     HOME, which is not redirected, so they need no seeding here.
+
+    Returns ``None`` for non-opencode agents or when the file is absent.
     """
     if agent_name != "opencode":
-        return
+        return None
     host_data = Path(
         os.environ.get(
             "XDG_DATA_HOME",
@@ -61,11 +63,20 @@ def _seed_agent_auth(agent_name: str, xdg_data_home: Path) -> None:
     )
     host_auth = host_data / "opencode" / "auth.json"
     if not host_auth.is_file():
-        return
+        return None
+    try:
+        return host_auth.read_text()
+    except OSError as err:
+        logger.warning("failed to read opencode auth.json: %s", err)
+        return None
+
+
+def _seed_auth_into(xdg_data_home: Path, content: str) -> None:
+    """Write cached auth content into an isolated XDG_DATA_HOME (called per run)."""
     target = xdg_data_home / "opencode" / "auth.json"
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(host_auth.read_text())
+        target.write_text(content)
     except OSError as err:
         logger.warning("failed to seed opencode auth.json: %s", err)
 
@@ -80,6 +91,7 @@ class _SubprocessSession:
         self._cwd = cwd
         self._env = env
         self._agent_name = agent_name
+        self._auth_content = _read_host_auth(agent_name) if agent_name else None
 
     def __enter__(self) -> _SubprocessSession:
         return self
@@ -107,14 +119,15 @@ class _SubprocessSession:
         env["XDG_DATA_HOME"] = str(xdg_data)
         env["XDG_CACHE_HOME"] = str(xdg_cache)
         env["XDG_STATE_HOME"] = str(xdg_state)
-        if self._agent_name:
-            _seed_agent_auth(self._agent_name, xdg_data)
         return env
 
     def run(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
         if self._agent_name:
             with tempfile.TemporaryDirectory(prefix=f"superseded-{self._agent_name}-") as tmp:
-                env = self._build_isolated_env(Path(tmp))
+                base = Path(tmp)
+                env = self._build_isolated_env(base)
+                if self._auth_content is not None:
+                    _seed_auth_into(base / "data", self._auth_content)
                 return self._run(cmd, prompt, timeout, env)
         return self._run(cmd, prompt, timeout, self._env)
 

@@ -877,11 +877,10 @@ def test_smolvm_session_falls_back_to_streaming_when_cache_fails(tmp_path, monke
 # ---------------------------------------------------------------------------
 
 
-def test_seed_agent_auth_copies_opencode_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """_seed_agent_auth should copy opencode/auth.json to isolated XDG_DATA_HOME."""
-    from superseded.review.executor import _seed_agent_auth
+def test_read_host_auth_reads_opencode_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """_read_host_auth should return opencode/auth.json content from host."""
+    from superseded.review.executor import _read_host_auth
 
-    # Set up fake host XDG_DATA_HOME with auth.json
     host_xdg = tmp_path / "host_xdg"
     host_auth_dir = host_xdg / "opencode"
     host_auth_dir.mkdir(parents=True)
@@ -890,82 +889,58 @@ def test_seed_agent_auth_copies_opencode_auth(tmp_path: Path, monkeypatch: pytes
 
     monkeypatch.setenv("XDG_DATA_HOME", str(host_xdg))
 
-    # Create isolated XDG_DATA_HOME
+    content = _read_host_auth("opencode")
+    assert content == '{"api_key": "test-key"}'
+
+
+def test_read_host_auth_skips_non_opencode():
+    """_read_host_auth should return None for non-opencode agents."""
+    from superseded.review.executor import _read_host_auth
+
+    assert _read_host_auth("claude-code") is None
+
+
+def test_read_host_auth_returns_none_when_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """_read_host_auth should return None when auth.json doesn't exist."""
+    from superseded.review.executor import _read_host_auth
+
+    host_xdg = tmp_path / "host_xdg"
+    host_xdg.mkdir()
+    monkeypatch.setenv("XDG_DATA_HOME", str(host_xdg))
+
+    assert _read_host_auth("opencode") is None
+
+
+def test_seed_auth_into_writes_content(tmp_path: Path):
+    """_seed_auth_into should write auth content into isolated XDG_DATA_HOME."""
+    from superseded.review.executor import _seed_auth_into
+
     isolated_xdg = tmp_path / "isolated_xdg"
     isolated_xdg.mkdir()
 
-    _seed_agent_auth("opencode", isolated_xdg)
+    _seed_auth_into(isolated_xdg, '{"api_key": "test-key"}')
 
-    # Verify auth.json was copied
     target_auth = isolated_xdg / "opencode" / "auth.json"
     assert target_auth.exists()
     assert target_auth.read_text() == '{"api_key": "test-key"}'
 
 
-def test_seed_agent_auth_skips_non_opencode(tmp_path: Path):
-    """_seed_agent_auth should do nothing for non-opencode agents."""
-    from superseded.review.executor import _seed_agent_auth
+def test_seed_auth_into_handles_write_error(tmp_path: Path, caplog: pytest.LogCaptureFixture):
+    """_seed_auth_into should log warning and continue on write error."""
+    from superseded.review.executor import _seed_auth_into
 
-    isolated_xdg = tmp_path / "isolated_xdg"
-    isolated_xdg.mkdir()
-
-    _seed_agent_auth("claude-code", isolated_xdg)
-
-    # Should not create any subdirectories
-    assert list(isolated_xdg.iterdir()) == []
-
-
-def test_seed_agent_auth_handles_missing_auth(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """_seed_agent_auth should not raise when auth.json doesn't exist."""
-    from superseded.review.executor import _seed_agent_auth
-
-    # Set up fake host XDG_DATA_HOME without auth.json
-    host_xdg = tmp_path / "host_xdg"
-    host_xdg.mkdir()
-    monkeypatch.setenv("XDG_DATA_HOME", str(host_xdg))
-
-    # Create isolated XDG_DATA_HOME
-    isolated_xdg = tmp_path / "isolated_xdg"
-    isolated_xdg.mkdir()
-
-    # Should not raise
-    _seed_agent_auth("opencode", isolated_xdg)
-
-    # Should not create opencode subdirectory
-    assert not (isolated_xdg / "opencode").exists()
-
-
-def test_seed_agent_auth_handles_write_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-):
-    """_seed_agent_auth should log warning and continue on write error."""
-    from superseded.review.executor import _seed_agent_auth
-
-    # Set up fake host XDG_DATA_HOME with auth.json
-    host_xdg = tmp_path / "host_xdg"
-    host_auth_dir = host_xdg / "opencode"
-    host_auth_dir.mkdir(parents=True)
-    host_auth = host_auth_dir / "auth.json"
-    host_auth.write_text('{"api_key": "test-key"}')
-
-    monkeypatch.setenv("XDG_DATA_HOME", str(host_xdg))
-
-    # Create isolated XDG_DATA_HOME but make it read-only
     isolated_xdg = tmp_path / "isolated_xdg"
     isolated_xdg.mkdir()
     isolated_xdg.chmod(0o555)
 
     try:
         with caplog.at_level(logging.WARNING):
-            # Should not raise
-            _seed_agent_auth("opencode", isolated_xdg)
+            _seed_auth_into(isolated_xdg, '{"api_key": "test-key"}')
 
-        # Should log warning
         assert any(
             "failed to seed opencode auth.json" in record.message for record in caplog.records
         )
     finally:
-        # Restore permissions for cleanup
         isolated_xdg.chmod(0o755)
 
 
@@ -1046,3 +1021,24 @@ def test_subprocess_session_isolates_xdg_per_run(tmp_path: Path, monkeypatch: py
     # Each run should have gotten a different XDG_DATA_HOME
     assert len(xdg_dirs) == 2
     assert xdg_dirs[0] != xdg_dirs[1]
+
+
+def test_subprocess_session_caches_host_auth_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Host auth.json should be read once at session init, not per run() call."""
+    monkeypatch.setattr(
+        "superseded.review.executor._read_host_auth",
+        lambda name: '{"api_key": "cached-key"}',
+    )
+    read_spy = MagicMock(side_effect=lambda name: '{"api_key": "cached-key"}')
+    monkeypatch.setattr("superseded.review.executor._read_host_auth", read_spy)
+
+    executor = SubprocessExecutor(agent_name="opencode")
+
+    with patch("superseded.review.executor.subprocess.run") as mock_run:
+        mock_run.return_value = _completed(stdout="[]")
+        with executor.session() as sess:
+            sess.run(["opencode"], "prompt1", timeout=10)
+            sess.run(["opencode"], "prompt2", timeout=10)
+
+    # _read_host_auth called once at session init, not once per run()
+    assert read_spy.call_count == 1
