@@ -57,7 +57,7 @@ class ReviewEngine:
         sess: Session | None = None,
     ) -> list[Finding]:
         if sess is None:
-            sess = SubprocessExecutor().session()
+            sess = SubprocessExecutor(agent_name=self.agent.name).session()
         if progress is not None:
             progress(pass_name, "start")
         findings, errors = self._run_and_validate(pass_name, prompt, timeout, sess)

@@ -44,10 +44,39 @@ class AgentExecutor(Protocol):
     ) -> Session: ...
 
 
+def _seed_agent_auth(agent_name: str, xdg_data_home: Path) -> None:
+    """Copy agent auth files from the host into an isolated XDG_DATA_HOME.
+
+    Only opencode's auth.json lives under XDG_DATA_HOME (and holds real
+    provider keys). claude-code and codex store auth at paths relative to
+    HOME, which is not redirected, so they need no seeding here.
+    """
+    if agent_name != "opencode":
+        return
+    host_data = Path(
+        os.environ.get(
+            "XDG_DATA_HOME",
+            os.path.join(os.path.expanduser("~"), ".local", "share"),
+        )
+    )
+    host_auth = host_data / "opencode" / "auth.json"
+    if not host_auth.is_file():
+        return
+    target = xdg_data_home / "opencode" / "auth.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(host_auth.read_text())
+
+
 class _SubprocessSession:
-    def __init__(self, cwd: str | None, env: dict[str, str] | None) -> None:
+    def __init__(
+        self,
+        cwd: str | None,
+        env: dict[str, str] | None,
+        agent_name: str | None = None,
+    ) -> None:
         self._cwd = cwd
         self._env = env
+        self._agent_name = agent_name
 
     def __enter__(self) -> _SubprocessSession:
         return self
@@ -55,7 +84,44 @@ class _SubprocessSession:
     def __exit__(self, *exc: object) -> None:
         return None
 
+    def _build_isolated_env(self, base: Path) -> dict[str, str]:
+        """Build an env dict with per-exec isolated XDG directories.
+
+        When multiple agent subprocesses share ``$XDG_DATA_HOME`` (the default
+        for the local subprocess path), their SQLite state DBs collide and error
+        with "database is locked" — opencode is especially vulnerable because it
+        touches several SQLite DBs (state, cache, data) concurrently.
+
+        Redirecting only the XDG directories keeps ``HOME`` intact so the agent
+        can reach ``~/.gitconfig`` and ``~/.ssh``."""
+        xdg_data = base / "data"
+        xdg_cache = base / "cache"
+        xdg_state = base / "state"
+        for d in (xdg_data, xdg_cache, xdg_state):
+            d.mkdir(parents=True, exist_ok=True)
+
+        env = dict(self._env) if self._env is not None else os.environ.copy()
+        env["XDG_DATA_HOME"] = str(xdg_data)
+        env["XDG_CACHE_HOME"] = str(xdg_cache)
+        env["XDG_STATE_HOME"] = str(xdg_state)
+        if self._agent_name:
+            _seed_agent_auth(self._agent_name, xdg_data)
+        return env
+
     def run(self, cmd: list[str], prompt: str, *, timeout: int) -> str:
+        if self._agent_name:
+            with tempfile.TemporaryDirectory(prefix=f"superseded-{self._agent_name}-") as tmp:
+                env = self._build_isolated_env(Path(tmp))
+                return self._run(cmd, prompt, timeout, env)
+        return self._run(cmd, prompt, timeout, self._env)
+
+    def _run(
+        self,
+        cmd: list[str],
+        prompt: str,
+        timeout: int,
+        env: dict[str, str] | None,
+    ) -> str:
         try:
             result = subprocess.run(
                 cmd,
@@ -64,7 +130,7 @@ class _SubprocessSession:
                 text=True,
                 timeout=timeout,
                 cwd=self._cwd,
-                env=self._env,
+                env=env,
             )
         except FileNotFoundError as err:
             raise AgentRunError(
@@ -84,13 +150,18 @@ class _SubprocessSession:
 class SubprocessExecutor:
     """Runs agent CLIs directly as host subprocesses (the default backend)."""
 
+    def __init__(self, agent_name: str | None = None) -> None:
+        self._agent_name = agent_name
+
     def available(self, agent: Agent) -> bool:
         return agent.is_available()
 
     def session(
         self, cwd: str | Path | None = None, *, env: dict[str, str] | None = None
     ) -> Session:
-        return _SubprocessSession(str(cwd) if cwd is not None else None, env)
+        return _SubprocessSession(
+            str(cwd) if cwd is not None else None, env, agent_name=self._agent_name
+        )
 
 
 class _SandboxSession:

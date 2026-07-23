@@ -117,7 +117,7 @@ def _resolve_smolvm_image(agent_name: str) -> str | None:
 
 def _select_executor(sandbox: bool, *, agent_name: str, timeout: int) -> AgentExecutor:
     if not sandbox:
-        return SubprocessExecutor()
+        return SubprocessExecutor(agent_name=agent_name)
     kind = os.environ.get("SUPERSEDED_SANDBOX_KIND", "sbx").strip().lower()
     if kind == "smolvm":
         resolved_image = _resolve_smolvm_image(agent_name)
