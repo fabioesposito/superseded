@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib.metadata import version
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,7 +15,7 @@ def test_cli_version():
     runner = CliRunner()
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert version("superseded") in result.output
 
 
 def test_serve_refuses_unconfigured_config(tmp_path):
