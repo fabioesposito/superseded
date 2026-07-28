@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+from collections.abc import Callable
 from pathlib import Path
 
 SKILL_NAME = "superseded"
@@ -58,3 +60,44 @@ def skill_dir_for(agent_name: str) -> Path:
     e.g. claude-code -> ~/.claude/skills/superseded
     """
     return Path.home().joinpath(*_AGENT_SKILLS_ROOT[agent_name], SKILL_NAME)
+
+
+def install_skill(
+    agents: list[str],
+    *,
+    force: bool = False,
+    status: Callable[[str], None] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Write SKILL.md to each selected agent's personal skills dir.
+
+    Returns ``(written, skipped)``. A target is treated as written when it is
+    absent, already content-identical, or present with ``force=True``. A target
+    that exists with differing content and no ``force`` is skipped (returned in
+    ``skipped``) and left untouched. Writes are atomic (temp file + os.replace).
+    Never raises on conflict; reports nuance via optional ``status`` callbacks.
+    """
+    text = build_skill_text()
+    written: list[str] = []
+    skipped: list[str] = []
+    for name in agents:
+        target_dir = skill_dir_for(name)
+        target_file = target_dir / "SKILL.md"
+        if target_file.exists():
+            if target_file.read_text() == text:
+                written.append(name)
+                if status:
+                    status(f"{name}: already up to date -> {target_file}")
+                continue
+            if not force:
+                skipped.append(name)
+                if status:
+                    status(f"{name}: skipped (differs, use --force) -> {target_file}")
+                continue
+        target_dir.mkdir(parents=True, exist_ok=True)
+        tmp = target_file.with_name(target_file.name + ".tmp")
+        tmp.write_text(text)
+        os.replace(tmp, target_file)
+        written.append(name)
+        if status:
+            status(f"{name}: wrote {target_file}")
+    return written, skipped
