@@ -43,6 +43,7 @@ from superseded.output.markdown import format_markdown
 from superseded.output.table import format_table
 from superseded.review.engine import ReviewEngine
 from superseded.review.executor import AgentExecutor, SubprocessExecutor, make_sandbox_executor
+from superseded.skill import SKILL_AGENTS, build_skill_text, install_skill
 
 AGENT_ENV = "SUPERSEDED_AGENT"
 MODEL_ENV = "SUPERSEDED_MODEL"
@@ -748,6 +749,61 @@ def _run_init(force: bool, agent_override: str | None, config_path: Path | None)
 
     _status(f"Selected agent: {chosen}" + (f" ({model})" if model else ""))
     _status(f"Wrote {target}")
+
+
+@cli.group()
+@click.pass_context
+def skill(ctx: click.Context) -> None:
+    """Install or print the superseded agent skill."""
+
+
+@skill.command("install")
+@click.option(
+    "--agent",
+    "-a",
+    "agents",
+    multiple=True,
+    help="Limit to a specific agent (repeatable). One of: claude-code, opencode, codex.",
+)
+@click.option("--force", is_flag=True, help="Overwrite a target whose content differs.")
+@click.pass_context
+def skill_install(ctx: click.Context, agents: tuple[str, ...], force: bool) -> None:
+    """Install the superseded SKILL.md into each agent's personal skill dir."""
+    setup_logging(
+        resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
+        resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
+    )
+    _run_skill_install(selected=list(agents), force=force)
+
+
+@skill.command("print")
+@click.pass_context
+def skill_print(ctx: click.Context) -> None:
+    """Print the canonical superseded SKILL.md to stdout."""
+    setup_logging(
+        resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
+        resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
+    )
+    click.echo(build_skill_text())
+
+
+def _run_skill_install(selected: list[str], force: bool) -> None:
+    targets = selected or list(SKILL_AGENTS)
+    unknown = [a for a in targets if a not in SKILL_AGENTS]
+    if unknown:
+        click.echo(
+            f"Error: unknown agent(s): {', '.join(unknown)}. "
+            f"Choose from: {', '.join(SKILL_AGENTS)}",
+            err=True,
+        )
+        sys.exit(2)
+
+    written, skipped = install_skill(targets, force=force, status=_status)
+    if written:
+        _status(f"Installed skill for: {', '.join(written)}")
+    if skipped:
+        _status(f"Skipped (differs, use --force): {', '.join(skipped)}")
+        sys.exit(2)
 
 
 @cli.command()
