@@ -8,12 +8,15 @@ Reviews that supersede themselves. Runs 5 parallel passes (security, correctness
 git clone https://github.com/fabioesposito/superseded
 cd superseded && uv sync && uv tool install .
 superseded review --diff HEAD~1..HEAD
+superseded skill install   # optional: teach claude-code/opencode/codex to run superseded review directly
 ```
 
 **Prerequisites:**
 - Python 3.14+
 - An AI CLI: `claude-code`, `opencode`, or `codex`
 - GitHub CLI (`gh`) authenticated: `gh auth login`
+
+`superseded skill install` writes a one-time `SKILL.md` into each agent's personal skill dir so that, when you ask it to review a PR, it runs `superseded review` directly instead of probing PATH or doing an ad-hoc review. Run `superseded skill print` to see (or commit) the same file.
 
 ## How It Works
 
