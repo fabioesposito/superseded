@@ -22,6 +22,9 @@ class Finding(BaseModel):
     confidence: Confidence = "high"
     reasoning: str = Field(default="")
     id: str = Field(default="")
+    verification: Literal["kept", "dropped"] | None = None
+    verified_severity: Severity | None = None
+    verification_reason: str | None = None
 
     @model_validator(mode="after")
     def _default_end_line(self) -> Finding:
@@ -52,6 +55,7 @@ class Finding(BaseModel):
 class ReviewResult(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    dropped_findings: list[Finding] = Field(default_factory=list)
 
     @property
     def summary(self) -> dict[str, int]:

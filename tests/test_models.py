@@ -175,3 +175,50 @@ def test_reasoning_does_not_affect_id():
         reasoning="because Y",
     )
     assert f1.id == f2.id
+
+
+def test_finding_verification_fields_default():
+    f = Finding(
+        pass_name="security",
+        severity="important",
+        file="foo.py",
+        line=42,
+        title="SQL injection",
+        description="User input in raw query",
+        suggestion="Use parameterized queries",
+    )
+    assert f.verification is None
+    assert f.verified_severity is None
+    assert f.verification_reason is None
+
+
+def test_finding_verification_dropped():
+    f = Finding(
+        pass_name="security",
+        severity="important",
+        file="foo.py",
+        line=42,
+        title="SQL injection",
+        description="User input in raw query",
+        suggestion="Use parameterized queries",
+        verification="dropped",
+        verification_reason="Code already sanitizes input on line 15",
+    )
+    assert f.verification == "dropped"
+    assert f.verification_reason == "Code already sanitizes input on line 15"
+
+
+def test_finding_verification_reestimate():
+    f = Finding(
+        pass_name="style",
+        severity="important",
+        file="bar.py",
+        line=10,
+        title="Unclear naming",
+        description="Variable x is ambiguous",
+        suggestion="Rename to user_count",
+        verification="kept",
+        verified_severity="suggestion",
+    )
+    assert f.verification == "kept"
+    assert f.verified_severity == "suggestion"

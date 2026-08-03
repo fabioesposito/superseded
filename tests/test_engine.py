@@ -367,3 +367,208 @@ def test_review_fallback_executor_forwards_agent_name(monkeypatch):
     engine.review(diff="d", passes=["security"])
 
     assert captured.get("agent_name") == "opencode"
+
+
+def test_run_verification_keeps_all():
+    """When verifier returns all 'keep', all findings are preserved."""
+    from superseded.config import Config
+    from superseded.models import Finding, ReviewResult
+
+    engine = ReviewEngine(agent=MagicMock(), config=Config(verify=True))
+    engine.agent.build_command.return_value = ["fake-agent"]
+    engine.agent.parse_output.return_value = []
+    engine.agent.name = "fake-agent"
+
+    f1 = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        title="X",
+        description="d",
+        suggestion="s",
+    )
+    f2 = Finding(
+        pass_name="style",
+        severity="nit",
+        file="b.py",
+        line=2,
+        title="Y",
+        description="d",
+        suggestion="s",
+    )
+    result = ReviewResult(findings=[f1, f2])
+
+    mock_run = MagicMock(
+        return_value='[{"id": "'
+        + f1.id
+        + '", "action": "keep", "reason": "ok"}, {"id": "'
+        + f2.id
+        + '", "action": "keep", "reason": "ok"}]'
+    )
+
+    new_result = engine._run_verification(result, "diff", "ctx", 600, MagicMock(run=mock_run))
+
+    assert len(new_result.findings) == 2
+
+
+def test_run_verification_drops_false_positives():
+    """When verifier drops some findings, they are excluded."""
+    from superseded.config import Config
+    from superseded.models import Finding, ReviewResult
+
+    engine = ReviewEngine(agent=MagicMock(), config=Config(verify=True))
+    engine.agent.name = "fake-agent"
+
+    f1 = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        title="Real",
+        description="d",
+        suggestion="s",
+    )
+    f2 = Finding(
+        pass_name="style",
+        severity="nit",
+        file="b.py",
+        line=2,
+        title="Fake",
+        description="d",
+        suggestion="s",
+    )
+    result = ReviewResult(findings=[f1, f2])
+
+    mock_run = MagicMock(
+        return_value='[{"id": "'
+        + f1.id
+        + '", "action": "keep", "reason": "ok"}, {"id": "'
+        + f2.id
+        + '", "action": "drop", "reason": "false positive"}]'
+    )
+
+    new_result = engine._run_verification(result, "diff", "ctx", 600, MagicMock(run=mock_run))
+
+    assert len(new_result.findings) == 1
+    assert new_result.findings[0].id == f1.id
+    assert f2.verification == "dropped"
+
+
+def test_run_verification_reestimates_severity():
+    """When verifier re-estimates severity, it is applied."""
+    from superseded.config import Config
+    from superseded.models import Finding, ReviewResult
+
+    engine = ReviewEngine(agent=MagicMock(), config=Config(verify=True))
+    engine.agent.name = "fake-agent"
+
+    f = Finding(
+        pass_name="performance",
+        severity="important",
+        file="a.py",
+        line=5,
+        title="Slow",
+        description="d",
+        suggestion="s",
+    )
+    result = ReviewResult(findings=[f])
+
+    mock_run = MagicMock(
+        return_value="[{"
+        + '"id": "'
+        + f.id
+        + '", '
+        + '"action": "keep", '
+        + '"severity": "suggestion", '
+        + '"confidence": "low", '
+        + '"reason": "less severe than reported"'
+        + "}]"
+    )
+
+    new_result = engine._run_verification(result, "diff", "ctx", 600, MagicMock(run=mock_run))
+
+    assert len(new_result.findings) == 1
+    assert new_result.findings[0].severity == "suggestion"
+    assert new_result.findings[0].confidence == "low"
+    assert new_result.findings[0].verified_severity == "suggestion"
+
+
+def test_run_verification_failure_returns_original():
+    """When verifier fails (non-zero exit), original findings are kept."""
+    from superseded.config import Config
+    from superseded.models import Finding, ReviewResult
+    from superseded.review.executor import AgentRunError
+
+    engine = ReviewEngine(agent=MagicMock(), config=Config(verify=True))
+    engine.agent.name = "fake-agent"
+
+    f = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        title="X",
+        description="d",
+        suggestion="s",
+    )
+    result = ReviewResult(findings=[f])
+
+    mock_run = MagicMock(side_effect=AgentRunError("timeout"))
+
+    new_result = engine._run_verification(result, "diff", "ctx", 600, MagicMock(run=mock_run))
+
+    assert new_result is result
+    assert len(new_result.warnings) == 1
+
+
+def test_run_verification_missing_ids_kept():
+    """Findings not in verifier output are kept unchanged."""
+    from superseded.config import Config
+    from superseded.models import Finding, ReviewResult
+
+    engine = ReviewEngine(agent=MagicMock(), config=Config(verify=True))
+    engine.agent.name = "fake-agent"
+
+    f1 = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        title="Mentioned",
+        description="d",
+        suggestion="s",
+    )
+    f2 = Finding(
+        pass_name="style",
+        severity="nit",
+        file="b.py",
+        line=2,
+        title="Omitted",
+        description="d",
+        suggestion="s",
+    )
+    result = ReviewResult(findings=[f1, f2])
+
+    mock_run = MagicMock(return_value='[{"id": "' + f1.id + '", "action": "keep", "reason": "ok"}]')
+
+    new_result = engine._run_verification(result, "diff", "ctx", 600, MagicMock(run=mock_run))
+
+    assert len(new_result.findings) == 2
+
+
+def test_run_verification_skips_when_no_findings():
+    """Verification is skipped when there are no findings."""
+    from superseded.config import Config
+    from superseded.models import ReviewResult
+
+    engine = ReviewEngine(agent=MagicMock(), config=Config(verify=True))
+    engine.agent.name = "fake-agent"
+
+    result = ReviewResult(findings=[])
+    mock_run = MagicMock()
+
+    new_result = engine._run_verification(result, "diff", "ctx", 600, MagicMock(run=mock_run))
+
+    assert mock_run.call_count == 0
+    assert new_result is result

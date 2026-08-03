@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+
+from superseded.models import Finding
+
 MAX_RETRY_ERRORS_SHOWN = 8
 
 PASS_INSTRUCTIONS: dict[str, str] = {
@@ -135,6 +139,79 @@ def build_prompt(
 {mem}
 
         {JSON_FORMAT_INSTRUCTIONS}"""
+
+
+def build_verify_prompt(
+    findings: list[Finding],
+    diff: str,
+    file_context: str | None,
+) -> str:
+    """Build a verification prompt that asks the agent to re-examine merged findings.
+
+    The agent receives the full diff, surrounding file context, and the merged
+    findings JSON. It must return a verdict for each finding: ``keep`` (possibly
+    with re-estimated severity/confidence) or ``drop`` (false positive).
+    """
+    ctx = file_context or "No additional file context available."
+
+    findings_json = json.dumps(
+        [
+            {
+                "id": f.id,
+                "pass": f.pass_name,
+                "severity": f.severity,
+                "confidence": f.confidence,
+                "file": f.file,
+                "line": f.line,
+                "title": f.title,
+                "description": f.description,
+            }
+            for f in findings
+        ],
+        indent=2,
+    )
+
+    return f"""You are performing a final verify pass over the findings from a code review.
+
+## Your Role
+Verify each finding against the original diff and surrounding code. Your job is to catch
+false positives and re-calibrate severity. Be skeptical: if the code already handles the
+issue, the finding is wrong. Only drop a finding when the code clearly disproves it —
+keeping noise is better than dropping a real bug.
+
+{SEVERITY_CALIBRATION}
+
+## Context
+
+### Diff
+{diff}
+
+### File Context (surrounding code for changed files, +/-20 lines from changes)
+{ctx}
+
+### Merged Findings
+{findings_json}
+
+## Output Format
+Return ONLY a JSON array. No explanation text before or after.
+
+[
+  {{
+    "id": "correctness-a1b2c3d4e5f6",
+    "action": "keep",
+    "severity": "suggestion",
+    "confidence": "low",
+    "reason": "short justification"
+  }},
+  {{
+    "id": "security-f7e8d9c0b1a2",
+    "action": "drop",
+    "reason": "The code already handles this case on line 42"
+  }}
+]
+
+If you have no opinion on a finding, omit it from the array — it will be kept unchanged.
+"""
 
 
 def build_retry_prompt(original_prompt: str, errors: list[str]) -> str:

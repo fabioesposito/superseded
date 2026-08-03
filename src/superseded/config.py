@@ -34,6 +34,7 @@ class Config(BaseModel):
     learned_review: bool = True
     reflection_threshold: int = 5
     max_learned_rules: int = 5
+    verify: bool = True
 
     def is_pass_enabled(self, name: str) -> bool:
         return getattr(self.passes, name, False)

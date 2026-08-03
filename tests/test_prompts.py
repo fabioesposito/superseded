@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from superseded.review.prompts import JSON_FORMAT_INSTRUCTIONS, build_prompt, build_retry_prompt
+from superseded.models import Finding
+from superseded.review.prompts import (
+    JSON_FORMAT_INSTRUCTIONS,
+    build_prompt,
+    build_retry_prompt,
+    build_verify_prompt,
+)
 
 
 def test_new_sections_present():
@@ -276,3 +282,43 @@ def test_build_retry_prompt_truncates_many_errors():
     # Should not dump all 50 — keep it bounded.
     assert "err 0" in retry
     assert "err 49" not in retry
+
+
+def test_build_verify_prompt_contains_expected_sections():
+    findings = [
+        Finding(
+            pass_name="security",
+            severity="critical",
+            file="a.py",
+            line=1,
+            title="SQLI",
+            description="Raw query",
+            suggestion="Parameterize",
+        )
+    ]
+    diff = "diff --git a/a.py b/a.py\n+raw query"
+    prompt = build_verify_prompt(findings, diff, "file context here")
+    assert "verify" in prompt.lower()
+    assert "diff" in prompt.lower()
+    assert "SQLI" in prompt
+    assert "file context here" in prompt
+    assert "critical" in prompt
+    assert "important" in prompt
+    assert "suggestion" in prompt
+    assert "nit" in prompt
+
+
+def test_build_verify_prompt_handles_none_file_context():
+    findings = [
+        Finding(
+            pass_name="style",
+            severity="nit",
+            file="x.py",
+            line=1,
+            title="T",
+            description="d",
+            suggestion="s",
+        )
+    ]
+    prompt = build_verify_prompt(findings, "diff", None)
+    assert "No additional file context" in prompt

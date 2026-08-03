@@ -25,10 +25,10 @@ def _make_config(url: str) -> Config:
     return cfg
 
 
-def test_head_revision_is_0002():
+def test_head_revision_is_0003():
     cfg = _make_config("sqlite+aiosqlite:///:memory:")
     script_dir = ScriptDirectory.from_config(cfg)
-    assert script_dir.get_current_head() == "0002"
+    assert script_dir.get_current_head() == "0003"
 
 
 def _sqlite_url_for(path: Path) -> str:
@@ -60,7 +60,7 @@ def test_upgrade_fresh_db_creates_schema(tmp_path):
 
     rev = alembic_runner.upgrade(_sqlite_url_for(db))
 
-    assert rev == "0002"
+    assert rev == "0003"
 
     async def has_table(name: str) -> bool:
         async with aiosqlite.connect(db) as conn:
@@ -81,7 +81,7 @@ def test_upgrade_pre_alembic_db_stamps_and_preserves_data(tmp_path):
 
     rev = alembic_runner.upgrade(_sqlite_url_for(db))
 
-    assert rev == "0002"
+    assert rev == "0003"
 
     async def count_findings() -> int:
         async with aiosqlite.connect(db) as conn:
@@ -118,15 +118,15 @@ def test_upgrade_is_idempotent(tmp_path):
     first = alembic_runner.upgrade(url)
     second = alembic_runner.upgrade(url)
 
-    assert first == second == "0002"
+    assert first == second == "0003"
 
 
-def test_migration_0002_is_noop_on_sqlite(tmp_path):
+def test_migration_0003_is_noop_on_sqlite(tmp_path):
     db = tmp_path / "twostep.db"
     alembic_runner.upgrade(_sqlite_url_for(db))
 
-    # Upgrading again (already at head 0002) must be a clean no-op.
-    assert alembic_runner.upgrade(_sqlite_url_for(db)) == "0002"
+    # Upgrading again (already at head 0003) must be a clean no-op.
+    assert alembic_runner.upgrade(_sqlite_url_for(db)) == "0003"
 
 
 def test_memory_store_open_adopts_pre_alembic_db(tmp_path):

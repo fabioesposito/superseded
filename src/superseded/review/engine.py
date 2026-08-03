@@ -14,6 +14,7 @@ from superseded.models import Finding, ReviewResult
 from superseded.review.executor import AgentExecutor, Session, SubprocessExecutor
 from superseded.review.merger import merge_findings
 from superseded.review.prompts import build_prompt, build_retry_prompt
+from superseded.review.verifier import _parse_verdicts
 
 if TYPE_CHECKING:
     from superseded.config import Config
@@ -94,6 +95,79 @@ class ReviewEngine:
                 logger.warning("Skipping malformed finding item in pass %s: %s", pass_name, err)
         return findings, errors
 
+    def _run_verification(
+        self,
+        result: ReviewResult,
+        diff: str,
+        file_context: str | None,
+        timeout: int,
+        sess: Session,
+    ) -> ReviewResult:
+        """Run a post-merge verification pass over the deduplicated findings.
+
+        Sends the merged findings back to the agent with a specialised
+        verification prompt. The agent returns ``keep``/``drop`` verdicts
+        per finding with optional severity re-estimation.
+
+        On any failure the original ``result`` is returned unchanged and a
+        warning is appended.
+        """
+        from superseded.review.prompts import build_verify_prompt
+
+        if not result.findings:
+            return result
+
+        prompt = build_verify_prompt(result.findings, diff, file_context)
+        cmd = self.agent.build_command()
+        try:
+            stdout = sess.run(cmd, prompt, timeout=timeout)
+        except Exception as err:
+            logger.warning("Verification pass failed: %s", err)
+            result.warnings.append(f"Verification pass failed: {err}")
+            return result
+
+        errors, verdicts = _parse_verdicts(stdout, collect_errors=True)
+
+        kept: list[Finding] = []
+        dropped_findings: list[Finding] = []
+        dropped_count = 0
+        reestimated_count = 0
+
+        for f in result.findings:
+            verdict = verdicts.get(f.id)
+            if verdict is None:
+                f.verification = "kept"
+                kept.append(f)
+                continue
+            if verdict.action == "drop":
+                f.verification = "dropped"
+                f.verification_reason = verdict.reason
+                dropped_count += 1
+                dropped_findings.append(f)
+                continue
+            f.verification = "kept"
+            if verdict.severity is not None:
+                f.severity = verdict.severity
+                f.verified_severity = verdict.severity
+                reestimated_count += 1
+            if verdict.confidence is not None:
+                f.confidence = verdict.confidence
+            if verdict.reason:
+                f.verification_reason = verdict.reason
+            kept.append(f)
+
+        for err in errors:
+            logger.warning("Verification parse error: %s", err)
+
+        dropped_msg = f"Verification completed: {dropped_count} findings dropped, {len(kept)} kept"
+        if reestimated_count:
+            dropped_msg += f" ({reestimated_count} re-estimated)"
+        result.warnings.append(dropped_msg)
+
+        return ReviewResult(
+            findings=kept, warnings=result.warnings, dropped_findings=dropped_findings
+        )
+
     def review(
         self,
         diff: str,
@@ -163,8 +237,12 @@ class ReviewEngine:
                     if progress is not None:
                         progress(pass_name, "failed")
 
-        result = self.merge_findings(all_findings)
-        result.warnings = warnings
+            result = self.merge_findings(all_findings)
+            result.warnings = warnings
+
+            if self.config.verify and result.findings:
+                result = self._run_verification(result, diff, file_context, timeout, sess)
+
         return result
 
     def merge_findings(self, finding_groups: list[list[Finding]]) -> ReviewResult:

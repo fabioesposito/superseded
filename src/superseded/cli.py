@@ -49,6 +49,7 @@ AGENT_ENV = "SUPERSEDED_AGENT"
 MODEL_ENV = "SUPERSEDED_MODEL"
 GRAPH_ENV = "SUPERSEDED_GRAPH"
 SANDBOX_ENV = "SUPERSEDED_SANDBOX"
+VERIFY_ENV = "SUPERSEDED_VERIFY"
 LOG_FORMAT_ENV = "SUPERSEDED_LOG_FORMAT"
 LOG_LEVEL_ENV = "SUPERSEDED_LOG_LEVEL"
 VERBOSE_ENV = "VERBOSE"
@@ -109,6 +110,15 @@ def resolve_sandbox(cli_value: bool | None, config: Config) -> bool:
     if cli_value is not None:
         return cli_value
     return config.sandbox
+
+
+def resolve_verify(cli_value: bool | None, config: Config) -> bool:
+    env = os.environ.get(VERIFY_ENV)
+    if env is not None:
+        return env.strip().lower() in ("1", "true", "yes", "on")
+    if cli_value is not None:
+        return cli_value
+    return config.verify
 
 
 def _resolve_smolvm_image(agent_name: str) -> str | None:
@@ -319,6 +329,12 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
     default=None,
     help="Run agents inside an sbx Docker Sandbox (default: from config; env SUPERSEDED_SANDBOX).",
 )
+@click.option(
+    "--verify/--no-verify",
+    "verify",
+    default=None,
+    help="Toggle post-merge verification pass (default: from config; env SUPERSEDED_VERIFY).",
+)
 @click.argument("files", nargs=-1, type=click.Path(exists=True, dir_okay=False))
 @click.pass_context
 def review(
@@ -340,6 +356,7 @@ def review(
     no_specs: bool,
     graph: bool | None,
     sandbox: bool | None,
+    verify: bool | None,
     staged: bool,
     files: tuple[str, ...],
 ) -> None:
@@ -384,6 +401,7 @@ def review(
         no_specs=no_specs,
         graph=graph,
         sandbox=sandbox,
+        verify=verify,
         staged=staged,
         files=list(files) or None,
     )
@@ -408,10 +426,13 @@ def _run_review(
     no_specs: bool = False,
     graph: bool | None = None,
     sandbox: bool | None = None,
+    verify: bool | None = None,
     staged: bool = False,
     files: list[str] | None = None,
 ) -> None:
     config = load_config(config_path)
+    verify = resolve_verify(verify, config)
+    config.verify = verify
     agent_name = resolve_agent(agent, config)
     model_name = resolve_model(model, config)
     fmt = output_format or config.format
@@ -620,11 +641,17 @@ async def _post_review_store(
                         "title": f.title,
                         "description": f.description,
                         "reasoning": f.reasoning,
+                        "verification": f.verification,
+                        "verification_reason": f.verification_reason,
                     }
                     for f in result.findings
                 ],
                 repo,
             )
+
+            if result.dropped_findings:
+                for f in result.dropped_findings:
+                    await store.record_verification_feedback(f.id)
 
         if head_sha is not None and pr is not None:
             await store.set_watermark(repo, pr, head_sha)

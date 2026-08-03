@@ -107,6 +107,19 @@ def test_write_config_default_path(tmp_path, monkeypatch):
     assert loaded.agent == "codex"
 
 
+def test_config_verify_defaults_to_true():
+    from superseded.config import Config
+
+    assert Config().verify is True
+
+
+def test_config_verify_from_dict():
+    from superseded.config import Config
+
+    config = Config(verify=False)
+    assert config.verify is False
+
+
 def test_config_graph_default_true():
     from superseded.config import Config
 

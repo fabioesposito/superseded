@@ -33,6 +33,8 @@ class Finding(Base):
     description: Mapped[str | None] = mapped_column(String)
     dismissed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     comment_id: Mapped[int | None] = mapped_column(BigInteger)
+    verification: Mapped[str | None] = mapped_column(String, nullable=True)
+    verification_reason: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -44,6 +46,7 @@ class Feedback(Base):
     )
     finding_id: Mapped[str | None] = mapped_column(String, ForeignKey("findings.id"))
     action: Mapped[str | None] = mapped_column(String)
+    source: Mapped[str] = mapped_column(String, default="human", server_default="human")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -862,3 +862,33 @@ def test_serve_allows_no_sandbox_with_explicit_opt_in(monkeypatch, tmp_path):
     result = CliRunner().invoke(cli, ["serve", "--host", "127.0.0.1", "--port", "0"])
     assert "refusing to serve without a sandbox" not in result.output
     assert result.exit_code == 0
+
+
+def test_verify_flag_passed_to_run_review(monkeypatch):
+    """--no-verify flag is parsed and passed through to _run_review."""
+    captured: dict = {}
+
+    def fake_run_review(**kwargs):
+        captured.update(kwargs)
+        return None
+
+    monkeypatch.setattr("superseded.cli._run_review", fake_run_review)
+
+    from click.testing import CliRunner
+
+    from superseded.cli import cli
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--no-verify", "--diff", "HEAD~1..HEAD"])
+    assert result.exit_code == 0
+    assert captured.get("verify") is False
+
+    captured.clear()
+    result = runner.invoke(cli, ["review", "--verify", "--diff", "HEAD~1..HEAD"])
+    assert result.exit_code == 0
+    assert captured.get("verify") is True
+
+    captured.clear()
+    result = runner.invoke(cli, ["review", "--diff", "HEAD~1..HEAD"])
+    assert result.exit_code == 0
+    assert captured.get("verify") is None

@@ -191,16 +191,32 @@ class MemoryStore:
         async def _do(db: aiosqlite.Connection) -> None:
             await db.execute(
                 "INSERT INTO findings "
-                "(id, repo, pass, severity, file, line, title, description, reasoning) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "(id, repo, pass, severity, file, line, title, description, reasoning, verification, verification_reason) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(id) DO UPDATE SET "
                 "severity = excluded.severity, "
                 "description = excluded.description, "
-                "reasoning = excluded.reasoning "
+                "reasoning = excluded.reasoning, "
+                "verification = excluded.verification, "
+                "verification_reason = excluded.verification_reason "
                 "WHERE excluded.severity != severity "
                 "OR excluded.description != description "
-                "OR excluded.reasoning != reasoning",
-                (finding_id, repo, pass_name, severity, file, line, title, description, reasoning),
+                "OR excluded.reasoning != reasoning "
+                "OR excluded.verification != verification "
+                "OR excluded.verification_reason != verification_reason",
+                (
+                    finding_id,
+                    repo,
+                    pass_name,
+                    severity,
+                    file,
+                    line,
+                    title,
+                    description,
+                    reasoning,
+                    None,
+                    None,
+                ),
             )
             await db.commit()
 
@@ -224,15 +240,19 @@ class MemoryStore:
         async def _do(db: aiosqlite.Connection) -> None:
             await db.executemany(
                 "INSERT INTO findings "
-                "(id, repo, pass, severity, file, line, title, description, reasoning) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "(id, repo, pass, severity, file, line, title, description, reasoning, verification, verification_reason) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(id) DO UPDATE SET "
                 "severity = excluded.severity, "
                 "description = excluded.description, "
-                "reasoning = excluded.reasoning "
+                "reasoning = excluded.reasoning, "
+                "verification = excluded.verification, "
+                "verification_reason = excluded.verification_reason "
                 "WHERE excluded.severity != severity "
                 "OR excluded.description != description "
-                "OR excluded.reasoning != reasoning",
+                "OR excluded.reasoning != reasoning "
+                "OR excluded.verification != verification "
+                "OR excluded.verification_reason != verification_reason",
                 [
                     (
                         f["id"],
@@ -244,6 +264,8 @@ class MemoryStore:
                         f["title"],
                         f["description"],
                         f.get("reasoning", ""),
+                        f.get("verification"),
+                        f.get("verification_reason"),
                     )
                     for f in findings
                 ],
@@ -299,6 +321,23 @@ class MemoryStore:
                     "UPDATE findings SET dismissed = TRUE WHERE id = ?",
                     (finding_id,),
                 )
+            await db.commit()
+
+    async def record_verification_feedback(self, finding_id: str) -> None:
+        """Record that the AI verification pass dismissed a finding.
+
+        Uses ``source = 'verifier'`` to distinguish from human ``dismiss`` actions,
+        so the StatsAggregator and PatternReflector can treat them separately.
+        """
+        async with self._db() as db:
+            await db.execute(
+                "INSERT INTO feedback (finding_id, action, source) VALUES (?, ?, ?)",
+                (finding_id, "dismiss", "verifier"),
+            )
+            await db.execute(
+                "UPDATE findings SET dismissed = TRUE WHERE id = ?",
+                (finding_id,),
+            )
             await db.commit()
 
     async def record_feedback_by_comment_id(self, comment_id: int, action: str) -> bool:
