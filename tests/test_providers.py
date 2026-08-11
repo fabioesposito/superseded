@@ -9,6 +9,12 @@ from superseded.providers.deepseek import (
     DEEPSEEK_DEFAULT_MODEL,
     DeepSeekProvider,
 )
+from superseded.providers.openai import (
+    OPENAI_API_KEY_ENV,
+    OPENAI_DEFAULT_BASE_URL,
+    OPENAI_DEFAULT_MODEL,
+    OpenAIProvider,
+)
 from superseded.providers.openai_compat import EFFORT_MAP, OpenAICompatProvider
 from superseded.providers.parsing import parse_findings_json
 
@@ -404,3 +410,79 @@ def test_openai_compat_provider_requires_configured_subclass():
     """The base must refuse instantiation without subclass class-attributes."""
     with pytest.raises((TypeError, ProviderConfigError)):
         OpenAICompatProvider()
+
+
+def _fake_responses(*, text="[]", input_tokens=11, output_tokens=6, model="gpt-5.6-terra"):
+    """Quacks like an openai Responses API response."""
+    usage = type("Usage", (), {"input_tokens": input_tokens, "output_tokens": output_tokens})()
+    return type("Resp", (), {"output_text": text, "usage": usage, "model": model})()
+
+
+def test_openai_constants():
+    assert OPENAI_API_KEY_ENV == "SUPERSEDED_OPENAI_API_KEY"
+    assert OPENAI_DEFAULT_BASE_URL == "https://api.openai.com/v1"
+    assert OPENAI_DEFAULT_MODEL == "gpt-5.6-terra"
+
+
+def test_openai_provider_name():
+    p = OpenAIProvider(api_key="sk-test")
+    assert p.name == "openai"
+
+
+def test_openai_provider_raises_when_no_key(monkeypatch):
+    monkeypatch.delenv(OPENAI_API_KEY_ENV, raising=False)
+    with pytest.raises(ProviderConfigError, match="No openai API key"):
+        OpenAIProvider()
+
+
+def test_openai_complete_uses_responses_api(monkeypatch):
+    """OpenAIProvider must call responses.create (not chat.completions)."""
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            captured["init_kwargs"] = kw
+
+        @property
+        def responses(self):
+            return self
+
+        def create(self, **kw):
+            captured["create_kwargs"] = kw
+            return _fake_responses(
+                text='[{"severity": "critical"}]', input_tokens=42, output_tokens=7
+            )
+
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
+    p = OpenAIProvider(api_key="sk-test")
+    resp = p.complete("the prompt", reasoning_effort="max")
+    assert resp.content == '[{"severity": "critical"}]'
+    assert resp.prompt_tokens == 42
+    assert resp.completion_tokens == 7
+    # Responses API: single user message translated to `input` (a string).
+    assert captured["create_kwargs"]["input"] == "the prompt"
+    assert "messages" not in captured["create_kwargs"]
+    assert captured["create_kwargs"]["reasoning_effort"] == "max"
+
+
+def test_openai_complete_maps_effort(monkeypatch):
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            pass
+
+        @property
+        def responses(self):
+            return self
+
+        def create(self, **kw):
+            captured.update(kw)
+            return _fake_responses()
+
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
+    p = OpenAIProvider(api_key="sk-test")
+    p.complete("p", reasoning_effort="medium")
+    assert captured["reasoning_effort"] == "medium"
+    p.complete("p", reasoning_effort="max")
+    assert captured["reasoning_effort"] == "max"
