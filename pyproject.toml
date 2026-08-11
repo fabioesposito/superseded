@@ -44,8 +44,9 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "postgres: requires a live Postgres (set SUPERSEDED_POSTGRES_TEST_DSN)",
+    "live: makes real API calls (set SUPERSEDED_DEEPSEEK_API_KEY)",
 ]
-addopts = "-m 'not postgres'"
+addopts = "-m 'not postgres and not live'"
 
 [tool.ruff]
 target-version = "py314"
