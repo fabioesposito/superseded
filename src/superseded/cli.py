@@ -155,11 +155,11 @@ def resolve_verify(cli_value: bool | None, config: Config) -> bool:
 
 
 def resolve_server(server_flag: str | None, config: Config) -> str | None:
-    return server_flag or os.environ.get(SERVER_URL_ENV) or config.server
+    return os.environ.get(SERVER_URL_ENV) or server_flag or config.server
 
 
 def resolve_server_key(key_flag: str | None, config: Config) -> str | None:
-    return key_flag or os.environ.get(SERVER_KEY_ENV) or config.server_key
+    return os.environ.get(SERVER_KEY_ENV) or key_flag or config.server_key
 
 
 def resolve_log_format(flag: str | None, config: Config | None = None) -> str:

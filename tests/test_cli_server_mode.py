@@ -226,7 +226,7 @@ def test_review_server_mode_config_sourced_warns(tmp_path, monkeypatch):
     assert "server-mode enabled by 'server:'" in result.output
 
 
-def test_review_server_mode_flag_overrides_env(monkeypatch):
+def test_review_server_mode_env_overrides_flag(monkeypatch):
     monkeypatch.setenv("SUPERSEDED_SERVER_URL", "https://env.example.com")
     monkeypatch.setenv("SUPERSEDED_SERVER_KEY", "envkey")
     runner = CliRunner()
@@ -239,5 +239,5 @@ def test_review_server_mode_flag_overrides_env(monkeypatch):
             ["review", "--server", "https://flag.example.com", "--pr", "7"],
         )
     assert result.exit_code == 0
-    assert mock_rev.call_args.kwargs["server_url"] == "https://flag.example.com"
+    assert mock_rev.call_args.kwargs["server_url"] == "https://env.example.com"
     assert "server-mode enabled by" not in result.output
