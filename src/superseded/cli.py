@@ -927,6 +927,17 @@ def _run_init(force: bool, config_path: Path | None) -> None:
             "SUPERSEDED_OPENAI_API_KEY, SUPERSEDED_ANTHROPIC_API_KEY."
         )
 
+    server_url = os.environ.get("SUPERSEDED_SERVER_URL")
+    server_key = os.environ.get("SUPERSEDED_SERVER_KEY")
+    if server_url:
+        _status(f"Review server: {server_url} (SUPERSEDED_SERVER_URL)")
+        if not server_key:
+            _status("  SUPERSEDED_SERVER_KEY not set — server-mode will need --server-key.")
+    elif server_key:
+        _status(
+            "SUPERSEDED_SERVER_KEY set but SUPERSEDED_SERVER_URL is not — server-mode disabled."
+        )
+
     cfg = Config(provider="deepseek")
     write_config(cfg, target)
     _status(f"Wrote {target} (provider: deepseek)")
