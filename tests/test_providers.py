@@ -1,6 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from superseded.providers.base import Provider, ProviderConfigError, ProviderResponse
+from superseded.providers.deepseek import (
+    DEEPSEEK_API_KEY_ENV,
+    DEEPSEEK_DEFAULT_BASE_URL,
+    DEEPSEEK_DEFAULT_MODEL,
+    DeepSeekProvider,
+)
 from superseded.providers.parsing import parse_findings_json
 
 
@@ -101,3 +109,171 @@ def test_parse_findings_json_injects_pass_name_into_each_item():
     items = parse_findings_json(raw, "architecture")
     assert all(i["pass_name"] == "architecture" for i in items)
     assert len(items) == 2
+
+
+def _fake_completion(
+    *, content="[]", prompt_tokens=10, completion_tokens=5, model="deepseek-v4-flash"
+):
+    """Build an object that quacks like openai's ChatCompletion."""
+    message = type("Msg", (), {"content": content, "reasoning_content": None})()
+    choice = type("Choice", (), {"message": message})()
+    usage = type(
+        "Usage", (), {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}
+    )()
+    return type(
+        "Resp",
+        (),
+        {"choices": [choice], "usage": usage, "model": model},
+    )()
+
+
+def test_deepseek_constants():
+    assert DEEPSEEK_API_KEY_ENV == "SUPERSEDED_DEEPSEEK_API_KEY"
+    assert DEEPSEEK_DEFAULT_BASE_URL == "https://api.deepseek.com"
+    assert DEEPSEEK_DEFAULT_MODEL == "deepseek-v4-flash"
+
+
+def test_deepseek_provider_name():
+    p = DeepSeekProvider(api_key="sk-test")
+    assert p.name == "deepseek"
+
+
+def test_deepseek_provider_uses_env_when_no_arg(monkeypatch):
+    monkeypatch.setenv(DEEPSEEK_API_KEY_ENV, "sk-from-env")
+    p = DeepSeekProvider()
+    assert p.name == "deepseek"  # construction succeeded
+
+
+def test_deepseek_provider_raises_when_no_key(monkeypatch):
+    monkeypatch.delenv(DEEPSEEK_API_KEY_ENV, raising=False)
+    with pytest.raises(ProviderConfigError, match="No DeepSeek API key"):
+        DeepSeekProvider()
+
+
+def test_deepseek_complete_returns_content(monkeypatch):
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            captured["init_kwargs"] = kw
+
+        @property
+        def chat(self):
+            return self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            captured["create_kwargs"] = kw
+            return _fake_completion(
+                content='[{"severity": "critical"}]', prompt_tokens=42, completion_tokens=7
+            )
+
+    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    p = DeepSeekProvider(api_key="sk-test")
+    resp = p.complete("the prompt", model="deepseek-v4-flash", timeout=120.0)
+    assert resp.content == '[{"severity": "critical"}]'
+    assert resp.prompt_tokens == 42
+    assert resp.completion_tokens == 7
+    assert resp.model == "deepseek-v4-flash"
+    # The prompt was forwarded as the user message.
+    assert captured["create_kwargs"]["messages"] == [{"role": "user", "content": "the prompt"}]
+    assert captured["create_kwargs"]["timeout"] == 120.0
+    assert captured["create_kwargs"]["model"] == "deepseek-v4-flash"
+
+
+def test_deepseek_complete_uses_default_model_when_none(monkeypatch):
+    class FakeClient:
+        def __init__(self, **kw):
+            pass
+
+        @property
+        def chat(self):
+            return self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            assert kw["model"] == DEEPSEEK_DEFAULT_MODEL
+            return _fake_completion()
+
+    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    p = DeepSeekProvider(api_key="sk-test")
+    p.complete("p")
+
+
+def test_deepseek_complete_ignores_reasoning_content(monkeypatch):
+    """Reasoner models populate both .reasoning_content and .content; we use .content only."""
+
+    class FakeClient:
+        def __init__(self, **kw):
+            pass
+
+        @property
+        def chat(self):
+            return self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            message = type(
+                "Msg",
+                (),
+                {"content": "[]", "reasoning_content": "let me think..."},
+            )()
+            choice = type("Choice", (), {"message": message})()
+            usage = type("Usage", (), {"prompt_tokens": 1, "completion_tokens": 1})()
+            return type("Resp", (), {"choices": [choice], "usage": usage, "model": "x"})
+
+    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    p = DeepSeekProvider(api_key="sk-test")
+    resp = p.complete("p")
+    assert resp.content == "[]"
+
+
+def test_deepseek_complete_handles_null_content(monkeypatch):
+    """A refusal may return content=None; provider should normalise to empty string."""
+
+    class FakeClient:
+        def __init__(self, **kw):
+            pass
+
+        @property
+        def chat(self):
+            return self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            message = type("Msg", (), {"content": None, "reasoning_content": None})()
+            choice = type("Choice", (), {"message": message})()
+            usage = type("Usage", (), {"prompt_tokens": 0, "completion_tokens": 0})()
+            return type("Resp", (), {"choices": [choice], "usage": usage, "model": "x"})
+
+    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    p = DeepSeekProvider(api_key="sk-test")
+    resp = p.complete("p")
+    assert resp.content == ""
+
+
+def test_deepseek_init_forwards_base_url_and_retries(monkeypatch):
+    """The OpenAI client must be configured with max_retries and the DeepSeek base_url."""
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            captured.update(kw)
+
+    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    DeepSeekProvider(api_key="sk-test")
+    assert captured["base_url"] == DEEPSEEK_DEFAULT_BASE_URL
+    assert captured["max_retries"] == 2
+    assert captured["api_key"] == "sk-test"
