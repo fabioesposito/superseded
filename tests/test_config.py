@@ -4,6 +4,8 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from superseded.config import Config, load_config
 
 
@@ -174,3 +176,62 @@ def test_config_log_round_trips(tmp_path):
     loaded = load_config(path)
     assert loaded.log_format == "json"
     assert loaded.log_level == "INFO"
+
+
+def test_load_config_hard_errors_on_legacy_cli_agent(tmp_path):
+    """A YAML with `agent: opencode` is a hard error post-v0.6."""
+    from superseded.config import load_config
+
+    cfg_path = tmp_path / ".superseded.yaml"
+    cfg_path.write_text("agent: opencode\n")
+    with pytest.raises(ValueError, match=r"CLI agents were removed in v0.6.0"):
+        load_config(cfg_path)
+
+
+def test_load_config_hard_errors_on_legacy_claude_code(tmp_path):
+    from superseded.config import load_config
+
+    cfg_path = tmp_path / ".superseded.yaml"
+    cfg_path.write_text("agent: claude-code\n")
+    with pytest.raises(ValueError, match="CLI agents were removed"):
+        load_config(cfg_path)
+
+
+def test_load_config_hard_errors_on_legacy_codex(tmp_path):
+    from superseded.config import load_config
+
+    cfg_path = tmp_path / ".superseded.yaml"
+    cfg_path.write_text("agent: codex\n")
+    with pytest.raises(ValueError, match="CLI agents were removed"):
+        load_config(cfg_path)
+
+
+def test_load_config_legacy_agent_with_unknown_value_treats_as_provider(tmp_path):
+    """If `agent:` has a value that isn't a known CLI agent, treat it as `provider:` and warn."""
+    import warnings
+
+    from superseded.config import load_config
+
+    cfg_path = tmp_path / ".superseded.yaml"
+    cfg_path.write_text("agent: openai\n")  # not a known CLI agent
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        cfg = load_config(cfg_path)
+    assert cfg.provider == "openai"
+    assert any("agent:" in str(w.message) for w in caught)
+
+
+def test_load_config_ignores_legacy_sandbox_key(tmp_path):
+    """A YAML with `sandbox: true` is silently ignored (with a warning)."""
+    import warnings
+
+    from superseded.config import load_config
+
+    cfg_path = tmp_path / ".superseded.yaml"
+    cfg_path.write_text("provider: deepseek\nsandbox: true\n")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        cfg = load_config(cfg_path)
+    assert cfg.provider == "deepseek"
+    assert not hasattr(cfg, "sandbox")
+    assert any("sandbox:" in str(w.message) for w in caught)

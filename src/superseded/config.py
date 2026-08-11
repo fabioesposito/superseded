@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from pathlib import Path
 
 import yaml
@@ -39,12 +40,41 @@ class Config(BaseModel):
         return getattr(self.passes, name, False)
 
 
+_LEGACY_CLI_AGENTS = {"claude-code", "opencode", "codex"}
+
+
 def load_config(path: Path | None = None) -> Config:
     if path is None:
         path = Path(".superseded.yaml")
     if not path.exists():
         return Config()
     data = yaml.safe_load(path.read_text()) or {}
+
+    # Backward-compat: hard-error on legacy `agent: <cli-agent>` values.
+    if "agent" in data:
+        legacy_value = data["agent"]
+        if isinstance(legacy_value, str) and legacy_value in _LEGACY_CLI_AGENTS:
+            raise ValueError(
+                "CLI agents were removed in v0.6.0. Set 'provider: deepseek' and "
+                "$SUPERSEDED_DEEPSEEK_API_KEY. See MIGRATION.md."
+            )
+        # Unknown value — treat as `provider:` and warn.
+        warnings.warn(
+            "`agent:` in .superseded.yaml is renamed to `provider:`.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        data.setdefault("provider", data.pop("agent"))
+
+    # Backward-compat: silently drop `sandbox:` (no longer used).
+    if "sandbox" in data:
+        warnings.warn(
+            "`sandbox:` in .superseded.yaml is no longer used (direct-API path has no subprocess to isolate).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        data.pop("sandbox")
+
     return Config(**data)
 
 

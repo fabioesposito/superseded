@@ -1,5 +1,5 @@
-agent: opencode
-model: opencode/big-pickle
+provider: deepseek
+model: deepseek-v4-flash
 passes:
   security: true
   correctness: true
