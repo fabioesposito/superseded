@@ -915,6 +915,7 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
         store=store,
         server_provider=config.provider,
         server_model=config.model,
+        server_reasoning_effort=config.reasoning_effort,
         provider=_build_server_provider(config),
     )
 

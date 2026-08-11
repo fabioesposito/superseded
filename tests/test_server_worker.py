@@ -522,6 +522,87 @@ async def test_run_review_for_job_forces_static_analysis_on():
 
 
 @pytest.mark.asyncio
+async def test_load_safe_config_pins_server_reasoning_effort():
+    """Server-level reasoning_effort overrides the repo's .superseded.yaml."""
+    from superseded.server.worker import _load_safe_config
+
+    github = FakeGitHubApp()
+    github.fetch_repo_file = AsyncMock(return_value="provider: deepseek\nreasoning_effort: low\n")
+
+    config = await _load_safe_config(
+        github=github,
+        token="tok",
+        owner="octocat",
+        repo="hello-world",
+        server_reasoning_effort="max",
+    )
+
+    assert config.reasoning_effort == "max"
+
+
+@pytest.mark.asyncio
+async def test_load_safe_config_keeps_repo_effort_without_server_pin():
+    """Without a server-level pin, the repo's reasoning_effort is preserved."""
+    from superseded.server.worker import _load_safe_config
+
+    github = FakeGitHubApp()
+    github.fetch_repo_file = AsyncMock(return_value="reasoning_effort: medium\n")
+
+    config = await _load_safe_config(
+        github=github,
+        token="tok",
+        owner="octocat",
+        repo="hello-world",
+    )
+
+    assert config.reasoning_effort == "medium"
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_pins_reasoning_effort_on_engine():
+    """server_reasoning_effort reaches the engine, overriding repo config."""
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    github.fetch_repo_file = AsyncMock(return_value="reasoning_effort: low\n")
+    repo_manager = FakeRepoManager()
+    job = ReviewJob(123, "octocat", "hello-world", 42, "abc", "def")
+
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = MagicMock(findings=[], summary={})
+
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo",
+            new_callable=AsyncMock,
+            return_value=Path("/tmp/checkout"),
+        ),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
+        patch(
+            "superseded.server.worker.gather_context",
+            return_value={
+                "file_context": None,
+                "static_signals": None,
+                "usage_signals": None,
+                "conventions_signals": None,
+                "spec_signals": None,
+            },
+        ),
+    ):
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="tok",
+            job=job,
+            correlation_id="c",
+            provider=_make_provider(),
+            server_reasoning_effort="high",
+        )
+
+    assert mock_engine.reasoning_effort == "high"
+
+
+@pytest.mark.asyncio
 async def test_run_review_for_job_end_to_end(tmp_path):
     """Real _run_review_for_job flow with only git clone + GitHub API mocked."""
     github = FakeGitHubApp()

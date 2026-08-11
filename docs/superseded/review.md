@@ -176,6 +176,15 @@ superseded review --pr 123 --timeout 900
 
 If a single pass times out or fails, it logs a warning and the review continues with the other passes. A pass whose findings don't match the output schema (e.g. an invalid `severity`) is retried once with a corrective prompt before being skipped.
 
+## Verification Pass
+
+When a run produces findings, superseded makes one extra provider call that double-checks each finding against the diff and drops false positives before output. On by default; disable to save tokens:
+
+```bash
+superseded review --pr 123 --no-verify
+# or: verify: false in .superseded.yaml, or SUPERSEDED_VERIFY=0
+```
+
 ## Exit Codes
 
 The `review` command exits with:

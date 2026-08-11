@@ -25,6 +25,7 @@ log_level: "info"
 database_url: null                    # null = SQLite, or postgresql://...
 provider: deepseek                    # deepseek | openai | anthropic — provider is fixed server-side
 model: null                           # null = use repo's .superseded.yaml
+reasoning_effort: max                 # server-side pin; null/unset = repo's choice
 deepseek_api_key: "sk-..."            # or set SUPERSEDED_DEEPSEEK_API_KEY
 # openai_api_key: "sk-..."            # for provider: openai (or SUPERSEDED_OPENAI_API_KEY)
 # anthropic_api_key: "sk-ant-..."     # for provider: anthropic (or SUPERSEDED_ANTHROPIC_API_KEY)
@@ -51,6 +52,11 @@ Environment variables (prefixed with `SUPERSEDED_`):
 | `SUPERSEDED_TLS_CERT` | `tls_cert_path` | No | — |
 | `SUPERSEDED_TLS_KEY` | `tls_key_path` | No | — |
 | `SUPERSEDED_SERVER_MODEL` | `model` | No | None |
+| `SUPERSEDED_SERVER_REASONING_EFFORT` | `reasoning_effort` | No | `max` |
+
+Like `model:`, a server-level `reasoning_effort` pins the value for every
+review, overriding the repo's `.superseded.yaml`. Leave it unset (default
+`max`) to let each repo choose via `reasoning_effort:`.
 
 The server requires the API key matching its `provider:` — one of
 `SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, or

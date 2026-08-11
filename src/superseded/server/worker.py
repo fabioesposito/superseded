@@ -66,6 +66,7 @@ class ReviewWorker:
         store: Store | None = None,
         server_provider: str | None = None,
         server_model: str | None = None,
+        server_reasoning_effort: str | None = None,
         provider: Provider | None = None,
     ) -> None:
         self.github = github
@@ -80,6 +81,7 @@ class ReviewWorker:
         self.store = store
         self.server_provider = server_provider
         self.server_model = server_model
+        self.server_reasoning_effort = server_reasoning_effort
         if provider is None:
             raise ValueError("ReviewWorker requires a Provider")
         self._provider = provider
@@ -198,6 +200,7 @@ class ReviewWorker:
                 store=self.store,
                 server_provider=self.server_provider,
                 server_model=self.server_model,
+                server_reasoning_effort=self.server_reasoning_effort,
                 provider=self._provider,
             )
 
@@ -261,6 +264,7 @@ async def _load_safe_config(
     store: Store | None = None,
     server_provider: str | None = None,
     server_model: str | None = None,
+    server_reasoning_effort: str | None = None,
 ) -> Config:
     """Load repo config from the default branch (trusted), not the PR head.
 
@@ -269,8 +273,8 @@ async def _load_safe_config(
     ``provider``/``model``. Reading from the default branch avoids this.
     ``static_analysis`` is forced on regardless, so secret scanning
     cannot be suppressed by repo config in server mode.  The server
-    operator can also pin a specific provider/model, overriding any
-    repo-level choice.
+    operator can also pin a specific provider/model/reasoning effort,
+    overriding any repo-level choice.
 
     Per-installation config overrides from ``installation_config`` take
     precedence over the repo's ``.superseded.yaml`` but are overridden by
@@ -309,6 +313,8 @@ async def _load_safe_config(
         config.provider = server_provider
     if server_model is not None:
         config.model = server_model
+    if server_reasoning_effort is not None:
+        config.reasoning_effort = server_reasoning_effort
     return config
 
 
@@ -321,6 +327,7 @@ async def _run_review_for_job(
     store: Store | None = None,
     server_provider: str | None = None,
     server_model: str | None = None,
+    server_reasoning_effort: str | None = None,
     provider: Provider | None = None,
 ) -> ReviewOutcome:
     tmp_dir = repo_manager.job_dir(
@@ -351,6 +358,7 @@ async def _run_review_for_job(
             store=store,
             server_provider=server_provider,
             server_model=server_model,
+            server_reasoning_effort=server_reasoning_effort,
         )
 
         repo_key = f"{job.owner}/{job.repo}"
