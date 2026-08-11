@@ -5,13 +5,7 @@ from typing import Literal
 
 from openai import OpenAI
 
-from superseded.providers.base import ProviderConfigError, ProviderResponse
-
-EFFORT_MAP: dict[str, dict[str, str]] = {
-    "deepseek": {"low": "low", "medium": "high", "high": "high", "max": "max"},
-    "openai": {"low": "low", "medium": "medium", "high": "high", "max": "max"},
-    "anthropic": {"low": "low", "medium": "medium", "high": "high", "max": "xhigh"},
-}
+from superseded.providers.base import EFFORT_MAP, ProviderConfigError, ProviderResponse
 
 
 class OpenAICompatProvider:

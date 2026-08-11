@@ -68,6 +68,7 @@ DEFAULT_TIMEOUT = 600
 # the server path surfaces failures via the check-run conclusion instead.
 EXIT_PARTIAL_FAILURE = 3
 KNOWN_PASSES: list[str] = list(get_args(PassName))
+EFFORT_LEVELS: list[str] = ["low", "medium", "high", "max"]
 
 try:
     _VERSION = version("superseded")
@@ -114,11 +115,14 @@ def resolve_model(model_flag: str | None, config: Config) -> str | None:
 
 def resolve_reasoning_effort(flag: str | None, config: Config) -> str:
     env = os.environ.get(REASONING_EFFORT_ENV)
-    if env:
-        return env
-    if flag is not None:
-        return flag
-    return config.reasoning_effort
+    value = env or flag or config.reasoning_effort
+    if value not in EFFORT_LEVELS:
+        click.echo(
+            f"Error: invalid reasoning effort {value!r}. Choose from: {', '.join(EFFORT_LEVELS)}.",
+            err=True,
+        )
+        sys.exit(2)
+    return value
 
 
 def _build_server_provider(config: ServerConfig) -> Provider:
@@ -276,7 +280,7 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
 @click.option(
     "--reasoning-effort",
     "reasoning_effort",
-    type=click.Choice(["low", "medium", "high", "max"]),
+    type=click.Choice(EFFORT_LEVELS),
     default=None,
     help="Reasoning depth (low|medium|high|max; mapped per provider). Env: SUPERSEDED_REASONING_EFFORT.",
 )

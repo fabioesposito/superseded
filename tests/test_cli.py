@@ -144,6 +144,14 @@ def test_resolve_reasoning_effort_precedence(monkeypatch):
     assert resolve_reasoning_effort("low", Config(reasoning_effort="high")) == "max"
 
 
+def test_resolve_reasoning_effort_rejects_invalid_env(monkeypatch):
+    """An invalid SUPERSEDED_REASONING_EFFORT exits 2 rather than silently no-op'ing effort."""
+    monkeypatch.setenv("SUPERSEDED_REASONING_EFFORT", "bogus")
+    with pytest.raises(SystemExit) as exc:
+        resolve_reasoning_effort("high", Config())
+    assert exc.value.code == 2
+
+
 def test_format_memory_context_with_reasoning():
     dismissed = [
         {

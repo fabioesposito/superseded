@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+EFFORT_MAP: dict[str, dict[str, str]] = {
+    "deepseek": {"low": "low", "medium": "high", "high": "high", "max": "max"},
+    "openai": {"low": "low", "medium": "medium", "high": "high", "max": "max"},
+    "anthropic": {"low": "low", "medium": "medium", "high": "high", "max": "xhigh"},
+}
+
 
 @dataclass(frozen=True)
 class ProviderResponse:

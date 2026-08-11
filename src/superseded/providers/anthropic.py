@@ -5,8 +5,7 @@ from typing import Literal
 
 from anthropic import Anthropic
 
-from superseded.providers.base import ProviderConfigError, ProviderResponse
-from superseded.providers.openai_compat import EFFORT_MAP
+from superseded.providers.base import EFFORT_MAP, ProviderConfigError, ProviderResponse
 
 ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-5"
 ANTHROPIC_API_KEY_ENV = "SUPERSEDED_ANTHROPIC_API_KEY"

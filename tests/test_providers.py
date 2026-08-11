@@ -8,7 +8,7 @@ from superseded.providers.anthropic import (
     ANTHROPIC_MAX_TOKENS,
     AnthropicProvider,
 )
-from superseded.providers.base import Provider, ProviderConfigError, ProviderResponse
+from superseded.providers.base import EFFORT_MAP, Provider, ProviderConfigError, ProviderResponse
 from superseded.providers.deepseek import (
     DEEPSEEK_API_KEY_ENV,
     DEEPSEEK_DEFAULT_BASE_URL,
@@ -21,7 +21,7 @@ from superseded.providers.openai import (
     OPENAI_DEFAULT_MODEL,
     OpenAIProvider,
 )
-from superseded.providers.openai_compat import EFFORT_MAP, OpenAICompatProvider
+from superseded.providers.openai_compat import OpenAICompatProvider
 from superseded.providers.parsing import parse_findings_json
 
 
