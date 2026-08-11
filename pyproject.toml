@@ -16,6 +16,7 @@ dependencies = [
     "pyjwt[crypto]>=2.10.0",
     "sqlalchemy[asyncio]>=2.0.0",
     "alembic>=1.13.0",
+    "anthropic>=0.40.0",
 ]
 
 [dependency-groups]
