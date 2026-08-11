@@ -24,7 +24,6 @@ class ServerConfig(BaseModel):
     database_url: str | None = None
     tls_cert_path: Path | None = None
     tls_key_path: Path | None = None
-    agent: str | None = None
     model: str | None = None
     behind_proxy: bool = False
     deepseek_api_key: str | None = None
@@ -134,10 +133,6 @@ class ServerConfig(BaseModel):
         api_key = os.environ.get("SUPERSEDED_API_KEY")
         if api_key:
             kwargs["api_key"] = api_key
-
-        agent = os.environ.get("SUPERSEDED_SERVER_AGENT")
-        if agent:
-            kwargs["agent"] = agent
 
         model = os.environ.get("SUPERSEDED_SERVER_MODEL")
         if model:

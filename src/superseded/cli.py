@@ -15,6 +15,7 @@ from typing import get_args
 import click
 
 from superseded.audit.guidelines import assemble_learned_context, format_memory_context
+from superseded.audit.reflector import PatternReflector
 from superseded.audit.stats import StatsAggregator
 from superseded.config import Config, load_config, write_config
 from superseded.context.gathering import gather_context
@@ -613,6 +614,11 @@ async def _build_learned_context(
     aggregator = StatsAggregator(store)
     await aggregator._refresh(repo)
     stats_text = await aggregator.get_stats_context(repo)
+
+    reflector = PatternReflector(
+        provider=engine.provider, store=store, threshold=config.reflection_threshold
+    )
+    await reflector.maybe_reflect(repo)
 
     await store.prune_stale_rules(repo)
     all_rules = await store.get_learned_rules(repo, limit=config.max_learned_rules)

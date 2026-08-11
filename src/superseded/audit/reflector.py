@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import logging
-import os
-import subprocess
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from superseded.review.executor import build_agent_env
+from superseded.providers import Provider, ProviderResponse
+from superseded.providers.parsing import parse_findings_json
 
 if TYPE_CHECKING:
-    from superseded.agents.base import Agent
     from superseded.memory.store import MemoryStore
 
 logger = logging.getLogger(__name__)
@@ -85,24 +82,24 @@ def _build_reflection_prompt(accepted: list[dict], dismissed: list[dict]) -> str
 
 class PatternReflector:
     def __init__(
-        self, agent: Agent, store: MemoryStore, threshold: int = REFLECTION_THRESHOLD
+        self, provider: Provider, store: MemoryStore, threshold: int = REFLECTION_THRESHOLD
     ) -> None:
-        self._agent = agent
+        self._provider = provider
         self._store = store
         self._threshold = threshold
 
-    async def maybe_reflect(self, repo: str, cwd: str | Path | None = None) -> list[dict]:
+    async def maybe_reflect(self, repo: str) -> list[dict]:
         """If unprocessed feedback >= threshold, run reflection pass.
 
         Returns newly learned rules (may be empty). Never raises.
         """
         try:
-            return await self._do_reflect(repo, cwd)
+            return await self._do_reflect(repo)
         except Exception:
             logger.exception("Reflection failed for %s", repo)
             return []
 
-    async def _do_reflect(self, repo: str, cwd: str | Path | None = None) -> list[dict]:
+    async def _do_reflect(self, repo: str) -> list[dict]:
         last_id = await self._store.get_reflection_state(repo)
 
         async with self._store._db() as db:
@@ -137,38 +134,15 @@ class PatternReflector:
         prompt = _build_reflection_prompt(accepted, dismissed)
 
         try:
-            cmd = self._agent.build_command()
-            _server_env = build_agent_env(os.environ)
-            result = subprocess.run(
-                cmd,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                cwd=cwd,
-                env=_server_env,
-            )
-        except FileNotFoundError:
-            logger.warning("Agent binary not found: %s", cmd[0] if cmd else "?")
+            resp: ProviderResponse = self._provider.complete(prompt, timeout=120)
+        except Exception:
+            logger.warning("Agent call failed during reflection")
             await self._store.set_reflection_state(repo, max_fb_id)
             return []
-        except subprocess.TimeoutExpired:
-            logger.warning("Agent timed out during reflection")
-            await self._store.set_reflection_state(repo, max_fb_id)
-            return []
+        raw = resp.content
 
-        if result.returncode != 0:
-            logger.warning(
-                "Agent exited %d during reflection: %s",
-                result.returncode,
-                result.stderr[:500] if result.stderr else "",
-            )
-            await self._store.set_reflection_state(repo, max_fb_id)
-            return []
-
-        raw = result.stdout
         try:
-            parsed = self._agent.parse_output(raw, "reflection")
+            parsed = parse_findings_json(raw, "reflection")
         except Exception:
             logger.warning("Failed to parse agent output as JSON")
             await self._store.set_reflection_state(repo, max_fb_id)
