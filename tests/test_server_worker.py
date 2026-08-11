@@ -1088,3 +1088,44 @@ async def test_worker_progressive_compare_diff_error_falls_back_to_full(tmp_path
 
     github.fetch_pr_diff.assert_awaited_once()
     assert await store.get_watermark("octocat/hello-world", 42) == "newhead"
+
+
+def test_record_job_creates_status_queued():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(),
+        repo_manager=FakeRepoManager(),
+        provider=_make_provider(),
+    )
+    worker._record_job("job-1", "queued")
+    status = worker.get_job_status("job-1")
+    assert status is not None
+    assert status.status == "queued"
+    assert status.result is None
+    assert status.error is None
+
+
+def test_record_job_evicts_oldest_over_cap(monkeypatch):
+    worker = ReviewWorker(
+        github=FakeGitHubApp(),
+        repo_manager=FakeRepoManager(),
+        provider=_make_provider(),
+    )
+    monkeypatch.setattr(worker, "_job_cap", 3)
+    for i in range(5):
+        worker._record_job(f"job-{i}", "queued")
+    assert worker.get_job_status("job-0") is None
+    assert worker.get_job_status("job-1") is None
+    assert worker.get_job_status("job-4") is not None
+    assert len(worker._jobs) == 3
+
+
+def test_record_job_marks_completed_at():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(),
+        repo_manager=FakeRepoManager(),
+        provider=_make_provider(),
+    )
+    worker._record_job("job-1", "queued")
+    assert worker.get_job_status("job-1").completed_at is None
+    worker._record_job("job-1", "completed", result=ReviewResult())
+    assert worker.get_job_status("job-1").completed_at is not None

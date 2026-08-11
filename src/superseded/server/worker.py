@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -49,6 +50,19 @@ class ReviewOutcome:
     summary: str = ""
 
 
+@dataclass
+class JobStatus:
+    job_id: str
+    status: str  # "queued" | "running" | "completed" | "failed"
+    result: ReviewResult | None = None
+    error: str | None = None
+    created_at: float = field(default_factory=time.time)
+    completed_at: float | None = None
+
+
+JOB_REGISTRY_CAP = 1000
+
+
 def build_check_run_title(result: ReviewResult) -> str:
     total = len(result.findings)
     summary = result.summary
@@ -85,10 +99,48 @@ class ReviewWorker:
         if provider is None:
             raise ValueError("ReviewWorker requires a Provider")
         self._provider = provider
+        self._jobs: dict[str, JobStatus] = {}
+        self._job_cap = JOB_REGISTRY_CAP
 
     @property
     def active_count(self) -> int:
         return self._active_count
+
+    def _record_job(
+        self,
+        job_id: str,
+        status: str,
+        result: ReviewResult | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Insert or update a job's status; evict oldest when over cap.
+
+        Single-threaded: called only from the worker event loop (enqueue,
+        _run_task, _process). No lock needed within one asyncio loop.
+        """
+        existing = self._jobs.get(job_id)
+        created_at = existing.created_at if existing else time.time()
+        completed_at = (
+            time.time()
+            if status in ("completed", "failed")
+            else (existing.completed_at if existing else None)
+        )
+        self._jobs[job_id] = JobStatus(
+            job_id=job_id,
+            status=status,
+            result=result if result is not None else (existing.result if existing else None),
+            error=error if error is not None else (existing.error if existing else None),
+            created_at=created_at,
+            completed_at=completed_at,
+        )
+        if len(self._jobs) > self._job_cap:
+            for stale_id in sorted(self._jobs, key=lambda j: self._jobs[j].created_at)[
+                : len(self._jobs) - self._job_cap
+            ]:
+                self._jobs.pop(stale_id, None)
+
+    def get_job_status(self, job_id: str) -> JobStatus | None:
+        return self._jobs.get(job_id)
 
     async def enqueue(self, job: ReviewJob) -> None:
         # put_nowait raises QueueFull instantly; a failed enqueue is logged and
