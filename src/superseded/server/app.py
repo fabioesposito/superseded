@@ -199,6 +199,10 @@ def create_app(
         if isinstance(passes_raw, str) and passes_raw.strip():
             passes_list = [p.strip() for p in passes_raw.split(",") if p.strip()]
 
+        post_field = body.get("post", True)
+        if not isinstance(post_field, bool):
+            raise HTTPException(status_code=422, detail="'post' must be a boolean if present.")
+
         installation_id = await github.resolve_installation(owner, repo)
         if installation_id is None:
             raise HTTPException(
@@ -228,6 +232,7 @@ def create_app(
             head_sha=pr_info["head_sha"],
             base_sha=pr_info["base_sha"],
             passes=passes_list,
+            post=post_field,
         )
         await worker.enqueue(job)
         logger.info(
