@@ -321,7 +321,8 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
     "--timeout",
     type=int,
     default=None,
-    help=f"Per-pass provider timeout in seconds (default: {DEFAULT_TIMEOUT})",
+    help=f"Timeout in seconds (per pass locally; total poll budget in server-mode; "
+    f"default: {DEFAULT_TIMEOUT})",
 )
 @click.option(
     "--config",
@@ -414,6 +415,11 @@ def review(
                 f"Warning: server-mode enabled by 'server:' in "
                 f"{config_path or '.superseded.yaml'}. Use SUPERSEDED_SERVER_URL or "
                 "--server to override; remove the key to disable."
+            )
+        elif os.environ.get(SERVER_URL_ENV) and server_url_flag is None and not log_config.server:
+            _status(
+                "Warning: server-mode enabled by SUPERSEDED_SERVER_URL env var. "
+                "Unset it to force local review."
             )
         _run_review_remote(
             server_url=server_url,

@@ -241,3 +241,18 @@ def test_review_server_mode_env_overrides_flag(monkeypatch):
     assert result.exit_code == 0
     assert mock_rev.call_args.kwargs["server_url"] == "https://env.example.com"
     assert "server-mode enabled by" not in result.output
+
+
+def test_review_server_mode_env_sourced_warns(monkeypatch):
+    monkeypatch.setenv("SUPERSEDED_SERVER_URL", "https://env.example.com")
+    monkeypatch.setenv("SUPERSEDED_SERVER_KEY", "envkey")
+    runner = CliRunner()
+    with (
+        patch("superseded.cli.current_repo", lambda: "octocat/hello-world"),
+        patch("superseded.cli.review_via_server", return_value=_ok_result()) as mock_rev,
+    ):
+        result = runner.invoke(cli, ["review", "--pr", "7"])
+    assert result.exit_code == 0
+    assert mock_rev.call_args.kwargs["server_url"] == "https://env.example.com"
+    assert "SUPERSEDED_SERVER_URL" in result.output
+    assert "Unset it to force local review" in result.output

@@ -646,3 +646,35 @@ def test_review_pr_rejects_non_bool_post(keyed_server):
         json={"owner": "octocat", "repo": "hello-world", "pr_number": 7, "post": "yes"},
     )
     assert response.status_code == 422
+
+
+def test_review_pr_returns_429_when_queue_full(keyed_server, monkeypatch):
+    import asyncio
+
+    asyncio.run(keyed_server.store.init())
+    asyncio.run(keyed_server.store.record_installation(12345, "octocat", ["hello-world"]))
+
+    async def fake_resolve(owner, repo):
+        return 12345
+
+    async def fake_token(installation_id):
+        return "ghp_fake"
+
+    async def fake_pr_info(token, owner, repo, pr_number):
+        return {"head_sha": "abc", "base_sha": "def", "title": "T"}
+
+    async def fake_enqueue(job):
+        raise asyncio.QueueFull
+
+    monkeypatch.setattr(keyed_server.github, "resolve_installation", fake_resolve)
+    monkeypatch.setattr(keyed_server.github, "get_installation_token", fake_token)
+    monkeypatch.setattr(keyed_server.github, "fetch_pr_info", fake_pr_info)
+    monkeypatch.setattr(keyed_server.worker, "enqueue", fake_enqueue)
+
+    response = TestClient(keyed_server.app).post(
+        "/review/pr",
+        json={"owner": "octocat", "repo": "hello-world", "pr_number": 7},
+        headers={"Authorization": "Bearer test-api-key"},
+    )
+    assert response.status_code == 429
+    assert "queue full" in response.json()["detail"].lower()

@@ -89,8 +89,9 @@ Server-mode constraints:
   one-line warning to stderr and is otherwise ignored; it is **not** an error.
 - The `--no-memory`, `--no-static`, `--no-usage`, `--no-conventions`,
   `--no-specs`, `--graph`, `--verify`, `--full` flags are accepted but have no
-  effect in server-mode (the server controls all context-gathering). No warning
-  is printed for these; they are documented as server-operator-controlled.
+  effect in server-mode (the server controls all context-gathering). A single
+  consolidated warning listing the ignored flags is printed to stderr; they are
+  documented as server-operator-controlled.
 
 Example:
 
@@ -122,8 +123,8 @@ Both honor env (`SUPERSEDED_SERVER_URL`, `SUPERSEDED_SERVER_KEY`) > flag >
 config, returning `None` when unset.
 
 `superseded init` is extended to probe `SUPERSEDED_SERVER_URL` /
-`SUPERSEDED_SERVER_KEY` and write `server:` / `server_key:` into
-`.superseded.yaml` when present. This is non-interactive, like the existing
+`SUPERSEDED_SERVER_KEY` and report their presence in its output; they are **not
+written** into `.superseded.yaml`. This is non-interactive, like the existing
 `gh` / provider-key probes.
 
 ## Data flow
@@ -309,6 +310,30 @@ dropping the check-run loses nothing for this path.
 
 All error messages go to stderr; the rendered result goes to stdout (so
 `superseded review --server ... --format json | jq` keeps working).
+
+## Documented deviations
+
+Shipped behavior differs from the text above in ways that are intentional but
+were decided during implementation:
+
+- **In-memory registry eviction may drop in-flight jobs under heavy load.**
+  The `JobStatus` registry is capped at 1000 entries and evicts the oldest by
+  `created_at` on insert. Under sustained load a long-running job can be
+  evicted before it finishes; the CLI then sees `404` ("Unknown or evicted
+  job_id.") while the review itself may still complete and post to the PR
+  server-side. This is the accepted cost of the bounded in-memory design.
+- **`completed` results are delivered once via polling.** Each `GET
+  /review/jobs/{job_id}` response carries the full serialized `ReviewResult`
+  on every poll; the CLI stops polling as soon as it observes the terminal
+  state, so a result is consumed exactly once per client. There is no replay
+  or retry-after-completion mechanism.
+- **`superseded init` reports server env vars but does not write them.** See
+  "Configuration & precedence" — `SUPERSEDED_SERVER_URL` /
+  `SUPERSEDED_SERVER_KEY` presence is echoed to the user, never persisted.
+- **Server-mode activation warnings.** Enabling server-mode via the config
+  file `server:` key or the `SUPERSEDED_SERVER_URL` env var prints a warning
+  to stderr (so the user can force local review by unsetting it); passing
+  `--server` explicitly prints none.
 
 ## Testing
 

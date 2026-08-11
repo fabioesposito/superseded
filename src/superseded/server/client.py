@@ -106,8 +106,11 @@ def poll_review(
             if status == "completed":
                 result_data = data.get("result")
                 if result_data is None:
-                    return ReviewResult()
-                return ReviewResult.model_validate(result_data)
+                    raise ServerReviewError("server completed without a result", exit_code=1)
+                try:
+                    return ReviewResult.model_validate(result_data)
+                except Exception as err:
+                    raise ServerReviewError("unexpected result from server", exit_code=1) from err
             if status == "failed":
                 raise ServerReviewError(data.get("error") or "review failed", exit_code=1)
             if time.monotonic() >= deadline:

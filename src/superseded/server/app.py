@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -234,7 +235,10 @@ def create_app(
             passes=passes_list,
             post=post_field,
         )
-        await worker.enqueue(job)
+        try:
+            await worker.enqueue(job)
+        except asyncio.QueueFull:
+            raise HTTPException(status_code=429, detail="Review queue full") from None
         logger.info(
             "review_pr_enqueued",
             extra={"repo": f"{owner}/{repo}", "pr": pr_number, "job_id": job.job_id},

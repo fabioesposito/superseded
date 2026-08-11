@@ -137,6 +137,59 @@ def test_poll_review_returns_result():
     assert result.findings[0].file == "a.py"
 
 
+def test_poll_review_completed_without_result_raises():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "completed", "result": None, "error": None})
+
+    with pytest.raises(ServerReviewError) as exc:
+        poll_review(
+            server_url="https://srv",
+            server_key="sk",
+            job_id="abc",
+            budget=10.0,
+            interval=0.0,
+            client=_client_with(handler),
+        )
+    assert exc.value.exit_code == 1
+    assert "without a result" in str(exc.value)
+
+
+def test_poll_review_invalid_result_raises_server_error_not_validation():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "status": "completed",
+                "result": {
+                    "findings": [
+                        {
+                            "pass_name": "security",
+                            "severity": "critical",
+                            "file": "a.py",
+                            "line": "not-an-int",
+                            "title": "t",
+                            "description": "d",
+                            "suggestion": "s",
+                        }
+                    ]
+                },
+                "error": None,
+            },
+        )
+
+    with pytest.raises(ServerReviewError) as exc:
+        poll_review(
+            server_url="https://srv",
+            server_key="sk",
+            job_id="abc",
+            budget=10.0,
+            interval=0.0,
+            client=_client_with(handler),
+        )
+    assert exc.value.exit_code == 1
+    assert "unexpected result" in str(exc.value)
+
+
 def test_poll_review_failed_status_exit_1():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"status": "failed", "result": None, "error": "boom"})
