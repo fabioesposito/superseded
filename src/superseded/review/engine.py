@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from superseded.models import Finding, ReviewResult, ReviewUsage
 from superseded.providers import PROVIDER_MAP, Provider
@@ -26,6 +26,7 @@ class ReviewEngine:
     def __init__(self, provider: Provider, config: Config) -> None:
         self.provider = provider
         self.model: str | None = None
+        self.reasoning_effort: Literal["low", "high", "max"] = config.reasoning_effort
         self.config = config
 
     @classmethod
@@ -71,7 +72,9 @@ class ReviewEngine:
     def _run_and_validate(
         self, pass_name: str, prompt: str, timeout: int
     ) -> tuple[list[Finding], list[str], ReviewUsage]:
-        resp = self.provider.complete(prompt, model=self.model, timeout=timeout)
+        resp = self.provider.complete(
+            prompt, model=self.model, timeout=timeout, reasoning_effort=self.reasoning_effort
+        )
         raw_findings = parse_findings_json(resp.content, pass_name)
         findings: list[Finding] = []
         errors: list[str] = []
@@ -103,7 +106,9 @@ class ReviewEngine:
 
         prompt = build_verify_prompt(result.findings, diff, file_context)
         try:
-            resp = self.provider.complete(prompt, model=self.model, timeout=timeout)
+            resp = self.provider.complete(
+                prompt, model=self.model, timeout=timeout, reasoning_effort=self.reasoning_effort
+            )
         except Exception as err:
             logger.warning("Verification pass failed: %s", err)
             result.warnings.append(f"Verification pass failed: {err}")

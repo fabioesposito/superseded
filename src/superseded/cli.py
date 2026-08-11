@@ -38,6 +38,7 @@ from superseded.providers import ProviderConfigError
 from superseded.review.engine import ReviewEngine
 
 MODEL_ENV = "SUPERSEDED_MODEL"
+REASONING_EFFORT_ENV = "SUPERSEDED_REASONING_EFFORT"
 GRAPH_ENV = "SUPERSEDED_GRAPH"
 VERIFY_ENV = "SUPERSEDED_VERIFY"
 LOG_FORMAT_ENV = "SUPERSEDED_LOG_FORMAT"
@@ -100,6 +101,15 @@ def resolve_provider(provider_flag: str | None, config: Config) -> str:
 
 def resolve_model(model_flag: str | None, config: Config) -> str | None:
     return os.environ.get(MODEL_ENV) or model_flag or config.model
+
+
+def resolve_reasoning_effort(flag: str | None, config: Config) -> str:
+    env = os.environ.get(REASONING_EFFORT_ENV)
+    if env:
+        return env
+    if flag is not None:
+        return flag
+    return config.reasoning_effort
 
 
 def resolve_graph(cli_value: bool | None, config: Config) -> bool:
@@ -247,6 +257,13 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
 @click.option("--provider", default=None, help="Model provider (default: deepseek)")
 @click.option("--model", default=None, help="Model to use")
 @click.option(
+    "--reasoning-effort",
+    "reasoning_effort",
+    type=click.Choice(["low", "high", "max"]),
+    default=None,
+    help="DeepSeek thinking-mode effort (default: max). Env: SUPERSEDED_REASONING_EFFORT.",
+)
+@click.option(
     "--format",
     "output_format",
     type=click.Choice(["json", "markdown", "table"]),
@@ -308,6 +325,7 @@ def review(
     diff_range: str | None,
     provider: str | None,
     model: str | None,
+    reasoning_effort: str | None,
     output_format: str | None,
     post: bool,
     passes: str | None,
@@ -352,6 +370,7 @@ def review(
         diff_range=diff_range,
         provider=provider,
         model=model,
+        reasoning_effort=reasoning_effort,
         output_format=output_format,
         post=post,
         passes=pass_list,
@@ -379,6 +398,7 @@ def _run_review(
     post: bool,
     passes: list[str] | None,
     *,
+    reasoning_effort: str | None = None,
     timeout: int | None = None,
     config_path: Path | None = None,
     no_memory: bool = False,
@@ -397,6 +417,8 @@ def _run_review(
     config.verify = verify
     provider_name = resolve_provider(provider, config)
     model_name = resolve_model(model, config)
+    reasoning_effort = resolve_reasoning_effort(reasoning_effort, config)
+    config.reasoning_effort = reasoning_effort
     fmt = output_format or config.format
     post = post or config.post_to_pr
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from typing import Literal
 
 from openai import OpenAI
 
@@ -37,14 +38,21 @@ class DeepSeekProvider:
         model: str | None = None,
         timeout: float = 600.0,
         temperature: float = 0.0,
+        reasoning_effort: Literal["low", "high", "max"] | None = None,
     ) -> ProviderResponse:
         resolved = model or self._default_model
-        resp = self._client.chat.completions.create(
-            model=resolved,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temperature,
-            timeout=timeout,
-        )
+        # Thinking mode (enabled by default at effort "high") ignores
+        # temperature/top_p silently; reasoning_effort="max" maximizes
+        # chain-of-thought quality at the cost of latency/tokens.
+        kwargs: dict = {
+            "model": resolved,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "timeout": timeout,
+        }
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
+        resp = self._client.chat.completions.create(**kwargs)
         # DeepSeek reasoner models populate both .reasoning_content (CoT) and
         # .content. We always read .content — the JSON we want is there
         # regardless of model, so the same code path handles chat and reasoner.

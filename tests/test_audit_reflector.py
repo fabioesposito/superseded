@@ -24,7 +24,9 @@ class FakeProvider:
         self._default = default
         self.calls: list[str] = []
 
-    def complete(self, prompt, *, model=None, timeout=600.0, temperature=0.0):
+    def complete(
+        self, prompt, *, model=None, timeout=600.0, temperature=0.0, reasoning_effort=None
+    ):
         self.calls.append(prompt)
         if self._responses:
             return ProviderResponse(content=self._responses.pop(0))
@@ -34,7 +36,9 @@ class FakeProvider:
 class FailingProvider(FakeProvider):
     """Provider whose complete() always raises (transport failure)."""
 
-    def complete(self, prompt, *, model=None, timeout=600.0, temperature=0.0):
+    def complete(
+        self, prompt, *, model=None, timeout=600.0, temperature=0.0, reasoning_effort=None
+    ):
         self.calls.append(prompt)
         raise RuntimeError("connection reset")
 

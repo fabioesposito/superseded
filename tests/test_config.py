@@ -19,6 +19,12 @@ def test_default_config():
     assert cfg.memory is True
 
 
+def test_config_reasoning_effort_default():
+    from superseded.config import Config
+
+    assert Config().reasoning_effort == "max"
+
+
 def test_load_config_from_yaml():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write("provider: deepseek\nmodel: gpt-4o\npasses:\n  security: false\n  style: false\n")

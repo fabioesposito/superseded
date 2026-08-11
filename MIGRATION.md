@@ -73,3 +73,4 @@ The only new field is `deepseek_api_key`.
 
 - Provider: `deepseek`
 - Model: `deepseek-v4-flash` (override with `--model` / `SUPERSEDED_MODEL` / `.superseded.yaml`)
+- Reasoning effort: max (override with `--reasoning-effort` / `SUPERSEDED_REASONING_EFFORT` / `.superseded.yaml`)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import warnings
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel
@@ -19,6 +20,7 @@ class PassConfig(BaseModel):
 class Config(BaseModel):
     provider: str = "deepseek"
     model: str | None = None
+    reasoning_effort: Literal["low", "high", "max"] = "max"
     passes: PassConfig = PassConfig()
     post_to_pr: bool = False
     format: str = "table"

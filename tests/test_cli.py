@@ -7,7 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from superseded.cli import cli, format_memory_context, resolve_model, resolve_provider
+from superseded.cli import (
+    cli,
+    format_memory_context,
+    resolve_model,
+    resolve_provider,
+    resolve_reasoning_effort,
+)
 from superseded.config import Config
 from superseded.models import ReviewUsage
 
@@ -124,6 +130,18 @@ def test_resolve_model_env_overrides():
     with patch.dict("os.environ", {}, clear=True):
         assert resolve_model(None, Config(model="cfg-model")) == "cfg-model"
         assert resolve_model("flag-model", Config()) == "flag-model"
+
+
+def test_resolve_reasoning_effort_precedence(monkeypatch):
+    monkeypatch.delenv("SUPERSEDED_REASONING_EFFORT", raising=False)
+    # config fallback
+    assert resolve_reasoning_effort(None, Config()) == "max"
+    assert resolve_reasoning_effort(None, Config(reasoning_effort="low")) == "low"
+    # flag beats config
+    assert resolve_reasoning_effort("high", Config(reasoning_effort="low")) == "high"
+    # env beats flag
+    monkeypatch.setenv("SUPERSEDED_REASONING_EFFORT", "max")
+    assert resolve_reasoning_effort("low", Config(reasoning_effort="high")) == "max"
 
 
 def test_format_memory_context_with_reasoning():

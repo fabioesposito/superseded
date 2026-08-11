@@ -445,6 +445,7 @@ async def _run_review_for_job(
 
         engine = ReviewEngine(provider=provider, config=config)
         engine.model = config.model
+        engine.reasoning_effort = config.reasoning_effort
         result = await asyncio.to_thread(
             engine.review,
             diff=diff,

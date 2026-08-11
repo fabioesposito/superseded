@@ -22,6 +22,7 @@ superseded init --force
 # --- Provider ---
 provider: deepseek                       # model provider (deepseek is the only one)
 model: null                              # null = provider default (deepseek-v4-flash)
+reasoning_effort: max                    # low | high | max — DeepSeek thinking-mode effort
 
 # --- Output ---
 format: table                           # table | json | markdown
@@ -57,7 +58,7 @@ verify: true                            # Post-review verification pass (extra A
 
 ### Provider and Model
 
-`SUPERSEDED_PROVIDER` / `SUPERSEDED_MODEL` env vars **override everything**. This is designed for CI secrets — set them in your GitHub Action and they cannot be overridden by a config file. (`SUPERSEDED_AGENT` still works as a deprecated alias for `SUPERSEDED_PROVIDER`.)
+`SUPERSEDED_PROVIDER` / `SUPERSEDED_MODEL` / `SUPERSEDED_REASONING_EFFORT` env vars **override everything**. This is designed for CI secrets — set them in your GitHub Action and they cannot be overridden by a config file. (`SUPERSEDED_AGENT` still works as a deprecated alias for `SUPERSEDED_PROVIDER`.)
 
 The provider requires a DeepSeek API key: `SUPERSEDED_DEEPSEEK_API_KEY` — without it, `superseded review` fails.
 
@@ -94,6 +95,10 @@ Which model provider to use. The provider is called directly over its API — no
 ### `model`
 
 The model ID sent with each review prompt. Set to `null` to use the provider's default (`deepseek-v4-flash` for `deepseek`).
+
+### `reasoning_effort`
+
+DeepSeek thinking-mode (chain-of-thought) effort: `low` | `high` | `max` (default `max`). Higher effort produces deeper reasoning at the cost of latency and tokens. In thinking mode the API ignores `temperature`/`top_p` silently. Override with `--reasoning-effort` or `SUPERSEDED_REASONING_EFFORT`.
 
 ### `format`
 

@@ -32,7 +32,9 @@ class FakeProvider:
         self._default = default
         self.calls: list[str] = []
 
-    def complete(self, prompt, *, model=None, timeout=600.0, temperature=0.0):
+    def complete(
+        self, prompt, *, model=None, timeout=600.0, temperature=0.0, reasoning_effort=None
+    ):
         self.calls.append(prompt)
         content = self._by_prompt.get(prompt, self._default)
         return ProviderResponse(

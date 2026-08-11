@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, model_validator
@@ -25,6 +26,7 @@ class ServerConfig(BaseModel):
     tls_cert_path: Path | None = None
     tls_key_path: Path | None = None
     model: str | None = None
+    reasoning_effort: Literal["low", "high", "max"] = "max"
     behind_proxy: bool = False
     deepseek_api_key: str | None = None
     provider: str = "deepseek"
@@ -137,6 +139,10 @@ class ServerConfig(BaseModel):
         model = os.environ.get("SUPERSEDED_SERVER_MODEL")
         if model:
             kwargs["model"] = model
+
+        reasoning_effort = os.environ.get("SUPERSEDED_SERVER_REASONING_EFFORT")
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
 
         behind_proxy = os.environ.get("SUPERSEDED_BEHIND_PROXY")
         if behind_proxy:

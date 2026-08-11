@@ -48,7 +48,7 @@ There is no CI, no Makefile/Taskfile, and no pre-commit hooks configured. Verify
 ## Configuration precedence
 
 For `provider` and `model`: **env vars > CLI flags > config file**, see `resolve_provider`/`resolve_model` in `cli.py`.
-- Env: `SUPERSEDED_PROVIDER` (`SUPERSEDED_AGENT` still works as a deprecated alias — it emits a `DeprecationWarning`), `SUPERSEDED_MODEL` — these override flags and config. `SUPERSEDED_DEEPSEEK_API_KEY` is the required provider key.
+- Env: `SUPERSEDED_PROVIDER` (`SUPERSEDED_AGENT` still works as a deprecated alias — it emits a `DeprecationWarning`), `SUPERSEDED_MODEL`, `SUPERSEDED_REASONING_EFFORT` — these override flags and config. `SUPERSEDED_DEEPSEEK_API_KEY` is the required provider key.
 - Config file: `.superseded.yaml` at repo root (optional; defaults in `config.py`). Legacy `agent:` / `sandbox:` keys are handled in `load_config` (hard error for the old CLI-agent names, warning otherwise).
 
 ## Packaging / GitHub Action

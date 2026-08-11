@@ -234,7 +234,9 @@ def test_deepseek_complete_returns_content(monkeypatch):
 
     monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
     p = DeepSeekProvider(api_key="sk-test")
-    resp = p.complete("the prompt", model="deepseek-v4-flash", timeout=120.0)
+    resp = p.complete(
+        "the prompt", model="deepseek-v4-flash", timeout=120.0, reasoning_effort="max"
+    )
     assert resp.content == '[{"severity": "critical"}]'
     assert resp.prompt_tokens == 42
     assert resp.completion_tokens == 7
@@ -243,6 +245,33 @@ def test_deepseek_complete_returns_content(monkeypatch):
     assert captured["create_kwargs"]["messages"] == [{"role": "user", "content": "the prompt"}]
     assert captured["create_kwargs"]["timeout"] == 120.0
     assert captured["create_kwargs"]["model"] == "deepseek-v4-flash"
+    assert captured["create_kwargs"]["reasoning_effort"] == "max"
+
+
+def test_deepseek_complete_omits_reasoning_effort_when_none(monkeypatch):
+    """When reasoning_effort is None, the kwarg is not sent to the API."""
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            pass
+
+        @property
+        def chat(self):
+            return self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            captured.update(kw)
+            return _fake_completion()
+
+    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    p = DeepSeekProvider(api_key="sk-test")
+    p.complete("p", reasoning_effort=None)
+    assert "reasoning_effort" not in captured
 
 
 def test_deepseek_complete_uses_default_model_when_none(monkeypatch):

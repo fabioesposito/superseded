@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 
 @dataclass(frozen=True)
@@ -32,4 +32,5 @@ class Provider(Protocol):
         model: str | None = None,
         timeout: float = 600.0,
         temperature: float = 0.0,
+        reasoning_effort: Literal["low", "high", "max"] | None = None,
     ) -> ProviderResponse: ...

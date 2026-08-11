@@ -241,6 +241,23 @@ def test_server_config_deepseek_api_key_from_env(monkeypatch, tmp_path):
     assert config.deepseek_api_key == "dsk-test"
 
 
+def test_server_config_reasoning_effort_default_max():
+    config = ServerConfig()
+    assert config.reasoning_effort == "max"
+
+
+def test_server_config_reasoning_effort_from_env(monkeypatch, tmp_path):
+    key_file = tmp_path / "key.pem"
+    key_file.write_text("fake-private-key")
+    monkeypatch.setenv("SUPERSEDED_APP_ID", "12345")
+    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whsec_test")
+    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(key_file))
+    monkeypatch.setenv("SUPERSEDED_SERVER_REASONING_EFFORT", "low")
+
+    config = ServerConfig.from_env()
+    assert config.reasoning_effort == "low"
+
+
 def test_server_config_provider_defaults_to_deepseek():
     config = ServerConfig()
     assert config.provider == "deepseek"
