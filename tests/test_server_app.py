@@ -636,3 +636,13 @@ def test_review_pr_post_defaults_true_when_absent(keyed_server, monkeypatch):
     assert response.status_code == 200
     assert response.json()["status"] == "enqueued"
     assert captured["job"].post is True
+
+
+def test_review_pr_rejects_non_bool_post(keyed_server):
+    client = TestClient(keyed_server.app)
+    response = client.post(
+        "/review/pr",
+        headers={"Authorization": "Bearer test-api-key"},
+        json={"owner": "octocat", "repo": "hello-world", "pr_number": 7, "post": "yes"},
+    )
+    assert response.status_code == 422
