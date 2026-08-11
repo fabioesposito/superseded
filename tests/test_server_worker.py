@@ -1267,3 +1267,70 @@ async def test_run_review_for_job_post_false_skips_posting():
     mock_payload.assert_not_called()
     assert isinstance(outcome, ReviewOutcome)
     assert isinstance(result, ReviewResult)
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_post_false_persists_findings_without_linking(tmp_path):
+    """A post=False review persists findings + watermark but never links comment ids.
+
+    Regression: the comment-id linkage (zip over the empty comment_ids list with
+    strict=True) must not run when posting is skipped, or it raises ValueError.
+    """
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    await store.init()
+
+    finding = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        end_line=2,
+        title="t",
+        description="d",
+        suggestion="s",
+    )
+    fake_engine = MagicMock()
+    fake_engine.review.return_value = ReviewResult(findings=[finding])
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
+    job = ReviewJob(1, "owner", "repo", 7, "abc", "def", post=False)
+
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo",
+            new_callable=AsyncMock,
+            return_value=tmp_path,
+        ),
+        patch("superseded.config.load_config", return_value=Config()),
+        patch("superseded.server.worker.ReviewEngine", return_value=fake_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value=None),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
+        patch.object(
+            store, "record_findings_batch", wraps=store.record_findings_batch
+        ) as mock_record,
+        patch.object(
+            store, "set_comment_ids_batch", wraps=store.set_comment_ids_batch
+        ) as mock_link,
+    ):
+        outcome, result = await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="t",
+            job=job,
+            correlation_id="c",
+            store=store,
+            provider=_make_provider(),
+        )
+
+    github.post_review.assert_not_awaited()
+    mock_record.assert_called_once()
+    mock_link.assert_not_called()
+    assert isinstance(outcome, ReviewOutcome)
+    assert result.findings == [finding]
+    assert await store.get_watermark("owner/repo", 7) == "abc"

@@ -561,13 +561,14 @@ async def _run_review_for_job(
                         ],
                         repo_key,
                     )
-                pairs = [
-                    (f.id, cid)
-                    for f, cid in zip(result.findings, comment_ids, strict=True)
-                    if cid is not None
-                ]
-                if pairs:
-                    await store.set_comment_ids_batch(pairs)
+                if job.post:
+                    pairs = [
+                        (f.id, cid)
+                        for f, cid in zip(result.findings, comment_ids, strict=True)
+                        if cid is not None
+                    ]
+                    if pairs:
+                        await store.set_comment_ids_batch(pairs)
                 await store.set_watermark(repo_key, job.pr_number, job.head_sha)
 
             if config.learned_review:
