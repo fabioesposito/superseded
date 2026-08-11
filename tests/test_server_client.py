@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import httpx
 import pytest
 
@@ -232,3 +234,73 @@ def test_review_via_server_orchestrates_submit_and_poll():
     )
     assert state["submitted"] is True
     assert isinstance(result, ReviewResult)
+
+
+def test_submit_review_plain_text_501_exit_2():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(501, text="API key not configured on this server.")
+
+    with pytest.raises(ServerReviewError) as exc:
+        submit_review(
+            server_url="https://srv",
+            server_key="sk",
+            owner="o",
+            repo="r",
+            pr_number=7,
+            client=_client_with(handler),
+        )
+    assert exc.value.exit_code == 2
+    assert "API key not configured" in str(exc.value)
+
+
+def test_submit_review_200_without_job_id_exit_1():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "enqueued"})
+
+    with pytest.raises(ServerReviewError) as exc:
+        submit_review(
+            server_url="https://srv",
+            server_key="sk",
+            owner="o",
+            repo="r",
+            pr_number=7,
+            client=_client_with(handler),
+        )
+    assert exc.value.exit_code == 1
+    assert "no job_id" in str(exc.value)
+
+
+def test_submit_review_network_error_exit_1():
+    with (
+        patch.object(httpx.Client, "post", side_effect=httpx.ConnectError("boom")),
+        pytest.raises(ServerReviewError) as exc,
+    ):
+        submit_review(
+            server_url="https://srv",
+            server_key="sk",
+            owner="o",
+            repo="r",
+            pr_number=7,
+        )
+    assert "Failed to reach server" in str(exc.value)
+    assert exc.value.exit_code == 1
+
+
+def test_poll_review_get_url_contains_job_id():
+    seen = {"path": None}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        return httpx.Response(200, json={"status": "running", "result": None, "error": None})
+
+    with pytest.raises(ServerReviewError) as exc:
+        poll_review(
+            server_url="https://srv",
+            server_key="sk",
+            job_id="abc",
+            budget=0.0,
+            interval=0.0,
+            client=_client_with(handler),
+        )
+    assert seen["path"] == "/review/jobs/abc"
+    assert exc.value.exit_code == 1

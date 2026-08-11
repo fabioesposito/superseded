@@ -32,6 +32,14 @@ def _detail(response: httpx.Response) -> str:
     return str(body)
 
 
+def _json_or_none(response: httpx.Response) -> dict | None:
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    return body if isinstance(body, dict) else None
+
+
 def submit_review(
     *,
     server_url: str,
@@ -63,11 +71,10 @@ def submit_review(
     except httpx.HTTPError as err:
         raise ServerReviewError(f"Failed to reach server: {err}", exit_code=1) from err
     if response.status_code == 200:
-        data = response.json()
-        job_id = data.get("job_id")
-        if not job_id:
+        data = _json_or_none(response)
+        if not data or not data.get("job_id"):
             raise ServerReviewError(f"Server returned 200 but no job_id: {data}", exit_code=1)
-        return str(job_id)
+        return str(data["job_id"])
     exit_code = 2 if response.status_code in _SUBMIT_FATAL_CODES else 1
     raise ServerReviewError(_detail(response), exit_code=exit_code)
 
@@ -92,7 +99,9 @@ def poll_review(
         except httpx.HTTPError as err:
             raise ServerReviewError(f"Failed to reach server: {err}", exit_code=1) from err
         if response.status_code == 200:
-            data = response.json()
+            data = _json_or_none(response)
+            if data is None:
+                raise ServerReviewError("unexpected response from server", exit_code=1)
             status = data.get("status")
             if status == "completed":
                 result_data = data.get("result")
@@ -103,7 +112,8 @@ def poll_review(
                 raise ServerReviewError(data.get("error") or "review failed", exit_code=1)
             if time.monotonic() >= deadline:
                 raise ServerReviewError(
-                    "review timed out (job did not complete within budget)", exit_code=1
+                    f"review timed out (job {job_id} did not complete within budget)",
+                    exit_code=1,
                 )
             time.sleep(max(0.0, interval))
             continue
