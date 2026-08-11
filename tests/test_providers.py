@@ -277,3 +277,16 @@ def test_deepseek_init_forwards_base_url_and_retries(monkeypatch):
     assert captured["base_url"] == DEEPSEEK_DEFAULT_BASE_URL
     assert captured["max_retries"] == 2
     assert captured["api_key"] == "sk-test"
+
+
+def test_provider_map_exports():
+    from superseded.providers import (  # noqa: F401
+        PROVIDER_MAP,
+        DeepSeekProvider,
+        Provider,
+        ProviderConfigError,
+        ProviderResponse,
+    )
+
+    assert "deepseek" in PROVIDER_MAP
+    assert PROVIDER_MAP["deepseek"] is DeepSeekProvider
