@@ -1334,3 +1334,101 @@ async def test_run_review_for_job_post_false_persists_findings_without_linking(t
     assert isinstance(outcome, ReviewOutcome)
     assert result.findings == [finding]
     assert await store.get_watermark("owner/repo", 7) == "abc"
+
+
+@pytest.mark.asyncio
+async def test_enqueue_records_queued_status():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    await worker.enqueue(job)
+    status = worker.get_job_status(job.job_id)
+    assert status is not None
+    assert status.status == "queued"
+
+
+@pytest.mark.asyncio
+async def test_process_records_completed_with_result():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    fake_result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="style",
+                severity="nit",
+                file="f.py",
+                line=1,
+                title="t",
+                description="d",
+                suggestion="s",
+            )
+        ]
+    )
+    with patch(
+        "superseded.server.worker._run_review_for_job",
+        new_callable=AsyncMock,
+        return_value=(ReviewOutcome("success", "ok", "sum"), fake_result),
+    ):
+        await worker._process(job)
+
+    status = worker.get_job_status(job.job_id)
+    assert status.status == "completed"
+    assert status.result is fake_result
+    assert status.error is None
+    assert status.completed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_process_records_failed_on_review_exception():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    with patch(
+        "superseded.server.worker._run_review_for_job",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("boom"),
+    ):
+        await worker._process(job)
+
+    status = worker.get_job_status(job.job_id)
+    assert status.status == "failed"
+    assert status.error is not None
+    assert "boom" in status.error
+    assert status.completed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_process_post_false_skips_check_run():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123,
+        owner="o",
+        repo="r",
+        pr_number=1,
+        head_sha="a",
+        base_sha="b",
+        post=False,
+    )
+    with patch(
+        "superseded.server.worker._run_review_for_job",
+        new_callable=AsyncMock,
+        return_value=(ReviewOutcome("success", "ok", "sum"), ReviewResult()),
+    ):
+        await worker._process(job)
+
+    worker.github.create_check_run.assert_not_called()
+    worker.github.update_check_run.assert_not_called()
+    status = worker.get_job_status(job.job_id)
+    assert status.status == "completed"

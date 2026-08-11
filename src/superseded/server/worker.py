@@ -144,12 +144,14 @@ class ReviewWorker:
         return self._jobs.get(job_id)
 
     async def enqueue(self, job: ReviewJob) -> None:
+        self._record_job(job.job_id, "queued")
         # put_nowait raises QueueFull instantly; a failed enqueue is logged and
         # surfaced to the caller (webhook handler turns it into a 429) rather
         # than blocking the handler indefinitely or growing without limit.
         try:
             self.queue.put_nowait(job)
         except asyncio.QueueFull:
+            self._record_job(job.job_id, "failed", error="queue full")
             logger.warning(
                 "review_queue_full",
                 extra={
@@ -184,12 +186,14 @@ class ReviewWorker:
             async with self._semaphore:
                 async with self._lock:
                     self._active_count += 1
+                self._record_job(job.job_id, "running")
                 try:
                     await self._process(job)
                 finally:
                     async with self._lock:
                         self._active_count -= 1
         except asyncio.CancelledError:
+            self._record_job(job.job_id, "failed", error="cancelled")
             logger.info(
                 "review_cancelled",
                 extra={"repo": f"{job.owner}/{job.repo}", "pr": job.pr_number},
@@ -222,7 +226,7 @@ class ReviewWorker:
 
         try:
             token = await self.github.get_installation_token(job.installation_id)
-        except Exception:
+        except Exception as err:
             logger.exception(
                 "review_failed",
                 extra={
@@ -231,20 +235,22 @@ class ReviewWorker:
                     "pr": job.pr_number,
                 },
             )
+            self._record_job(job.job_id, "failed", error=f"token fetch failed: {err}")
             return
 
         check_run_id = None
         try:
-            check_run_id = await self.github.create_check_run(
-                token=token,
-                owner=job.owner,
-                repo=job.repo,
-                name="Superseded Review",
-                head_sha=job.head_sha,
-                status="in_progress",
-            )
+            if job.post:
+                check_run_id = await self.github.create_check_run(
+                    token=token,
+                    owner=job.owner,
+                    repo=job.repo,
+                    name="Superseded Review",
+                    head_sha=job.head_sha,
+                    status="in_progress",
+                )
 
-            outcome, _result = await _run_review_for_job(
+            outcome, result = await _run_review_for_job(
                 github=self.github,
                 repo_manager=self.repo_manager,
                 token=token,
@@ -257,16 +263,18 @@ class ReviewWorker:
                 provider=self._provider,
             )
 
-            await self.github.update_check_run(
-                token=token,
-                owner=job.owner,
-                repo=job.repo,
-                check_run_id=check_run_id,
-                status="completed",
-                conclusion=outcome.conclusion,
-                title=outcome.title,
-                summary=outcome.summary,
-            )
+            if check_run_id is not None:
+                await self.github.update_check_run(
+                    token=token,
+                    owner=job.owner,
+                    repo=job.repo,
+                    check_run_id=check_run_id,
+                    status="completed",
+                    conclusion=outcome.conclusion,
+                    title=outcome.title,
+                    summary=outcome.summary,
+                )
+            self._record_job(job.job_id, "completed", result=result)
         except asyncio.CancelledError:
             if check_run_id is not None:
                 try:
@@ -282,8 +290,9 @@ class ReviewWorker:
                     )
                 except Exception:
                     logger.exception("Failed to update check run on cancellation")
+            self._record_job(job.job_id, "failed", error="cancelled")
             raise
-        except Exception:
+        except Exception as err:
             logger.exception(
                 "review_failed",
                 extra={
@@ -306,6 +315,7 @@ class ReviewWorker:
                     )
                 except Exception:
                     logger.exception("Failed to update check run on error")
+            self._record_job(job.job_id, "failed", error=str(err))
 
 
 async def _load_safe_config(
