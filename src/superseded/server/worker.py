@@ -41,6 +41,7 @@ class ReviewJob:
     base_sha: str
     job_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     passes: list[str] | None = None
+    post: bool = True
 
 
 @dataclass
@@ -243,7 +244,7 @@ class ReviewWorker:
                 status="in_progress",
             )
 
-            outcome = await _run_review_for_job(
+            outcome, _result = await _run_review_for_job(
                 github=self.github,
                 repo_manager=self.repo_manager,
                 token=token,
@@ -381,7 +382,7 @@ async def _run_review_for_job(
     server_model: str | None = None,
     server_reasoning_effort: str | None = None,
     provider: Provider | None = None,
-) -> ReviewOutcome:
+) -> tuple[ReviewOutcome, ReviewResult]:
     tmp_dir = repo_manager.job_dir(
         job.installation_id, job.owner, job.repo, job.pr_number, job.job_id
     )
@@ -427,10 +428,13 @@ async def _run_review_for_job(
                             "pr": job.pr_number,
                         },
                     )
-                    return ReviewOutcome(
-                        conclusion="success",
-                        title="No new commits since last review",
-                        summary=f"Head {job.head_sha[:7]} unchanged since last review.",
+                    return (
+                        ReviewOutcome(
+                            conclusion="success",
+                            title="No new commits since last review",
+                            summary=f"Head {job.head_sha[:7]} unchanged since last review.",
+                        ),
+                        ReviewResult(),
                     )
                 try:
                     patch, status = await github.compare_diff(
@@ -522,17 +526,20 @@ async def _run_review_for_job(
             progress=None,
         )
 
-        payload = build_review_payload(result)
-
-        comment_ids = await github.post_review(
-            token=token,
-            owner=job.owner,
-            repo=job.repo,
-            pr_number=job.pr_number,
-            body=payload["body"],
-            comments=payload["comments"],
-            event=payload["event"],
-        )
+        comment_ids: list[int | None] = []
+        event = "COMMENT"
+        if job.post:
+            payload = build_review_payload(result)
+            event = payload["event"]
+            comment_ids = await github.post_review(
+                token=token,
+                owner=job.owner,
+                repo=job.repo,
+                pr_number=job.pr_number,
+                body=payload["body"],
+                comments=payload["comments"],
+                event=payload["event"],
+            )
 
         if store is not None:
             repo_key = f"{job.owner}/{job.repo}"
@@ -581,7 +588,7 @@ async def _run_review_for_job(
                     stats_text, all_rules, config.max_learned_rules
                 )
 
-        conclusion = "success" if payload["event"] != "REQUEST_CHANGES" else "failure"
+        conclusion = "success" if event != "REQUEST_CHANGES" else "failure"
         title = build_check_run_title(result)
         passes_used = sorted({f.pass_name for f in result.findings})
         summary = (
@@ -597,6 +604,6 @@ async def _run_review_for_job(
                 "findings_count": len(result.findings),
             },
         )
-        return ReviewOutcome(conclusion=conclusion, title=title, summary=summary)
+        return ReviewOutcome(conclusion=conclusion, title=title, summary=summary), result
     finally:
         repo_manager.cleanup(tmp_dir)

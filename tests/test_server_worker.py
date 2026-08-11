@@ -86,8 +86,14 @@ async def test_worker_processes_job():
         base_sha="def456",
     )
 
+    outcome_tuple = (
+        ReviewOutcome(conclusion="success", title="0 findings", summary="ok"),
+        ReviewResult(),
+    )
     with patch(
-        "superseded.server.worker._run_review_for_job", new_callable=AsyncMock
+        "superseded.server.worker._run_review_for_job",
+        new_callable=AsyncMock,
+        return_value=outcome_tuple,
     ) as mock_review:
         await worker._process(job)
 
@@ -160,7 +166,7 @@ async def test_worker_success_updates_existing_check_run():
     with patch(
         "superseded.server.worker._run_review_for_job",
         new_callable=AsyncMock,
-        return_value=outcome,
+        return_value=(outcome, ReviewResult()),
     ):
         await worker._process(job)
 
@@ -642,7 +648,7 @@ async def test_run_review_for_job_end_to_end(tmp_path):
         patch("superseded.context.gathering.run_static_analysis", return_value=None),
         patch("superseded.context.gathering.retrieve_usages", return_value=None),
     ):
-        outcome = await _run_review_for_job(
+        outcome, _ = await _run_review_for_job(
             github=github,
             repo_manager=repo_manager,
             token="t",
@@ -760,7 +766,10 @@ async def test_concurrency_limit_blocks_second_job():
     async def slow_review(**kwargs):
         started.set()
         await release.wait()
-        return ReviewOutcome(conclusion="success", title="0 findings", summary="done")
+        return (
+            ReviewOutcome(conclusion="success", title="0 findings", summary="done"),
+            ReviewResult(),
+        )
 
     job1 = ReviewJob(1, "o", "r", 1, "a", "b")
     job2 = ReviewJob(1, "o", "r", 2, "a", "b")
@@ -802,7 +811,10 @@ async def test_enqueue_rejects_overflow():
 
     async def slow_review(**kwargs):
         await block.wait()
-        return ReviewOutcome(conclusion="success", title="0 findings", summary="done")
+        return (
+            ReviewOutcome(conclusion="success", title="0 findings", summary="done"),
+            ReviewResult(),
+        )
 
     with patch(
         "superseded.server.worker._run_review_for_job",
@@ -903,7 +915,7 @@ async def test_worker_progressive_noop_returns_success_without_review(tmp_path):
 
     with patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout:
         mock_checkout.return_value = tmp_path
-        outcome = await _run_review_for_job(
+        outcome, _ = await _run_review_for_job(
             github=github,
             repo_manager=repo_manager,
             token="tok",
@@ -1129,3 +1141,129 @@ def test_record_job_marks_completed_at():
     assert worker.get_job_status("job-1").completed_at is None
     worker._record_job("job-1", "completed", result=ReviewResult())
     assert worker.get_job_status("job-1").completed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_returns_tuple_with_result():
+    """_run_review_for_job returns (ReviewOutcome, ReviewResult)."""
+    from superseded.config import Config
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    job = ReviewJob(
+        installation_id=123,
+        owner="octocat",
+        repo="hello-world",
+        pr_number=42,
+        head_sha="abc123",
+        base_sha="def456",
+    )
+    fake_result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="x.py",
+                line=1,
+                title="T",
+                description="D",
+                suggestion="S",
+            )
+        ]
+    )
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = fake_result
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch(
+            "superseded.server.worker._load_safe_config",
+            new_callable=AsyncMock,
+            return_value=Config(),
+        ),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
+        patch(
+            "superseded.server.worker.gather_context",
+            return_value={
+                "file_context": "fc",
+                "static_signals": "ss",
+                "usage_signals": "us",
+                "conventions_signals": "cv",
+                "spec_signals": "sp",
+            },
+        ),
+        patch(
+            "superseded.server.worker.build_review_payload",
+            return_value={"body": "b", "comments": [], "event": "COMMENT"},
+        ),
+    ):
+        mock_checkout.return_value = Path("/tmp/checkout")
+        outcome, result = await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="ghp_test",
+            job=job,
+            correlation_id="c1",
+            provider=_make_provider(),
+        )
+
+    assert isinstance(outcome, ReviewOutcome)
+    assert isinstance(result, ReviewResult)
+    assert result is fake_result
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_post_false_skips_posting():
+    """When job.post is False, github.post_review and build_review_payload are not called."""
+    from superseded.config import Config
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    job = ReviewJob(
+        installation_id=123,
+        owner="octocat",
+        repo="hello-world",
+        pr_number=42,
+        head_sha="abc123",
+        base_sha="def456",
+        post=False,
+    )
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = ReviewResult()
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch(
+            "superseded.server.worker._load_safe_config",
+            new_callable=AsyncMock,
+            return_value=Config(),
+        ),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
+        patch(
+            "superseded.server.worker.gather_context",
+            return_value={
+                "file_context": "fc",
+                "static_signals": "ss",
+                "usage_signals": "us",
+                "conventions_signals": "cv",
+                "spec_signals": "sp",
+            },
+        ),
+        patch("superseded.server.worker.build_review_payload") as mock_payload,
+    ):
+        mock_checkout.return_value = Path("/tmp/checkout")
+        outcome, result = await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="ghp_test",
+            job=job,
+            correlation_id="c1",
+            provider=_make_provider(),
+        )
+
+    github.post_review.assert_not_called()
+    mock_payload.assert_not_called()
+    assert isinstance(outcome, ReviewOutcome)
+    assert isinstance(result, ReviewResult)
