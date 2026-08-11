@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from superseded.providers.base import Provider, ProviderConfigError, ProviderResponse
+from superseded.providers.parsing import parse_findings_json
 
 
 def test_provider_response_defaults():
@@ -44,3 +45,59 @@ def test_provider_protocol_has_complete_method():
     fake = Fake()
     assert hasattr(fake, "complete")
     assert hasattr(fake, "name")
+
+
+def test_parse_findings_json_bare_array():
+    raw = '[{"severity": "critical", "file": "a.py", "line": 1}]'
+    items = parse_findings_json(raw, "security")
+    assert len(items) == 1
+    assert items[0]["severity"] == "critical"
+    assert items[0]["pass_name"] == "security"
+
+
+def test_parse_findings_json_fenced_block():
+    raw = 'Here you go:\n```json\n[{"severity": "nit", "file": "a.py", "line": 1}]\n```\n'
+    items = parse_findings_json(raw, "style")
+    assert len(items) == 1
+    assert items[0]["pass_name"] == "style"
+
+
+def test_parse_findings_json_array_embedded_in_prose():
+    raw = (
+        "I reviewed the diff and found:\n"
+        '[{"severity": "critical", "file": "a.py", "line": 1, "title": "t"}]\n'
+        "Let me know if you need more detail."
+    )
+    items = parse_findings_json(raw, "correctness")
+    assert len(items) == 1
+    assert items[0]["title"] == "t"
+
+
+def test_parse_findings_json_empty_array_returns_empty_list():
+    assert parse_findings_json("[]", "security") == []
+
+
+def test_parse_findings_json_no_array_returns_empty_list():
+    assert parse_findings_json("no json here", "security") == []
+
+
+def test_parse_findings_json_malformed_array_returns_empty_list():
+    # Truncated/garbled array — return [] so the retry path (engine) can react.
+    assert parse_findings_json("[{bad json", "security") == []
+
+
+def test_parse_findings_json_top_level_dict_rejected():
+    # Prompt asks for an array; a single dict is schema drift — return [].
+    assert parse_findings_json('{"severity": "critical"}', "security") == []
+
+
+def test_parse_findings_json_array_element_not_dict_rejected():
+    # ["string"] is not a list of finding dicts.
+    assert parse_findings_json('["just a string"]', "security") == []
+
+
+def test_parse_findings_json_injects_pass_name_into_each_item():
+    raw = '[{"severity": "critical", "file": "a.py", "line": 1}, {"severity": "nit", "file": "b.py", "line": 2}]'
+    items = parse_findings_json(raw, "architecture")
+    assert all(i["pass_name"] == "architecture" for i in items)
+    assert len(items) == 2
