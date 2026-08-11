@@ -241,3 +241,10 @@ def test_load_config_ignores_legacy_sandbox_key(tmp_path):
     assert cfg.provider == "deepseek"
     assert not hasattr(cfg, "sandbox")
     assert any("sandbox:" in str(w.message) for w in caught)
+
+
+def test_config_reasoning_effort_accepts_medium():
+    from superseded.config import Config
+
+    assert Config(reasoning_effort="medium").reasoning_effort == "medium"
+    assert Config().reasoning_effort == "max"

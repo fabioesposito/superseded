@@ -33,22 +33,27 @@ def test_init_force_overwrites(tmp_path, monkeypatch):
     assert result.exit_code == 0
 
 
-def test_init_reports_missing_deepseek_key(tmp_path, monkeypatch):
+def test_init_reports_no_api_keys(tmp_path, monkeypatch):
     monkeypatch.delenv("SUPERSEDED_DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("SUPERSEDED_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SUPERSEDED_ANTHROPIC_API_KEY", raising=False)
     target = tmp_path / ".superseded.yaml"
     runner = CliRunner()
     result = runner.invoke(cli, ["init", "--config", str(target)])
     assert result.exit_code == 0  # not an error, just a status line
-    assert "SUPERSEDED_DEEPSEEK_API_KEY: not set" in result.output
+    assert "API keys: none set" in result.output
 
 
-def test_init_reports_present_deepseek_key(tmp_path, monkeypatch):
+def test_init_reports_configured_keys(tmp_path, monkeypatch):
     monkeypatch.setenv("SUPERSEDED_DEEPSEEK_API_KEY", "sk-test")
+    monkeypatch.delenv("SUPERSEDED_OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("SUPERSEDED_ANTHROPIC_API_KEY", raising=False)
     target = tmp_path / ".superseded.yaml"
     runner = CliRunner()
     result = runner.invoke(cli, ["init", "--config", str(target)])
     assert result.exit_code == 0
-    assert "SUPERSEDED_DEEPSEEK_API_KEY: set" in result.output
+    assert "API keys: deepseek ✓" in result.output
+    assert "openai ✗" in result.output
 
 
 def test_init_reports_gh_presence(tmp_path, monkeypatch):

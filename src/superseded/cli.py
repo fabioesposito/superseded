@@ -10,7 +10,7 @@ import subprocess
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import get_args
+from typing import TYPE_CHECKING, get_args
 
 import click
 
@@ -34,8 +34,17 @@ from superseded.output.github_pr import current_repo, post_review_to_pr
 from superseded.output.json_out import format_json
 from superseded.output.markdown import format_markdown
 from superseded.output.table import format_table
-from superseded.providers import ProviderConfigError
+from superseded.providers import (
+    AnthropicProvider,
+    DeepSeekProvider,
+    OpenAIProvider,
+    Provider,
+    ProviderConfigError,
+)
 from superseded.review.engine import ReviewEngine
+
+if TYPE_CHECKING:
+    from superseded.server.config import ServerConfig
 
 MODEL_ENV = "SUPERSEDED_MODEL"
 REASONING_EFFORT_ENV = "SUPERSEDED_REASONING_EFFORT"
@@ -110,6 +119,14 @@ def resolve_reasoning_effort(flag: str | None, config: Config) -> str:
     if flag is not None:
         return flag
     return config.reasoning_effort
+
+
+def _build_server_provider(config: ServerConfig) -> Provider:
+    if config.provider == "openai":
+        return OpenAIProvider(api_key=config.openai_api_key)
+    if config.provider == "anthropic":
+        return AnthropicProvider(api_key=config.anthropic_api_key)
+    return DeepSeekProvider(api_key=config.deepseek_api_key)
 
 
 def resolve_graph(cli_value: bool | None, config: Config) -> bool:
@@ -254,12 +271,12 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
 @cli.command()
 @click.option("--pr", type=int, help="PR number to review")
 @click.option("--diff", "diff_range", help="Git diff range (e.g. HEAD~3..HEAD)")
-@click.option("--provider", default=None, help="Model provider (default: deepseek)")
+@click.option("--provider", default=None, help="Model provider (deepseek, openai, anthropic)")
 @click.option("--model", default=None, help="Model to use")
 @click.option(
     "--reasoning-effort",
     "reasoning_effort",
-    type=click.Choice(["low", "high", "max"]),
+    type=click.Choice(["low", "medium", "high", "max"]),
     default=None,
     help="DeepSeek thinking-mode effort (default: max). Env: SUPERSEDED_REASONING_EFFORT.",
 )
@@ -696,10 +713,18 @@ def _run_init(force: bool, config_path: Path | None) -> None:
             "uv add code-review-graph && code-review-graph build)"
         )
 
-    if os.environ.get("SUPERSEDED_DEEPSEEK_API_KEY"):
-        _status("SUPERSEDED_DEEPSEEK_API_KEY: set")
+    key_status = {
+        "deepseek": bool(os.environ.get("SUPERSEDED_DEEPSEEK_API_KEY")),
+        "openai": bool(os.environ.get("SUPERSEDED_OPENAI_API_KEY")),
+        "anthropic": bool(os.environ.get("SUPERSEDED_ANTHROPIC_API_KEY")),
+    }
+    if any(key_status.values()):
+        _status("API keys: " + ", ".join(f"{k} {'✓' if v else '✗'}" for k, v in key_status.items()))
     else:
-        _status("SUPERSEDED_DEEPSEEK_API_KEY: not set — set it before running `superseded review`.")
+        _status(
+            "API keys: none set — set one of SUPERSEDED_DEEPSEEK_API_KEY, "
+            "SUPERSEDED_OPENAI_API_KEY, SUPERSEDED_ANTHROPIC_API_KEY."
+        )
 
     cfg = Config(provider="deepseek")
     write_config(cfg, target)
@@ -842,7 +867,6 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
     from contextlib import asynccontextmanager
 
     from superseded.memory.backend import make_store
-    from superseded.providers import DeepSeekProvider
     from superseded.server.config import ServerConfig
     from superseded.server.github import GitHubApp
     from superseded.server.repo_manager import RepoManager
@@ -856,9 +880,18 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
         click.echo(f"Error: {err}", err=True)
         sys.exit(2)
 
-    if not config.deepseek_api_key:
+    key_env_by_provider = {
+        "deepseek": "SUPERSEDED_DEEPSEEK_API_KEY",
+        "openai": "SUPERSEDED_OPENAI_API_KEY",
+        "anthropic": "SUPERSEDED_ANTHROPIC_API_KEY",
+    }
+
+    if config.provider not in key_env_by_provider:
+        click.echo(f"Error: unknown provider {config.provider!r}", err=True)
+        sys.exit(2)
+    if not getattr(config, f"{config.provider}_api_key", None):
         click.echo(
-            "Error: SUPERSEDED_DEEPSEEK_API_KEY must be set to serve.",
+            f"Error: {key_env_by_provider[config.provider]} must be set to serve.",
             err=True,
         )
         sys.exit(2)
@@ -882,7 +915,7 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
         store=store,
         server_provider=config.provider,
         server_model=config.model,
-        provider=DeepSeekProvider(api_key=config.deepseek_api_key),
+        provider=_build_server_provider(config),
     )
 
     import uvicorn

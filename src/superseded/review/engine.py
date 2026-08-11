@@ -26,7 +26,7 @@ class ReviewEngine:
     def __init__(self, provider: Provider, config: Config) -> None:
         self.provider = provider
         self.model: str | None = None
-        self.reasoning_effort: Literal["low", "high", "max"] = config.reasoning_effort
+        self.reasoning_effort: Literal["low", "medium", "high", "max"] = config.reasoning_effort
         self.config = config
 
     @classmethod

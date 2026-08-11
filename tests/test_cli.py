@@ -769,3 +769,15 @@ def test_verify_flag_passed_to_run_review(monkeypatch):
     result = runner.invoke(cli, ["review", "--diff", "HEAD~1..HEAD"])
     assert result.exit_code == 0
     assert captured.get("verify") is None
+
+
+def test_cli_provider_choices_include_all_providers():
+    from click.testing import CliRunner
+
+    from superseded.cli import cli
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["review", "--help"])
+    assert result.exit_code == 0
+    assert "deepseek, openai, anthropic" in result.output
+    assert "medium" in result.output  # widened effort choice

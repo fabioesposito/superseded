@@ -26,9 +26,11 @@ class ServerConfig(BaseModel):
     tls_cert_path: Path | None = None
     tls_key_path: Path | None = None
     model: str | None = None
-    reasoning_effort: Literal["low", "high", "max"] = "max"
+    reasoning_effort: Literal["low", "medium", "high", "max"] = "max"
     behind_proxy: bool = False
     deepseek_api_key: str | None = None
+    openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
     provider: str = "deepseek"
 
     @property
@@ -156,6 +158,13 @@ class ServerConfig(BaseModel):
         deepseek_api_key = os.environ.get("SUPERSEDED_DEEPSEEK_API_KEY")
         if deepseek_api_key:
             kwargs["deepseek_api_key"] = deepseek_api_key
+
+        openai_api_key = os.environ.get("SUPERSEDED_OPENAI_API_KEY")
+        if openai_api_key:
+            kwargs["openai_api_key"] = openai_api_key
+        anthropic_api_key = os.environ.get("SUPERSEDED_ANTHROPIC_API_KEY")
+        if anthropic_api_key:
+            kwargs["anthropic_api_key"] = anthropic_api_key
 
         return cls(**kwargs)
 

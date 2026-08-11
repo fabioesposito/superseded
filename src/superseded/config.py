@@ -20,7 +20,7 @@ class PassConfig(BaseModel):
 class Config(BaseModel):
     provider: str = "deepseek"
     model: str | None = None
-    reasoning_effort: Literal["low", "high", "max"] = "max"
+    reasoning_effort: Literal["low", "medium", "high", "max"] = "max"
     passes: PassConfig = PassConfig()
     post_to_pr: bool = False
     format: str = "table"

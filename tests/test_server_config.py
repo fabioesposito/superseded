@@ -261,3 +261,14 @@ def test_server_config_reasoning_effort_from_env(monkeypatch, tmp_path):
 def test_server_config_provider_defaults_to_deepseek():
     config = ServerConfig()
     assert config.provider == "deepseek"
+
+
+def test_server_config_reads_openai_and_anthropic_keys(monkeypatch):
+    from superseded.server.config import ServerConfig
+
+    _set_required_server_env(monkeypatch)
+    monkeypatch.setenv("SUPERSEDED_OPENAI_API_KEY", "sk-openai")
+    monkeypatch.setenv("SUPERSEDED_ANTHROPIC_API_KEY", "sk-anthropic")
+    cfg = ServerConfig.from_env()
+    assert cfg.openai_api_key == "sk-openai"
+    assert cfg.anthropic_api_key == "sk-anthropic"

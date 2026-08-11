@@ -573,3 +573,11 @@ def test_anthropic_complete_maps_effort(monkeypatch):
     assert captured["extra_body"]["effort"] == "high"
     p.complete("p", reasoning_effort="max")
     assert captured["extra_body"]["effort"] == "xhigh"
+
+
+def test_provider_map_has_three_providers():
+    from superseded.providers import PROVIDER_MAP
+
+    assert set(PROVIDER_MAP) == {"deepseek", "openai", "anthropic"}
+    assert PROVIDER_MAP["openai"] is OpenAIProvider
+    assert PROVIDER_MAP["anthropic"] is AnthropicProvider

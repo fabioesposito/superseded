@@ -32,5 +32,5 @@ class Provider(Protocol):
         model: str | None = None,
         timeout: float = 600.0,
         temperature: float = 0.0,
-        reasoning_effort: Literal["low", "high", "max"] | None = None,
+        reasoning_effort: Literal["low", "medium", "high", "max"] | None = None,
     ) -> ProviderResponse: ...
