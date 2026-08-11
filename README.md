@@ -136,7 +136,7 @@ docker compose up -d                       # api + postgres
 The API binds `0.0.0.0:8000` **inside the compose network only**; terminate TLS at
 a reverse proxy in front of compose. `SUPERSEDED_BEHIND_PROXY=1` (set by compose)
 tells the server TLS terminates upstream. See [Server Mode](docs/superseded/server.md)
-for the full Docker/compose guide and slim-image builds.
+for the full server guide.
 
 **Server config file** (`/etc/superseded/server.yaml`) — alternatively to env vars:
 
