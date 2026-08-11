@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,7 +32,9 @@ def server(tmp_path):
         webhook_secret=config.webhook_secret,
     )
     repo_manager = RepoManager(base_path=config.temp_dir)
-    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    worker = ReviewWorker(
+        github=github, repo_manager=repo_manager, max_concurrent=1, provider=MagicMock()
+    )
     from superseded.memory.store import MemoryStore
 
     store = MemoryStore(tmp_path / "memory.db")
@@ -90,7 +92,9 @@ def test_health_without_token_hides_internals(tmp_path):
         webhook_secret=config.webhook_secret,
     )
     repo_manager = RepoManager(base_path=config.temp_dir)
-    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    worker = ReviewWorker(
+        github=github, repo_manager=repo_manager, max_concurrent=1, provider=MagicMock()
+    )
     from superseded.memory.store import MemoryStore
 
     store = MemoryStore(tmp_path / "memory.db")
@@ -125,7 +129,9 @@ def test_health_with_token_requires_auth(tmp_path):
         webhook_secret=config.webhook_secret,
     )
     repo_manager = RepoManager(base_path=config.temp_dir)
-    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    worker = ReviewWorker(
+        github=github, repo_manager=repo_manager, max_concurrent=1, provider=MagicMock()
+    )
     from superseded.memory.store import MemoryStore
 
     store = MemoryStore(tmp_path / "memory.db")
@@ -171,7 +177,9 @@ def test_review_endpoint_returns_401_when_api_key_missing(tmp_path):
         webhook_secret=config.webhook_secret,
     )
     repo_manager = RepoManager(base_path=config.temp_dir)
-    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    worker = ReviewWorker(
+        github=github, repo_manager=repo_manager, max_concurrent=1, provider=MagicMock()
+    )
     store = __import__("superseded.memory.store", fromlist=["MemoryStore"]).MemoryStore(
         tmp_path / "mem.db"
     )
@@ -203,7 +211,9 @@ def test_review_endpoint_returns_422_when_authenticated_but_body_invalid(tmp_pat
         webhook_secret=config.webhook_secret,
     )
     repo_manager = RepoManager(base_path=config.temp_dir)
-    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    worker = ReviewWorker(
+        github=github, repo_manager=repo_manager, max_concurrent=1, provider=MagicMock()
+    )
     store = __import__("superseded.memory.store", fromlist=["MemoryStore"]).MemoryStore(
         tmp_path / "mem2.db"
     )
@@ -415,7 +425,9 @@ def keyed_server(tmp_path):
         webhook_secret=config.webhook_secret,
     )
     repo_manager = RepoManager(base_path=config.temp_dir)
-    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    worker = ReviewWorker(
+        github=github, repo_manager=repo_manager, max_concurrent=1, provider=MagicMock()
+    )
     from superseded.memory.store import MemoryStore
 
     store = MemoryStore(tmp_path / "memory.db")

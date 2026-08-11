@@ -7,8 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from superseded.cli import cli, format_memory_context, resolve_agent, resolve_model
+from superseded.cli import cli, format_memory_context, resolve_model, resolve_provider
 from superseded.config import Config
+from superseded.models import ReviewUsage
 
 
 def test_cli_version():
@@ -69,16 +70,16 @@ def test_review_with_pr(mock_review):
     mock_review.assert_called_once()
 
 
-def test_resolve_agent_env_overrides_flag_and_config():
-    with patch.dict("os.environ", {"SUPERSEDED_AGENT": "opencode"}, clear=False):
-        assert resolve_agent(None, Config()) == "opencode"
-        assert resolve_agent("codex", Config()) == "opencode"
-
-
-def test_resolve_agent_flag_overrides_config_no_env():
+def test_resolve_provider_flag_overrides_config_no_env():
     with patch.dict("os.environ", {}, clear=True):
-        assert resolve_agent(None, Config()) == "opencode"
-        assert resolve_agent("codex", Config()) == "codex"
+        assert resolve_provider(None, Config()) == "deepseek"
+        assert resolve_provider("other", Config()) == "other"
+
+
+def test_resolve_provider_legacy_agent_env_alias():
+    """SUPERSEDED_AGENT is accepted as a deprecated alias for SUPERSEDED_PROVIDER."""
+    with patch.dict("os.environ", {"SUPERSEDED_AGENT": "deepseek"}, clear=False):
+        assert resolve_provider(None, Config()) == "deepseek"
 
 
 def test_resolve_model_env_overrides():
@@ -167,7 +168,8 @@ def test_persist_findings_passes_reasoning(monkeypatch):
     assert calls[0]["reasoning"] == "suspicious input"
 
 
-def test_run_review_exits_cleanly_when_agent_unavailable(tmp_path, monkeypatch, capsys):
+def test_run_review_exits_cleanly_when_provider_unknown(tmp_path, monkeypatch, capsys):
+    """An unknown provider name must exit 2 with a clear error."""
     monkeypatch.setattr(
         "superseded.cli.fetch_diff",
         lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n",
@@ -182,7 +184,6 @@ def test_run_review_exits_cleanly_when_agent_unavailable(tmp_path, monkeypatch, 
     )
     monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
-    monkeypatch.setattr("shutil.which", lambda cmd: None)
 
     from superseded.cli import _run_review
 
@@ -190,7 +191,7 @@ def test_run_review_exits_cleanly_when_agent_unavailable(tmp_path, monkeypatch, 
         _run_review(
             pr=None,
             diff_range="HEAD~1..HEAD",
-            agent=None,
+            provider="bogus",
             model=None,
             output_format="json",
             post=False,
@@ -198,7 +199,7 @@ def test_run_review_exits_cleanly_when_agent_unavailable(tmp_path, monkeypatch, 
         )
     assert exc.value.code == 2
     err = capsys.readouterr().err
-    assert "agent" in err.lower() or "path" in err.lower()
+    assert "provider" in err.lower()
 
 
 def test_run_review_exits_partial_when_passes_warned(tmp_path, monkeypatch):
@@ -219,7 +220,7 @@ def test_run_review_exits_partial_when_passes_warned(tmp_path, monkeypatch):
     )
     monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
-    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/claude")
+    monkeypatch.setenv("SUPERSEDED_DEEPSEEK_API_KEY", "test-key")
 
     from superseded.models import ReviewResult
 
@@ -227,7 +228,10 @@ def test_run_review_exits_partial_when_passes_warned(tmp_path, monkeypatch):
         return ReviewResult(findings=[], warnings=["pass 'correctness' failed: no provider"])
 
     monkeypatch.setattr("superseded.review.engine.ReviewEngine.review", fake_review)
-    monkeypatch.setattr("superseded.review.engine.ReviewEngine.run_pass", lambda self, *a, **k: [])
+    monkeypatch.setattr(
+        "superseded.review.engine.ReviewEngine.run_pass",
+        lambda self, *a, **k: ([], ReviewUsage()),
+    )
 
     from superseded.cli import EXIT_PARTIAL_FAILURE, _run_review
 
@@ -235,7 +239,7 @@ def test_run_review_exits_partial_when_passes_warned(tmp_path, monkeypatch):
         _run_review(
             pr=None,
             diff_range="HEAD~1..HEAD",
-            agent=None,
+            provider=None,
             model=None,
             output_format="json",
             post=False,
@@ -260,7 +264,7 @@ def test_run_review_clean_when_no_warnings(tmp_path, monkeypatch):
     )
     monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
-    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/claude")
+    monkeypatch.setenv("SUPERSEDED_DEEPSEEK_API_KEY", "test-key")
 
     from superseded.models import ReviewResult
 
@@ -268,7 +272,10 @@ def test_run_review_clean_when_no_warnings(tmp_path, monkeypatch):
         return ReviewResult(findings=[], warnings=[])
 
     monkeypatch.setattr("superseded.review.engine.ReviewEngine.review", fake_review)
-    monkeypatch.setattr("superseded.review.engine.ReviewEngine.run_pass", lambda self, *a, **k: [])
+    monkeypatch.setattr(
+        "superseded.review.engine.ReviewEngine.run_pass",
+        lambda self, *a, **k: ([], ReviewUsage()),
+    )
 
     from superseded.cli import _run_review
 
@@ -276,7 +283,7 @@ def test_run_review_clean_when_no_warnings(tmp_path, monkeypatch):
     _run_review(
         pr=None,
         diff_range="HEAD~1..HEAD",
-        agent=None,
+        provider=None,
         model=None,
         output_format="json",
         post=False,
@@ -286,7 +293,7 @@ def test_run_review_clean_when_no_warnings(tmp_path, monkeypatch):
 
 def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, monkeypatch):
     """passes.style: false in .superseded.yaml must skip style when --passes is omitted."""
-    (tmp_path / ".superseded.yaml").write_text("agent: claude-code\npasses:\n  style: false\n")
+    (tmp_path / ".superseded.yaml").write_text("provider: deepseek\npasses:\n  style: false\n")
     monkeypatch.chdir(tmp_path)
 
     monkeypatch.setattr(
@@ -303,15 +310,15 @@ def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, mo
     )
     monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
     monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
-    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/claude")
+    monkeypatch.setenv("SUPERSEDED_DEEPSEEK_API_KEY", "test-key")
 
     invoked: list[str] = []
 
-    def fake_run_pass(self, pass_name, prompt, timeout=300, progress=None, sess=None):
+    def fake_run_pass(self, pass_name, prompt, timeout=300, progress=None):
         invoked.append(pass_name)
         if progress is not None:
             progress(pass_name, "done")
-        return []
+        return [], ReviewUsage()
 
     monkeypatch.setattr("superseded.review.engine.ReviewEngine.run_pass", fake_run_pass)
 
@@ -320,7 +327,7 @@ def test_run_review_honors_config_disabled_passes_when_flag_omitted(tmp_path, mo
     _run_review(
         pr=None,
         diff_range="HEAD~1..HEAD",
-        agent=None,
+        provider=None,
         model=None,
         output_format="json",
         post=False,
@@ -461,7 +468,6 @@ def test_review_passes_graph_to_gather_context(monkeypatch):
     monkeypatch.setattr(cli_mod, "repo_root", lambda: Path("/repo"))
     monkeypatch.setattr(cli_mod, "fetch_pr_description", lambda pr: None)
     fake_engine = MagicMock()
-    fake_engine.agent.is_available.return_value = True
     fake_engine.review = fake_engine_review
     monkeypatch.setattr(
         cli_mod.ReviewEngine, "select", classmethod(lambda cls, *a, **kw: fake_engine)
@@ -661,169 +667,8 @@ def test_log_format_config_file_used_when_no_flag_or_env(
     assert mock_setup.call_args.args[1] == "INFO"
 
 
-def test_resolve_sandbox_env_overrides_flag(monkeypatch):
-    from superseded.cli import resolve_sandbox
-
-    with monkeypatch.context() as m:
-        m.setenv("SUPERSEDED_SANDBOX", "0")
-        assert resolve_sandbox(True, Config()) is False
-
-
-def test_resolve_sandbox_env_truthy_overrides_flag(monkeypatch):
-    from superseded.cli import resolve_sandbox
-
-    with monkeypatch.context() as m:
-        m.setenv("SUPERSEDED_SANDBOX", "1")
-        assert resolve_sandbox(False, Config()) is True
-
-
-def test_resolve_sandbox_flag_overrides_config():
-    from superseded.cli import resolve_sandbox
-
-    assert resolve_sandbox(True, Config(sandbox=False)) is True
-    assert resolve_sandbox(False, Config(sandbox=True)) is False
-
-
-def test_resolve_sandbox_defaults_to_config():
-    from superseded.cli import resolve_sandbox
-
-    assert resolve_sandbox(None, Config(sandbox=True)) is True
-    assert resolve_sandbox(None, Config(sandbox=False)) is False
-
-
-def test_resolve_sandbox_defaults_false():
-    from superseded.cli import resolve_sandbox
-
-    assert resolve_sandbox(None, Config()) is False
-
-
-def test_run_review_sandbox_missing_sbx_exits(tmp_path, monkeypatch, capsys):
-    """--sandbox with no sbx on PATH exits 2 with a clear sbx message."""
-    monkeypatch.setattr(
-        "superseded.cli.fetch_diff",
-        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n",
-    )
-    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
-    monkeypatch.setattr(
-        "superseded.context.gathering.compute_file_context", lambda diff, root=None: None
-    )
-    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
-    monkeypatch.setattr(
-        "superseded.context.gathering.run_static_analysis", lambda files, root: None
-    )
-    monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
-    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
-    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/claude" if cmd != "sbx" else None)
-
-    from superseded.cli import _run_review
-
-    with pytest.raises(SystemExit) as exc:
-        _run_review(
-            pr=None,
-            diff_range="HEAD~1..HEAD",
-            agent=None,
-            model=None,
-            output_format="json",
-            post=False,
-            passes=None,
-            sandbox=True,
-        )
-    assert exc.value.code == 2
-    assert "sbx" in capsys.readouterr().err.lower()
-
-
-def test_run_review_sandbox_builds_sandbox_executor(tmp_path, monkeypatch):
-    """--sandbox with sbx present builds a SandboxExecutor and passes it to engine.review."""
-    monkeypatch.setattr(
-        "superseded.cli.fetch_diff",
-        lambda pr=None, diff_range=None, files=None, staged=False: "diff --git a/x.py b/x.py\n",
-    )
-    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
-    monkeypatch.setattr(
-        "superseded.context.gathering.compute_file_context", lambda diff, root=None: None
-    )
-    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
-    monkeypatch.setattr(
-        "superseded.context.gathering.run_static_analysis", lambda files, root: None
-    )
-    monkeypatch.setattr("superseded.context.gathering.retrieve_usages", lambda diff, root: None)
-    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
-    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/sbx")
-
-    captured: dict = {}
-
-    def fake_review(self, **kwargs):
-        captured.update(kwargs)
-        from superseded.models import ReviewResult
-
-        return ReviewResult(findings=[], warnings=[])
-
-    monkeypatch.setattr("superseded.review.engine.ReviewEngine.review", fake_review)
-    monkeypatch.setattr("superseded.review.engine.ReviewEngine.run_pass", lambda self, *a, **k: [])
-
-    from superseded.cli import _run_review
-    from superseded.review.executor import SandboxExecutor
-
-    _run_review(
-        pr=None,
-        diff_range="HEAD~1..HEAD",
-        agent=None,
-        model=None,
-        output_format="json",
-        post=False,
-        passes=None,
-        sandbox=True,
-    )
-    ex = captured.get("executor")
-    assert isinstance(ex, SandboxExecutor)
-
-
-def test_serve_threads_smolvm_sandbox_fields(monkeypatch):
-    """SandboxSettings built by `serve` carries kind+smolvm_image_* from ServerConfig."""
-    import pathlib
-    import tempfile
-
-    pk = pathlib.Path(tempfile.mkstemp(suffix=".pem")[1])
-    pk.write_text("dummy")
-    monkeypatch.setenv("SUPERSEDED_APP_ID", "123456")
-    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whs")
-    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(pk))
-    monkeypatch.setenv("SUPERSEDED_SANDBOX", "1")
-    monkeypatch.setenv("SUPERSEDED_SANDBOX_KIND", "smolvm")
-    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE", "gcr/x/all:1")
-
-    captured = {}
-
-    from superseded.server import worker as worker_mod
-
-    real_init = worker_mod.ReviewWorker.__init__
-
-    def spy(self, **kw):
-        captured["sandbox"] = kw.get("sandbox")
-        return real_init(self, **kw)
-
-    monkeypatch.setattr(worker_mod.ReviewWorker, "__init__", spy)
-
-    import contextlib
-
-    import uvicorn  # noqa: F401
-
-    monkeypatch.setattr("uvicorn.run", lambda **k: None)
-
-    from click.testing import CliRunner
-
-    from superseded.cli import cli
-
-    runner = CliRunner()
-    with contextlib.suppress(Exception):
-        runner.invoke(cli, ["serve", "--host", "127.0.0.1", "--port", "0"])
-    assert "sandbox" in captured
-    assert captured["sandbox"].kind == "smolvm"
-    assert captured["sandbox"].smolvm_image == "gcr/x/all:1"
-
-
-def test_serve_refuses_no_sandbox_without_opt_in(monkeypatch, tmp_path):
-    """serve must refuse to boot with the sandbox off unless explicitly opted in."""
+def test_serve_refuses_without_deepseek_key(monkeypatch, tmp_path):
+    """serve must exit 2 if SUPERSEDED_DEEPSEEK_API_KEY is not set."""
     import pathlib
 
     pk = pathlib.Path(tmp_path / "key.pem")
@@ -831,8 +676,7 @@ def test_serve_refuses_no_sandbox_without_opt_in(monkeypatch, tmp_path):
     monkeypatch.setenv("SUPERSEDED_APP_ID", "123456")
     monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whs")
     monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(pk))
-    monkeypatch.setenv("SUPERSEDED_SANDBOX", "0")
-    monkeypatch.delenv("SUPERSEDED_ALLOW_NO_SANDBOX", raising=False)
+    monkeypatch.delenv("SUPERSEDED_DEEPSEEK_API_KEY", raising=False)
 
     from click.testing import CliRunner
 
@@ -840,28 +684,7 @@ def test_serve_refuses_no_sandbox_without_opt_in(monkeypatch, tmp_path):
 
     result = CliRunner().invoke(cli, ["serve", "--host", "127.0.0.1", "--port", "0"])
     assert result.exit_code == 2
-    assert "refusing to serve without a sandbox" in result.output
-
-
-def test_serve_allows_no_sandbox_with_explicit_opt_in(monkeypatch, tmp_path):
-    import pathlib
-
-    pk = pathlib.Path(tmp_path / "key.pem")
-    pk.write_text("dummy")
-    monkeypatch.setenv("SUPERSEDED_APP_ID", "123456")
-    monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whs")
-    monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(pk))
-    monkeypatch.setenv("SUPERSEDED_SANDBOX", "0")
-    monkeypatch.setenv("SUPERSEDED_ALLOW_NO_SANDBOX", "1")
-    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
-
-    from click.testing import CliRunner
-
-    from superseded.cli import cli
-
-    result = CliRunner().invoke(cli, ["serve", "--host", "127.0.0.1", "--port", "0"])
-    assert "refusing to serve without a sandbox" not in result.output
-    assert result.exit_code == 0
+    assert "SUPERSEDED_DEEPSEEK_API_KEY" in result.output
 
 
 def test_verify_flag_passed_to_run_review(monkeypatch):

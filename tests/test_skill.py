@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from click.testing import CliRunner
-
-from superseded.cli import cli
 from superseded.skill import SKILL_AGENTS, build_skill_text, install_skill, skill_dir_for
 
 
@@ -91,45 +88,3 @@ def test_install_atomic_no_tmp_lingering(tmp_path, monkeypatch):
     install_skill(["opencode"])
     d = skill_dir_for("opencode")
     assert list(d.glob("*.tmp")) == []
-
-
-def test_cli_skill_install_happy_path(tmp_path, monkeypatch):
-    _patch_home(monkeypatch, tmp_path)
-    runner = CliRunner()
-    result = runner.invoke(cli, ["skill", "install"])
-    assert result.exit_code == 0, result.output
-    for name in SKILL_AGENTS:
-        assert (skill_dir_for(name) / "SKILL.md").read_text() == build_skill_text()
-
-
-def test_cli_skill_print_emits_skill(tmp_path, monkeypatch):
-    _patch_home(monkeypatch, tmp_path)
-    runner = CliRunner()
-    result = runner.invoke(cli, ["skill", "print"])
-    assert result.exit_code == 0, result.output
-    assert result.output == build_skill_text() + "\n"
-    # print performs no writes
-    for name in SKILL_AGENTS:
-        assert not skill_dir_for(name).exists()
-
-
-def test_cli_skill_install_unknown_agent(tmp_path, monkeypatch):
-    _patch_home(monkeypatch, tmp_path)
-    runner = CliRunner()
-    result = runner.invoke(cli, ["skill", "install", "--agent", "bogus"])
-    assert result.exit_code == 2
-    assert "bogus" in result.output
-
-
-def test_cli_skill_install_force_flag(tmp_path, monkeypatch):
-    _patch_home(monkeypatch, tmp_path)
-    f = skill_dir_for("codex") / "SKILL.md"
-    f.parent.mkdir(parents=True)
-    f.write_text("old")
-    runner = CliRunner()
-    no_force = runner.invoke(cli, ["skill", "install", "--agent", "codex"])
-    assert no_force.exit_code == 2
-    assert f.read_text() == "old"
-    forced = runner.invoke(cli, ["skill", "install", "--agent", "codex", "--force"])
-    assert forced.exit_code == 0, forced.output
-    assert f.read_text() == build_skill_text()

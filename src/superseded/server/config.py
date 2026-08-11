@@ -27,17 +27,8 @@ class ServerConfig(BaseModel):
     agent: str | None = None
     model: str | None = None
     behind_proxy: bool = False
-    sandbox_enabled: bool = True
-    sbx_binary: str = "sbx"
-    sandbox_timeout: int = 600
-    sandbox_keep_on_error: bool = False
-    sandbox_io_mode: str = "exec"
-    sandbox_kind: str = "sbx"
-    smolvm_binary: str = "smolvm"
-    smolvm_image: str | None = None
-    smolvm_image_claude: str | None = None
-    smolvm_image_opencode: str | None = None
-    smolvm_image_codex: str | None = None
+    deepseek_api_key: str | None = None
+    provider: str = "deepseek"
 
     @property
     def is_configured(self) -> bool:
@@ -161,54 +152,9 @@ class ServerConfig(BaseModel):
                 "on",
             )
 
-        sandbox = os.environ.get("SUPERSEDED_SANDBOX")
-        if sandbox:
-            kwargs["sandbox_enabled"] = sandbox.strip().lower() in ("1", "true", "yes", "on")
-
-        sbx_binary = os.environ.get("SUPERSEDED_SBX_BINARY")
-        if sbx_binary:
-            kwargs["sbx_binary"] = sbx_binary
-
-        sandbox_timeout = os.environ.get("SUPERSEDED_SANDBOX_TIMEOUT")
-        if sandbox_timeout:
-            kwargs["sandbox_timeout"] = int(sandbox_timeout)
-
-        sandbox_keep = os.environ.get("SUPERSEDED_SANDBOX_KEEP_ON_ERROR")
-        if sandbox_keep:
-            kwargs["sandbox_keep_on_error"] = sandbox_keep.strip().lower() in (
-                "1",
-                "true",
-                "yes",
-                "on",
-            )
-
-        sandbox_io = os.environ.get("SUPERSEDED_SANDBOX_IO_MODE")
-        if sandbox_io:
-            kwargs["sandbox_io_mode"] = sandbox_io
-
-        sandbox_kind = os.environ.get("SUPERSEDED_SANDBOX_KIND")
-        if sandbox_kind:
-            kwargs["sandbox_kind"] = sandbox_kind
-
-        smolvm_binary = os.environ.get("SUPERSEDED_SMOLVM_BINARY")
-        if smolvm_binary:
-            kwargs["smolvm_binary"] = smolvm_binary
-
-        smolvm_image = os.environ.get("SUPERSEDED_SMOLVM_IMAGE")
-        if smolvm_image:
-            kwargs["smolvm_image"] = smolvm_image
-
-        smolvm_image_claude = os.environ.get("SUPERSEDED_SMOLVM_IMAGE_CLAUDE")
-        if smolvm_image_claude:
-            kwargs["smolvm_image_claude"] = smolvm_image_claude
-
-        smolvm_image_opencode = os.environ.get("SUPERSEDED_SMOLVM_IMAGE_OPENCODE")
-        if smolvm_image_opencode:
-            kwargs["smolvm_image_opencode"] = smolvm_image_opencode
-
-        smolvm_image_codex = os.environ.get("SUPERSEDED_SMOLVM_IMAGE_CODEX")
-        if smolvm_image_codex:
-            kwargs["smolvm_image_codex"] = smolvm_image_codex
+        deepseek_api_key = os.environ.get("SUPERSEDED_DEEPSEEK_API_KEY")
+        if deepseek_api_key:
+            kwargs["deepseek_api_key"] = deepseek_api_key
 
         return cls(**kwargs)
 

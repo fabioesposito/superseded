@@ -3,15 +3,11 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from superseded.agents.base import Agent
-from superseded.agents.claude_code import ClaudeCodeAgent
-from superseded.agents.codex import CodexAgent
-from superseded.agents.opencode import OpenCodeAgent
-from superseded.models import Finding, ReviewResult
-from superseded.review.executor import AgentExecutor, Session, SubprocessExecutor
+from superseded.models import Finding, ReviewResult, ReviewUsage
+from superseded.providers import PROVIDER_MAP, Provider
+from superseded.providers.parsing import parse_findings_json
 from superseded.review.merger import merge_findings
 from superseded.review.prompts import build_prompt, build_retry_prompt
 from superseded.review.verifier import _parse_verdicts
@@ -25,29 +21,28 @@ DEFAULT_PASS_TIMEOUT = 600
 
 ProgressFn = Callable[[str, str], None]
 
-AGENT_MAP: dict[str, type[Agent]] = {
-    "claude-code": ClaudeCodeAgent,
-    "opencode": OpenCodeAgent,
-    "codex": CodexAgent,
-}
-
 
 class ReviewEngine:
-    def __init__(self, agent: Agent, config: Config) -> None:
-        self.agent = agent
+    def __init__(self, provider: Provider, config: Config) -> None:
+        self.provider = provider
+        self.model: str | None = None
         self.config = config
 
     @classmethod
     def select(
-        cls, agent_name: str, model: str | None, config: Config | None = None
+        cls, provider_name: str, model: str | None, config: Config | None = None
     ) -> ReviewEngine:
         from superseded.config import Config
 
-        agent_cls = AGENT_MAP.get(agent_name)
-        if agent_cls is None:
-            raise ValueError(f"Unknown agent: {agent_name}. Choose from: {list(AGENT_MAP)}")
-        agent = agent_cls(model=model)
-        return cls(agent=agent, config=config or Config())
+        provider_cls = PROVIDER_MAP.get(provider_name)
+        if provider_cls is None:
+            raise ValueError(
+                f"Unknown provider: {provider_name}. Choose from: {list(PROVIDER_MAP)}"
+            )
+        provider = provider_cls()
+        engine = cls(provider=provider, config=config or Config())
+        engine.model = model
+        return engine
 
     def run_pass(
         self,
@@ -55,36 +50,26 @@ class ReviewEngine:
         prompt: str,
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
-        sess: Session | None = None,
-    ) -> list[Finding]:
-        if sess is None:
-            sess = SubprocessExecutor(agent_name=self.agent.name).session()
+    ) -> tuple[list[Finding], ReviewUsage]:
         if progress is not None:
             progress(pass_name, "start")
-        findings, errors = self._run_and_validate(pass_name, prompt, timeout, sess)
+        findings, errors, usage = self._run_and_validate(pass_name, prompt, timeout)
         if errors:
-            # Retry once with a corrective nudge: a schema drift (e.g. severity
-            # "minor") shouldn't silently drop otherwise-valid findings. Only the
-            # items that failed Finding() validation trigger this; a clean `[]`
-            # (no issues, or unparseable output handled in parsing.py) does not.
             logger.info("Retrying pass %s: %d finding(s) failed validation", pass_name, len(errors))
-            retried, _ = self._run_and_validate(
-                pass_name, build_retry_prompt(prompt, errors), timeout, sess
+            retried, _, _ = self._run_and_validate(
+                pass_name, build_retry_prompt(prompt, errors), timeout
             )
-            # Adopt the retry output only if it recovered findings; otherwise
-            # keep the partial first attempt rather than discarding everything.
             if retried:
                 findings = retried
         if progress is not None:
             progress(pass_name, "done")
-        return findings
+        return findings, usage
 
     def _run_and_validate(
-        self, pass_name: str, prompt: str, timeout: int, sess: Session
-    ) -> tuple[list[Finding], list[str]]:
-        cmd = self.agent.build_command()
-        stdout = sess.run(cmd, prompt, timeout=timeout)
-        raw_findings = self.agent.parse_output(stdout, pass_name)
+        self, pass_name: str, prompt: str, timeout: int
+    ) -> tuple[list[Finding], list[str], ReviewUsage]:
+        resp = self.provider.complete(prompt, model=self.model, timeout=timeout)
+        raw_findings = parse_findings_json(resp.content, pass_name)
         findings: list[Finding] = []
         errors: list[str] = []
         for item in raw_findings:
@@ -93,7 +78,12 @@ class ReviewEngine:
             except Exception as err:
                 errors.append(str(err))
                 logger.warning("Skipping malformed finding item in pass %s: %s", pass_name, err)
-        return findings, errors
+        usage = ReviewUsage(
+            prompt_tokens=resp.prompt_tokens,
+            completion_tokens=resp.completion_tokens,
+            per_pass={pass_name: (resp.prompt_tokens, resp.completion_tokens)},
+        )
+        return findings, errors, usage
 
     def _run_verification(
         self,
@@ -101,32 +91,22 @@ class ReviewEngine:
         diff: str,
         file_context: str | None,
         timeout: int,
-        sess: Session,
     ) -> ReviewResult:
-        """Run a post-merge verification pass over the deduplicated findings.
-
-        Sends the merged findings back to the agent with a specialised
-        verification prompt. The agent returns ``keep``/``drop`` verdicts
-        per finding with optional severity re-estimation.
-
-        On any failure the original ``result`` is returned unchanged and a
-        warning is appended.
-        """
+        """Run a post-merge verification pass over the deduplicated findings."""
         from superseded.review.prompts import build_verify_prompt
 
         if not result.findings:
             return result
 
         prompt = build_verify_prompt(result.findings, diff, file_context)
-        cmd = self.agent.build_command()
         try:
-            stdout = sess.run(cmd, prompt, timeout=timeout)
+            resp = self.provider.complete(prompt, model=self.model, timeout=timeout)
         except Exception as err:
             logger.warning("Verification pass failed: %s", err)
             result.warnings.append(f"Verification pass failed: {err}")
             return result
 
-        errors, verdicts = _parse_verdicts(stdout, collect_errors=True)
+        errors, verdicts = _parse_verdicts(resp.content, collect_errors=True)
 
         kept: list[Finding] = []
         dropped_findings: list[Finding] = []
@@ -164,8 +144,16 @@ class ReviewEngine:
             dropped_msg += f" ({reestimated_count} re-estimated)"
         result.warnings.append(dropped_msg)
 
+        # Accumulate verify-pass tokens into result.usage too.
+        result.usage.prompt_tokens += resp.prompt_tokens
+        result.usage.completion_tokens += resp.completion_tokens
+        result.usage.per_pass["verify"] = (resp.prompt_tokens, resp.completion_tokens)
+
         return ReviewResult(
-            findings=kept, warnings=result.warnings, dropped_findings=dropped_findings
+            findings=kept,
+            warnings=result.warnings,
+            dropped_findings=dropped_findings,
+            usage=result.usage,
         )
 
     def review(
@@ -182,19 +170,7 @@ class ReviewEngine:
         passes: list[str] | None = None,
         timeout: int = DEFAULT_PASS_TIMEOUT,
         progress: ProgressFn | None = None,
-        cwd: str | Path | None = None,
-        *,
-        env: dict[str, str] | None = None,
-        executor: AgentExecutor | None = None,
     ) -> ReviewResult:
-        resolved_executor = (
-            executor if executor is not None else SubprocessExecutor(agent_name=self.agent.name)
-        )
-        if not resolved_executor.available(self.agent):
-            raise RuntimeError(
-                f"Agent CLI '{self.agent.name}' not found on PATH. "
-                "Install it or choose a different agent with --agent."
-            )
         if passes is None or len(passes) == 0:
             passes = [
                 n
@@ -204,11 +180,9 @@ class ReviewEngine:
 
         all_findings: list[list[Finding]] = []
         warnings: list[str] = []
+        total_usage = ReviewUsage()
 
-        with (
-            resolved_executor.session(cwd, env=env) as sess,
-            ThreadPoolExecutor(max_workers=max(1, len(passes))) as pool,
-        ):
+        with ThreadPoolExecutor(max_workers=max(1, len(passes))) as pool:
             future_to_pass = {}
             for pass_name in passes:
                 prompt = build_prompt(
@@ -223,13 +197,17 @@ class ReviewEngine:
                     spec_signals=spec_signals,
                     learned_context=learned_context,
                 )
-                future = pool.submit(self.run_pass, pass_name, prompt, timeout, progress, sess)
+                future = pool.submit(self.run_pass, pass_name, prompt, timeout, progress)
                 future_to_pass[future] = pass_name
 
             for future in as_completed(future_to_pass):
                 pass_name = future_to_pass[future]
                 try:
-                    all_findings.append(future.result())
+                    findings, usage = future.result()
+                    all_findings.append(findings)
+                    total_usage.prompt_tokens += usage.prompt_tokens
+                    total_usage.completion_tokens += usage.completion_tokens
+                    total_usage.per_pass.update(usage.per_pass)
                 except Exception as err:
                     msg = f"Review pass '{pass_name}' failed and was skipped: {err}"
                     logger.warning(msg)
@@ -239,9 +217,10 @@ class ReviewEngine:
 
             result = self.merge_findings(all_findings)
             result.warnings = warnings
+            result.usage = total_usage
 
             if self.config.verify and result.findings:
-                result = self._run_verification(result, diff, file_context, timeout, sess)
+                result = self._run_verification(result, diff, file_context, timeout)
 
         return result
 

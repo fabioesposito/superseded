@@ -4,7 +4,15 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from superseded.review.engine import AGENT_MAP
+from superseded.agents.claude_code import ClaudeCodeAgent
+from superseded.agents.codex import CodexAgent
+from superseded.agents.opencode import OpenCodeAgent
+
+AGENT_MAP: dict[str, type] = {
+    "claude-code": ClaudeCodeAgent,
+    "opencode": OpenCodeAgent,
+    "codex": CodexAgent,
+}
 
 AGENT_PREFERENCE: tuple[str, ...] = ("claude-code", "opencode", "codex")
 

@@ -32,6 +32,7 @@ async def test_shutdown_drains_in_flight_jobs():
         github=_FakeGitHub(),
         repo_manager=_FakeRepoManager(),
         max_concurrent=1,
+        provider=MagicMock(),
     )
     processed: list[int] = []
 
@@ -67,6 +68,7 @@ async def test_shutdown_logs_unprocessed_jobs_when_empty_drain():
         github=_FakeGitHub(),
         repo_manager=_FakeRepoManager(),
         max_concurrent=1,
+        provider=MagicMock(),
     )
     lifecycle = ServerLifecycle(app=MagicMock(), worker=worker)
     lifecycle._worker_task = asyncio.create_task(worker.run())

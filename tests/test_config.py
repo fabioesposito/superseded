@@ -9,7 +9,7 @@ from superseded.config import Config, load_config
 
 def test_default_config():
     cfg = Config()
-    assert cfg.agent == "opencode"
+    assert cfg.provider == "deepseek"
     assert cfg.model is None
     assert cfg.passes.security is True
     assert cfg.post_to_pr is False
@@ -19,10 +19,10 @@ def test_default_config():
 
 def test_load_config_from_yaml():
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        f.write("agent: opencode\nmodel: gpt-4o\npasses:\n  security: false\n  style: false\n")
+        f.write("provider: deepseek\nmodel: gpt-4o\npasses:\n  security: false\n  style: false\n")
         f.flush()
         cfg = load_config(Path(f.name))
-        assert cfg.agent == "opencode"
+        assert cfg.provider == "deepseek"
         assert cfg.passes.security is False
     os.unlink(f.name)
 
@@ -65,13 +65,13 @@ def test_conventions_can_be_disabled():
 def test_write_config_round_trip(tmp_path):
     from superseded.config import Config, load_config, write_config
 
-    cfg = Config(agent="claude-code", model="claude-sonnet-4-6")
+    cfg = Config(provider="deepseek", model="gpt-4o")
     target = tmp_path / ".superseded.yaml"
     write_config(cfg, target)
 
     loaded = load_config(target)
-    assert loaded.agent == "claude-code"
-    assert loaded.model == "claude-sonnet-4-6"
+    assert loaded.provider == "deepseek"
+    assert loaded.model == "gpt-4o"
     assert loaded.passes.security is True
     assert loaded.passes.architecture is True
     assert loaded.format == "table"
@@ -101,10 +101,10 @@ def test_write_config_default_path(tmp_path, monkeypatch):
     from superseded.config import Config, load_config, write_config
 
     monkeypatch.chdir(tmp_path)
-    write_config(Config(agent="codex"))
+    write_config(Config(provider="deepseek"))
     assert (tmp_path / ".superseded.yaml").exists()
     loaded = load_config(None)
-    assert loaded.agent == "codex"
+    assert loaded.provider == "deepseek"
 
 
 def test_config_verify_defaults_to_true():
@@ -126,20 +126,11 @@ def test_config_graph_default_true():
     assert Config().graph is True
 
 
-def test_config_sandbox_defaults_false():
+def test_config_sandbox_field_removed():
     from superseded.config import Config
 
-    assert Config().sandbox is False
-
-
-def test_config_sandbox_round_trip(tmp_path):
-    from superseded.config import Config, load_config, write_config
-
-    cfg = Config(sandbox=True)
-    target = tmp_path / ".superseded.yaml"
-    write_config(cfg, target)
-    loaded = load_config(target)
-    assert loaded.sandbox is True
+    cfg = Config()
+    assert not hasattr(cfg, "sandbox")
 
 
 def test_config_graph_round_trip(tmp_path):

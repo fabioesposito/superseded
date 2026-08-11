@@ -16,7 +16,7 @@ class PassConfig(BaseModel):
 
 
 class Config(BaseModel):
-    agent: str = "opencode"
+    provider: str = "deepseek"
     model: str | None = None
     passes: PassConfig = PassConfig()
     post_to_pr: bool = False
@@ -29,7 +29,6 @@ class Config(BaseModel):
     conventions: bool = True
     spec_retrieval: bool = True
     graph: bool = True
-    sandbox: bool = False
     progressive: bool = True
     learned_review: bool = True
     reflection_threshold: int = 5

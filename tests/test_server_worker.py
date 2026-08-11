@@ -19,6 +19,13 @@ from superseded.server.worker import (
 )
 
 
+def _make_provider():
+    """Return a MagicMock suitable for ReviewWorker's `provider=` kwarg."""
+    p = MagicMock()
+    p.name = "fake"
+    return p
+
+
 @dataclass
 class FakeGitHubApp:
     get_installation_token: AsyncMock = field(
@@ -67,6 +74,7 @@ async def test_worker_processes_job():
         github=github,
         repo_manager=repo_manager,
         max_concurrent=2,
+        provider=_make_provider(),
     )
 
     job = ReviewJob(
@@ -97,6 +105,7 @@ async def test_worker_handles_failure_gracefully():
         github=github,
         repo_manager=repo_manager,
         max_concurrent=1,
+        provider=_make_provider(),
     )
 
     job = ReviewJob(
@@ -135,6 +144,7 @@ async def test_worker_success_updates_existing_check_run():
         github=github,
         repo_manager=repo_manager,
         max_concurrent=1,
+        provider=_make_provider(),
     )
 
     job = ReviewJob(
@@ -185,7 +195,7 @@ async def test_run_review_for_job_passes_context():
     with (
         patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
         patch("superseded.config.load_config") as mock_load_config,
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
         patch("superseded.context.gathering.compute_file_context", return_value="file ctx"),
         patch("superseded.context.gathering.run_static_analysis", return_value="static sig"),
         patch("superseded.context.gathering.retrieve_usages", return_value="usage sig"),
@@ -193,7 +203,7 @@ async def test_run_review_for_job_passes_context():
     ):
         mock_checkout.return_value = Path("/tmp/checkout")
         cfg = MagicMock()
-        cfg.agent = "claude-code"
+        cfg.provider = "deepseek"
         cfg.model = None
         cfg.static_analysis = True
         cfg.usage_retrieval = True
@@ -205,6 +215,7 @@ async def test_run_review_for_job_passes_context():
             token="ghp_test",
             job=job,
             correlation_id="test123",
+            provider=_make_provider(),
         )
 
     mock_engine.review.assert_called_once()
@@ -235,7 +246,7 @@ async def test_run_review_for_job_forwards_conventions_and_specs():
     with (
         patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
         patch("superseded.config.load_config") as mock_load_config,
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
         patch("superseded.context.gathering.compute_file_context", return_value="file ctx"),
         patch("superseded.context.gathering.run_static_analysis", return_value=None),
         patch("superseded.context.gathering.retrieve_usages", return_value=None),
@@ -245,7 +256,7 @@ async def test_run_review_for_job_forwards_conventions_and_specs():
     ):
         mock_checkout.return_value = Path("/tmp/checkout")
         cfg = MagicMock()
-        cfg.agent = "claude-code"
+        cfg.provider = "deepseek"
         cfg.model = None
         cfg.static_analysis = False
         cfg.usage_retrieval = False
@@ -259,6 +270,7 @@ async def test_run_review_for_job_forwards_conventions_and_specs():
             token="ghp_test",
             job=job,
             correlation_id="test123",
+            provider=_make_provider(),
         )
 
     mock_engine.review.assert_called_once()
@@ -320,7 +332,7 @@ async def test_run_review_for_job_injects_memory_context_and_graph(tmp_path):
             return_value=tmp_path,
         ),
         patch("superseded.config.load_config", return_value=Config()),
-        patch("superseded.review.engine.ReviewEngine.select", return_value=fake_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=fake_engine),
         patch("superseded.server.worker.gather_context", side_effect=fake_gather),
     ):
         await _run_review_for_job(
@@ -330,6 +342,7 @@ async def test_run_review_for_job_injects_memory_context_and_graph(tmp_path):
             job=job,
             correlation_id="c",
             store=store,
+            provider=_make_provider(),
         )
 
     assert captured["gather_kwargs"].get("graph") is True
@@ -364,6 +377,7 @@ async def test_run_review_skips_clone_when_disk_full():
             token="ghp_test",
             job=job,
             correlation_id="test123",
+            provider=_make_provider(),
         )
     mock_checkout.assert_not_called()
 
@@ -420,7 +434,7 @@ async def test_run_review_for_job_loads_config_from_default_branch():
     from superseded.server.worker import _run_review_for_job
 
     github = FakeGitHubApp()
-    github.fetch_repo_file = AsyncMock(return_value="agent: codex\nstatic_analysis: false\n")
+    github.fetch_repo_file = AsyncMock(return_value="provider: deepseek\nstatic_analysis: false\n")
     repo_manager = FakeRepoManager()
     job = ReviewJob(
         installation_id=123,
@@ -437,7 +451,7 @@ async def test_run_review_for_job_loads_config_from_default_branch():
     with (
         patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
         patch("superseded.config.load_config") as mock_load_config,
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
         patch("superseded.context.gathering.compute_file_context", return_value=None),
         patch("superseded.context.gathering.run_static_analysis", return_value=None),
         patch("superseded.context.gathering.retrieve_usages", return_value=None),
@@ -451,6 +465,7 @@ async def test_run_review_for_job_loads_config_from_default_branch():
             token="ghp_test",
             job=job,
             correlation_id="test123",
+            provider=_make_provider(),
         )
 
     github.fetch_repo_file.assert_awaited_once()
@@ -490,7 +505,7 @@ async def test_run_review_for_job_forces_static_analysis_on():
             new_callable=AsyncMock,
             return_value=Path("/tmp/checkout"),
         ),
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
         patch("superseded.server.worker.gather_context", side_effect=fake_gather_context),
         patch("superseded.context.gathering.parse_diff_files", return_value=[{"file": "x.py"}]),
     ):
@@ -500,6 +515,7 @@ async def test_run_review_for_job_forces_static_analysis_on():
             token="ghp_test",
             job=job,
             correlation_id="test123",
+            provider=_make_provider(),
         )
 
     assert captured_config.get("static_analysis") is True
@@ -540,7 +556,7 @@ async def test_run_review_for_job_end_to_end(tmp_path):
             return_value=tmp_path,
         ),
         patch("superseded.config.load_config", return_value=Config()),
-        patch("superseded.review.engine.ReviewEngine.select", return_value=fake_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=fake_engine),
         patch("superseded.context.gathering.compute_file_context", return_value=None),
         patch("superseded.context.gathering.run_static_analysis", return_value=None),
         patch("superseded.context.gathering.retrieve_usages", return_value=None),
@@ -551,6 +567,7 @@ async def test_run_review_for_job_end_to_end(tmp_path):
             token="t",
             job=job,
             correlation_id="c",
+            provider=_make_provider(),
         )
 
     github.post_review.assert_awaited_once()
@@ -598,7 +615,7 @@ async def test_worker_persists_findings_and_comment_ids(tmp_path):
             return_value=tmp_path,
         ),
         patch("superseded.config.load_config", return_value=Config()),
-        patch("superseded.review.engine.ReviewEngine.select", return_value=fake_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=fake_engine),
         patch("superseded.context.gathering.compute_file_context", return_value=None),
         patch("superseded.context.gathering.run_static_analysis", return_value=None),
         patch("superseded.context.gathering.retrieve_usages", return_value=None),
@@ -610,6 +627,7 @@ async def test_worker_persists_findings_and_comment_ids(tmp_path):
             job=job,
             correlation_id="c",
             store=store,
+            provider=_make_provider(),
         )
 
     # Persisted with repo key and comment_id linked.
@@ -651,7 +669,9 @@ async def test_concurrency_limit_blocks_second_job():
     github = FakeGitHubApp()
     github.create_check_run = AsyncMock(return_value=42)
     repo_manager = FakeRepoManager()
-    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1)
+    worker = ReviewWorker(
+        github=github, repo_manager=repo_manager, max_concurrent=1, provider=_make_provider()
+    )
 
     started = asyncio.Event()
     release = asyncio.Event()
@@ -689,7 +709,13 @@ async def test_enqueue_rejects_overflow():
     """When the pending queue is full, enqueue must refuse rather than grow unbounded."""
     github = FakeGitHubApp()
     repo_manager = FakeRepoManager()
-    worker = ReviewWorker(github=github, repo_manager=repo_manager, max_concurrent=1, max_queue=1)
+    worker = ReviewWorker(
+        github=github,
+        repo_manager=repo_manager,
+        max_concurrent=1,
+        max_queue=1,
+        provider=_make_provider(),
+    )
 
     block = asyncio.Event()
 
@@ -756,7 +782,7 @@ async def test_worker_progressive_incremental_skips_full_diff(tmp_path):
 
     with (
         patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
         patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
         patch(
             "superseded.server.worker.build_review_payload",
@@ -771,6 +797,7 @@ async def test_worker_progressive_incremental_skips_full_diff(tmp_path):
             job=job,
             correlation_id="c",
             store=store,
+            provider=_make_provider(),
         )
 
     github.compare_diff.assert_awaited_once_with(
@@ -802,6 +829,7 @@ async def test_worker_progressive_noop_returns_success_without_review(tmp_path):
             job=job,
             correlation_id="c",
             store=store,
+            provider=_make_provider(),
         )
 
     assert outcome.conclusion == "success"
@@ -830,7 +858,7 @@ async def test_worker_progressive_diverged_falls_back_to_full(tmp_path):
 
     with (
         patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
         patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
         patch(
             "superseded.server.worker.build_review_payload",
@@ -845,6 +873,7 @@ async def test_worker_progressive_diverged_falls_back_to_full(tmp_path):
             job=job,
             correlation_id="c",
             store=store,
+            provider=_make_provider(),
         )
 
     github.fetch_pr_diff.assert_awaited_once()
@@ -868,13 +897,13 @@ async def test_worker_progressive_disabled_uses_full_diff(tmp_path):
     mock_engine.review.return_value = MagicMock(findings=[], summary={})
 
     # Force progressive off via repo config YAML from the default branch.
-    fake_config_yaml = "progressive: false\nagent: claude-code\n"
+    fake_config_yaml = "progressive: false\nprovider: deepseek\n"
     github.fetch_repo_file = AsyncMock(return_value=fake_config_yaml)
     github.post_review = AsyncMock(return_value=[])
 
     with (
         patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
         patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
         patch(
             "superseded.server.worker.build_review_payload",
@@ -889,6 +918,7 @@ async def test_worker_progressive_disabled_uses_full_diff(tmp_path):
             job=job,
             correlation_id="c",
             store=store,
+            provider=_make_provider(),
         )
 
     github.compare_diff.assert_not_awaited()
@@ -909,7 +939,7 @@ async def test_worker_progressive_no_store_uses_full_diff(tmp_path):
 
     with (
         patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
         patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
         patch(
             "superseded.server.worker.build_review_payload",
@@ -924,6 +954,7 @@ async def test_worker_progressive_no_store_uses_full_diff(tmp_path):
             job=job,
             correlation_id="c",
             store=None,
+            provider=_make_provider(),
         )
 
     github.compare_diff.assert_not_awaited()
@@ -956,7 +987,7 @@ async def test_worker_progressive_compare_diff_error_falls_back_to_full(tmp_path
 
     with (
         patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
         patch("superseded.context.gathering.compute_file_context", return_value="ctx"),
         patch(
             "superseded.server.worker.build_review_payload",
@@ -971,319 +1002,8 @@ async def test_worker_progressive_compare_diff_error_falls_back_to_full(tmp_path
             job=job,
             correlation_id="c",
             store=store,
+            provider=_make_provider(),
         )
 
     github.fetch_pr_diff.assert_awaited_once()
     assert await store.get_watermark("octocat/hello-world", 42) == "newhead"
-
-
-@pytest.mark.asyncio
-async def test_run_review_for_job_builds_sandbox_executor(tmp_path, monkeypatch):
-    """When sandbox settings are enabled, _run_review_for_job builds a SandboxExecutor and passes it to engine.review."""
-    from superseded.review.executor import SandboxExecutor
-    from superseded.server.worker import SandboxSettings, _run_review_for_job
-
-    github = FakeGitHubApp()
-    repo_manager = FakeRepoManager()
-    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
-    job = ReviewJob(1, "o", "r", 5, "abc", "def")
-
-    captured: dict = {}
-    mock_engine = MagicMock()
-
-    monkeypatch.setattr("shutil.which", lambda cmd: "/usr/bin/sbx")
-    with (
-        patch(
-            "superseded.server.worker.checkout_repo", new_callable=AsyncMock, return_value=tmp_path
-        ),
-        patch("superseded.config.load_config", return_value=Config()),
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
-        patch("superseded.context.gathering.compute_file_context", return_value=None),
-        patch("superseded.context.gathering.run_static_analysis", return_value=None),
-        patch("superseded.context.gathering.retrieve_usages", return_value=None),
-    ):
-        mock_engine.review.side_effect = lambda **kw: (
-            captured.update(kw) or MagicMock(findings=[], summary={})
-        )
-        await _run_review_for_job(
-            github=github,
-            repo_manager=repo_manager,
-            token="t",
-            job=job,
-            correlation_id="c",
-            sandbox=SandboxSettings(enabled=True),
-        )
-
-    ex = captured.get("executor")
-    assert isinstance(ex, SandboxExecutor)
-    assert ex._name == f"superseded-{job.job_id}"
-
-
-@pytest.mark.asyncio
-async def test_run_review_for_job_fails_when_sbx_missing(tmp_path, monkeypatch):
-    """Sandbox enabled but sbx missing must raise a loud 'sandbox unavailable' error."""
-    from superseded.server.worker import SandboxSettings, _run_review_for_job
-
-    github = FakeGitHubApp()
-    repo_manager = FakeRepoManager()
-    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
-    job = ReviewJob(1, "o", "r", 5, "abc", "def")
-
-    mock_engine = MagicMock()
-    monkeypatch.setattr("shutil.which", lambda cmd: None)
-    with (
-        patch(
-            "superseded.server.worker.checkout_repo", new_callable=AsyncMock, return_value=tmp_path
-        ),
-        patch("superseded.config.load_config", return_value=Config()),
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
-        patch("superseded.context.gathering.compute_file_context", return_value=None),
-        patch("superseded.context.gathering.run_static_analysis", return_value=None),
-        patch("superseded.context.gathering.retrieve_usages", return_value=None),
-        pytest.raises(RuntimeError, match="sandbox unavailable"),
-    ):
-        await _run_review_for_job(
-            github=github,
-            repo_manager=repo_manager,
-            token="t",
-            job=job,
-            correlation_id="c",
-            sandbox=SandboxSettings(enabled=True),
-        )
-    mock_engine.review.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_run_review_for_job_defaults_no_sandbox(tmp_path):
-    """Without sandbox settings, executor is NOT passed (engine uses SubprocessExecutor default)."""
-    from superseded.server.worker import _run_review_for_job
-
-    github = FakeGitHubApp()
-    repo_manager = FakeRepoManager()
-    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
-    job = ReviewJob(1, "o", "r", 5, "abc", "def")
-
-    captured: dict = {}
-    mock_engine = MagicMock()
-    with (
-        patch(
-            "superseded.server.worker.checkout_repo", new_callable=AsyncMock, return_value=tmp_path
-        ),
-        patch("superseded.config.load_config", return_value=Config()),
-        patch("superseded.review.engine.ReviewEngine.select", return_value=mock_engine),
-        patch("superseded.context.gathering.compute_file_context", return_value=None),
-        patch("superseded.context.gathering.run_static_analysis", return_value=None),
-        patch("superseded.context.gathering.retrieve_usages", return_value=None),
-    ):
-        mock_engine.review.side_effect = lambda **kw: (
-            captured.update(kw) or MagicMock(findings=[], summary={})
-        )
-        await _run_review_for_job(
-            github=github, repo_manager=repo_manager, token="t", job=job, correlation_id="c"
-        )
-
-    assert captured.get("executor") is None
-
-
-def test_sandbox_settings_has_smolvm_fields_with_defaults():
-    from superseded.server.worker import SandboxSettings
-
-    s = SandboxSettings()
-    assert s.kind == "sbx"
-    assert s.smolvm_binary == "smolvm"
-    assert s.smolvm_image is None
-    assert s.smolvm_image_claude is None
-    assert s.smolvm_image_opencode is None
-    assert s.smolvm_image_codex is None
-
-
-def test_agent_smolvm_image_resolves_per_agent_field():
-    from superseded.server.worker import SandboxSettings, _agent_smolvm_image
-
-    s = SandboxSettings(smolvm_image_claude="ghcr.io/x/c:1")
-    assert _agent_smolvm_image(s, "claude-code") == "ghcr.io/x/c:1"
-    assert _agent_smolvm_image(s, "opencode") is None
-    assert _agent_smolvm_image(s, "codex") is None
-
-
-def test_agent_smolvm_image_host_wide_override_wins():
-    from superseded.server.worker import SandboxSettings, _agent_smolvm_image
-
-    s = SandboxSettings(smolvm_image="ghcr.io/x/all:1", smolvm_image_claude="ghcr.io/x/c:1")
-    assert _agent_smolvm_image(s, "claude-code") == "ghcr.io/x/all:1"
-    assert _agent_smolvm_image(s, "opencode") == "ghcr.io/x/all:1"
-
-
-def test_agent_smolvm_image_unknown_agent_returns_none():
-    from superseded.server.worker import SandboxSettings, _agent_smolvm_image
-
-    s = SandboxSettings()
-    assert _agent_smolvm_image(s, "custom-agent") is None
-
-
-def test_sandbox_unavailable_msg_sbx():
-    from superseded.server.worker import SandboxSettings, _sandbox_unavailable_msg
-
-    s = SandboxSettings(kind="sbx", binary="sbx")
-    msg = _sandbox_unavailable_msg(s)
-    assert "sbx" in msg
-    assert "docker-sbx" in msg
-
-
-def test_sandbox_unavailable_msg_smolvm():
-    from superseded.server.worker import SandboxSettings, _sandbox_unavailable_msg
-
-    s = SandboxSettings(kind="smolvm")
-    msg = _sandbox_unavailable_msg(s)
-    assert "smolmachines" in msg
-    assert "uv sync --extra sandbox" in msg
-
-
-def test_run_review_smolvm_dispatch_builds_smolvm_executor(monkeypatch, tmp_path):
-    """When sandbox.kind=smolvm + image set + smol importable, the worker
-    constructs a SmolvmExecutor via make_sandbox_executor(kind='smolvm')."""
-    import sys
-    import types
-
-    machine_inst = types.SimpleNamespace(
-        name="superseded-x",
-        write_file=lambda p, d, m=None: None,
-        exec=lambda c, o=None: types.SimpleNamespace(exit_code=0, stdout="[]", stderr=""),
-        delete=lambda: None,
-        state=lambda: "running",
-    )
-    fake = types.ModuleType("smol")
-    fake.Machine = type("M", (), {"create": staticmethod(lambda c=None, conn=None: machine_inst)})
-    fake.MachineConfig = type("MC", (), {"__init__": lambda self, **k: None})
-    fake.MountSpec = type("MS", (), {"__init__": lambda self, **k: None})
-    fake.ResourceSpec = type("RS", (), {"__init__": lambda self, **k: None})
-    fake.ExecOptions = type("EO", (), {"__init__": lambda self, **k: None})
-    monkeypatch.setitem(sys.modules, "smol", fake)
-
-    from superseded.review import executor as exec_mod
-    from superseded.review.executor import SmolvmExecutor, make_sandbox_executor
-
-    monkeypatch.setattr(exec_mod, "SMOLVM_AVAILABLE", True)
-    ex = make_sandbox_executor(
-        kind="smolvm",
-        agent_name="claude-code",
-        name="superseded-x",
-        cwd=tmp_path,
-        resolved_image="ghcr.io/x/c:1",
-        timeout=600,
-        keep_on_error=False,
-        binary="sbx",
-        io_mode="exec",
-        smolvm_binary="smolvm",
-    )
-    assert isinstance(ex, SmolvmExecutor)
-    assert ex._image == "ghcr.io/x/c:1"
-
-
-def test_run_review_smolvm_image_unset_raises_value_error():
-    """Direct construction (mirrors what the worker does) without an image
-    must raise loudly — no silent fallback."""
-    from superseded.review.executor import make_sandbox_executor
-
-    with pytest.raises(ValueError, match="resolved_image"):
-        make_sandbox_executor(
-            kind="smolvm", agent_name="claude-code", name="n1", resolved_image=None
-        )
-
-
-@pytest.mark.asyncio
-async def test_smolvm_worker_dispatch(monkeypatch, tmp_path):
-    """Drives _run_review_for_job with sandbox.kind=smolvm; asserts the
-    executor built is a SmolvmExecutor with the right image, cwd, name."""
-    import sys
-    import types
-
-    machine_inst = types.SimpleNamespace(
-        name="superseded-smolvm-1",
-        write_file=lambda p, d, m=None: None,
-        exec=lambda c, o=None: types.SimpleNamespace(
-            exit_code=0, stdout='{"findings":[]}', stderr=""
-        ),
-        delete=lambda: None,
-        state=lambda: "running",
-    )
-    fake = types.ModuleType("smol")
-    fake.Machine = type("M", (), {"create": staticmethod(lambda c=None, conn=None: machine_inst)})
-    fake.MachineConfig = type("MC", (), {"__init__": lambda self, **k: None})
-    fake.MountSpec = type("MS", (), {"__init__": lambda self, **k: None})
-    fake.ResourceSpec = type("RS", (), {"__init__": lambda self, **k: None})
-    fake.ExecOptions = type("EO", (), {"__init__": lambda self, **k: None})
-    monkeypatch.setitem(sys.modules, "smol", fake)
-    from superseded.review import executor as exec_mod
-
-    monkeypatch.setattr(exec_mod, "SMOLVM_AVAILABLE", True)
-
-    captured_executor: dict = {}
-
-    class FakeEngine:
-        agent = types.SimpleNamespace(is_available=lambda: True)
-
-        def review(self, **kw):
-            captured_executor["executor"] = kw.get("executor")
-            from superseded.models import ReviewResult
-
-            return ReviewResult(findings=[], summary={})
-
-    monkeypatch.setattr(
-        "superseded.server.worker.ReviewEngine.select", lambda *a, **k: FakeEngine()
-    )
-
-    monkeypatch.setattr(
-        "superseded.server.worker.checkout_repo", AsyncMock(return_value=str(tmp_path))
-    )
-    monkeypatch.setattr(
-        "superseded.server.worker.gather_context",
-        lambda *a, **k: {
-            "file_context": "",
-            "static_signals": "",
-            "usage_signals": "",
-            "conventions_signals": "",
-            "spec_signals": "",
-        },
-    )
-
-    github = MagicMock()
-    github.fetch_pr_diff = AsyncMock(return_value="")
-    github.fetch_pr_description = AsyncMock(return_value="")
-    github.compare_diff = AsyncMock(return_value=("", "ahead"))
-    github.post_review = AsyncMock(return_value=[])
-    github.fetch_repo_file = AsyncMock(return_value=None)
-
-    repo_manager = MagicMock()
-    repo_manager.job_dir = MagicMock(return_value=tmp_path)
-    repo_manager.disk_usage = MagicMock(return_value=0.1)
-    repo_manager.cleanup = MagicMock()
-
-    from superseded.server.worker import SandboxSettings, _run_review_for_job
-
-    job = ReviewJob(
-        installation_id=1,
-        owner="o",
-        repo="r",
-        pr_number=1,
-        head_sha="aaa",
-        base_sha="bbb",
-        job_id="smolvm-1",
-    )
-    sandbox = SandboxSettings(enabled=True, kind="smolvm", smolvm_image_claude="ghcr.io/x/c:1")
-
-    await _run_review_for_job(
-        github=github,
-        repo_manager=repo_manager,
-        token="t",
-        job=job,
-        correlation_id="c",
-        server_agent="claude-code",
-        sandbox=sandbox,
-    )
-    ex = captured_executor["executor"]
-    from superseded.review.executor import SmolvmExecutor
-
-    assert isinstance(ex, SmolvmExecutor)
-    assert ex._image == "ghcr.io/x/c:1"
-    assert ex._name == "superseded-smolvm-1"

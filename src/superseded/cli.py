@@ -4,10 +4,10 @@ import asyncio
 import contextlib
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import sys
-import uuid
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import get_args
@@ -15,17 +15,9 @@ from typing import get_args
 import click
 
 from superseded.audit.guidelines import assemble_learned_context, format_memory_context
-from superseded.audit.reflector import PatternReflector
 from superseded.audit.stats import StatsAggregator
 from superseded.config import Config, load_config, write_config
 from superseded.context.gathering import gather_context
-from superseded.detection import (
-    default_model_for,
-    detect_agents,
-    detect_code_review_graph,
-    detect_gh,
-    pick_agent,
-)
 from superseded.diff import (
     fetch_diff,
     fetch_pr_description,
@@ -42,13 +34,9 @@ from superseded.output.json_out import format_json
 from superseded.output.markdown import format_markdown
 from superseded.output.table import format_table
 from superseded.review.engine import ReviewEngine
-from superseded.review.executor import AgentExecutor, SubprocessExecutor, make_sandbox_executor
-from superseded.skill import SKILL_AGENTS, build_skill_text, install_skill
 
-AGENT_ENV = "SUPERSEDED_AGENT"
 MODEL_ENV = "SUPERSEDED_MODEL"
 GRAPH_ENV = "SUPERSEDED_GRAPH"
-SANDBOX_ENV = "SUPERSEDED_SANDBOX"
 VERIFY_ENV = "SUPERSEDED_VERIFY"
 LOG_FORMAT_ENV = "SUPERSEDED_LOG_FORMAT"
 LOG_LEVEL_ENV = "SUPERSEDED_LOG_LEVEL"
@@ -86,8 +74,23 @@ def _status(message: str) -> None:
     click.echo(message, err=True)
 
 
-def resolve_agent(agent_flag: str | None, config: Config) -> str:
-    return os.environ.get(AGENT_ENV) or agent_flag or config.agent
+PROVIDER_ENV = "SUPERSEDED_PROVIDER"
+
+
+def resolve_provider(provider_flag: str | None, config: Config) -> str:
+    legacy = os.environ.get("SUPERSEDED_AGENT")
+    if legacy and not os.environ.get(PROVIDER_ENV):
+        import warnings
+
+        warnings.warn(
+            "SUPERSEDED_AGENT is deprecated; use SUPERSEDED_PROVIDER.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return legacy
+    if provider_flag is not None:
+        return provider_flag
+    return config.provider
 
 
 def resolve_model(model_flag: str | None, config: Config) -> str | None:
@@ -103,15 +106,6 @@ def resolve_graph(cli_value: bool | None, config: Config) -> bool:
     return config.graph
 
 
-def resolve_sandbox(cli_value: bool | None, config: Config) -> bool:
-    env = os.environ.get(SANDBOX_ENV)
-    if env is not None:
-        return env.strip().lower() in ("1", "true", "yes", "on")
-    if cli_value is not None:
-        return cli_value
-    return config.sandbox
-
-
 def resolve_verify(cli_value: bool | None, config: Config) -> bool:
     env = os.environ.get(VERIFY_ENV)
     if env is not None:
@@ -119,34 +113,6 @@ def resolve_verify(cli_value: bool | None, config: Config) -> bool:
     if cli_value is not None:
         return cli_value
     return config.verify
-
-
-def _resolve_smolvm_image(agent_name: str) -> str | None:
-    per_agent_var = f"SUPERSEDED_SMOLVM_IMAGE_{agent_name.upper().replace('-', '_')}"
-    return os.environ.get(per_agent_var) or os.environ.get("SUPERSEDED_SMOLVM_IMAGE")
-
-
-def _select_executor(sandbox: bool, *, agent_name: str, timeout: int) -> AgentExecutor:
-    if not sandbox:
-        return SubprocessExecutor(agent_name=agent_name)
-    kind = os.environ.get("SUPERSEDED_SANDBOX_KIND", "sbx").strip().lower()
-    if kind == "smolvm":
-        resolved_image = _resolve_smolvm_image(agent_name)
-        # provider_files (per-agent host credentials) are resolved centrally by
-        # make_sandbox_executor from agent_name — opencode/claude-code/codex all
-        # get their ~/.config files seeded into the guest HOME automatically.
-        return make_sandbox_executor(
-            kind="smolvm",
-            agent_name=agent_name,
-            name=f"superseded-local-{uuid.uuid4().hex[:10]}",
-            timeout=timeout,
-            resolved_image=resolved_image,
-        )
-    return make_sandbox_executor(
-        agent_name=agent_name,
-        name=f"superseded-local-{uuid.uuid4().hex[:10]}",
-        timeout=timeout,
-    )
 
 
 def resolve_log_format(flag: str | None, config: Config | None = None) -> str:
@@ -273,7 +239,7 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
 @cli.command()
 @click.option("--pr", type=int, help="PR number to review")
 @click.option("--diff", "diff_range", help="Git diff range (e.g. HEAD~3..HEAD)")
-@click.option("--agent", default=None, help="AI CLI agent (claude-code, opencode, codex)")
+@click.option("--provider", default=None, help="Model provider (default: deepseek)")
 @click.option("--model", default=None, help="Model to use")
 @click.option(
     "--format",
@@ -292,7 +258,7 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
     "--timeout",
     type=int,
     default=None,
-    help=f"Per-pass agent timeout in seconds (default: {DEFAULT_TIMEOUT})",
+    help=f"Per-pass provider timeout in seconds (default: {DEFAULT_TIMEOUT})",
 )
 @click.option(
     "--config",
@@ -324,12 +290,6 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
     help="Toggle graph-grounded usage retrieval (default: from config)",
 )
 @click.option(
-    "--sandbox/--no-sandbox",
-    "sandbox",
-    default=None,
-    help="Run agents inside an sbx Docker Sandbox (default: from config; env SUPERSEDED_SANDBOX).",
-)
-@click.option(
     "--verify/--no-verify",
     "verify",
     default=None,
@@ -341,7 +301,7 @@ def review(
     ctx: click.Context,
     pr: int | None,
     diff_range: str | None,
-    agent: str | None,
+    provider: str | None,
     model: str | None,
     output_format: str | None,
     post: bool,
@@ -355,7 +315,6 @@ def review(
     no_conventions: bool,
     no_specs: bool,
     graph: bool | None,
-    sandbox: bool | None,
     verify: bool | None,
     staged: bool,
     files: tuple[str, ...],
@@ -386,7 +345,7 @@ def review(
     _run_review(
         pr=pr,
         diff_range=diff_range,
-        agent=agent,
+        provider=provider,
         model=model,
         output_format=output_format,
         post=post,
@@ -400,7 +359,6 @@ def review(
         no_conventions=no_conventions,
         no_specs=no_specs,
         graph=graph,
-        sandbox=sandbox,
         verify=verify,
         staged=staged,
         files=list(files) or None,
@@ -410,7 +368,7 @@ def review(
 def _run_review(
     pr: int | None,
     diff_range: str | None,
-    agent: str | None,
+    provider: str | None,
     model: str | None,
     output_format: str | None,
     post: bool,
@@ -425,7 +383,6 @@ def _run_review(
     no_conventions: bool = False,
     no_specs: bool = False,
     graph: bool | None = None,
-    sandbox: bool | None = None,
     verify: bool | None = None,
     staged: bool = False,
     files: list[str] | None = None,
@@ -433,44 +390,18 @@ def _run_review(
     config = load_config(config_path)
     verify = resolve_verify(verify, config)
     config.verify = verify
-    agent_name = resolve_agent(agent, config)
+    provider_name = resolve_provider(provider, config)
     model_name = resolve_model(model, config)
     fmt = output_format or config.format
     post = post or config.post_to_pr
 
-    # Select the agent and verify it is installed BEFORE doing expensive context
-    # work. Failing fast here saves wasted diff fetch / static analysis when the
-    # user simply forgot to install the CLI.
     try:
-        engine = ReviewEngine.select(agent_name, model=model_name, config=config)
+        engine = ReviewEngine.select(provider_name, model=model_name, config=config)
     except ValueError as err:
         click.echo(f"Error: {err}", err=True)
         sys.exit(2)
 
     pass_timeout = timeout if timeout is not None else DEFAULT_TIMEOUT
-    sandbox = resolve_sandbox(sandbox, config)
-    executor = _select_executor(sandbox, agent_name=agent_name, timeout=pass_timeout)
-    if not executor.available(engine.agent):
-        if sandbox:
-            kind = os.environ.get("SUPERSEDED_SANDBOX_KIND", "sbx").strip().lower()
-            if kind == "smolvm":
-                msg = (
-                    "Error: smolvm sandbox unavailable. Install the extra "
-                    "(`uv sync --extra sandbox`) and set SUPERSEDED_SMOLVM_IMAGE "
-                    f"or SUPERSEDED_SMOLVM_IMAGE_{agent_name.upper().replace('-', '_')}."
-                )
-            else:
-                msg = (
-                    "Error: 'sbx' (Docker Sandboxes) not found on PATH. "
-                    "Install docker-sbx to use --sandbox."
-                )
-        else:
-            msg = (
-                f"Error: Agent CLI '{engine.agent.name}' not found on PATH. "
-                "Install it or choose a different agent with --agent."
-            )
-        click.echo(msg, err=True)
-        sys.exit(2)
 
     repo = current_repo()
     memory_enabled = config.memory and not no_memory and repo is not None
@@ -566,7 +497,7 @@ def _run_review(
         if config.learned_review and store is not None and repo:
             learned_context = asyncio.run(_build_learned_context(store, engine, repo, config, root))
 
-        _status(f"Running review with {agent_name} (timeout {pass_timeout}s per pass)...")
+        _status(f"Running review with {provider_name} (timeout {pass_timeout}s per pass)...")
         try:
             result = engine.review(
                 diff=diff,
@@ -581,8 +512,6 @@ def _run_review(
                 passes=passes,
                 timeout=pass_timeout,
                 progress=_progress,
-                cwd=str(root),
-                executor=executor,
             )
         except RuntimeError as err:
             click.echo(f"Error: {err}", err=True)
@@ -685,11 +614,6 @@ async def _build_learned_context(
     await aggregator._refresh(repo)
     stats_text = await aggregator.get_stats_context(repo)
 
-    reflector = PatternReflector(
-        agent=engine.agent, store=store, threshold=config.reflection_threshold
-    )
-    await reflector.maybe_reflect(repo, cwd=root)
-
     await store.prune_stale_rules(repo)
     all_rules = await store.get_learned_rules(repo, limit=config.max_learned_rules)
     return assemble_learned_context(stats_text, all_rules, config.max_learned_rules)
@@ -698,12 +622,6 @@ async def _build_learned_context(
 @cli.command()
 @click.option("--force", is_flag=True, help="Overwrite an existing .superseded.yaml")
 @click.option(
-    "--agent",
-    "agent_override",
-    default=None,
-    help="Force a specific agent (claude-code, opencode, codex)",
-)
-@click.option(
     "--config",
     "config_path",
     type=click.Path(dir_okay=False, path_type=Path),
@@ -711,42 +629,34 @@ async def _build_learned_context(
     help="Path to write (default: .superseded.yaml in cwd)",
 )
 @click.pass_context
-def init(
-    ctx: click.Context, force: bool, agent_override: str | None, config_path: Path | None
-) -> None:
-    """Detect installed AI CLIs and write a .superseded.yaml config file."""
+def init(ctx: click.Context, force: bool, config_path: Path | None) -> None:
+    """Probe the environment and write a .superseded.yaml config file."""
     setup_logging(
         resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
         resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
     )
-    _run_init(force=force, agent_override=agent_override, config_path=config_path)
+    _run_init(force=force, config_path=config_path)
 
 
-def _run_init(force: bool, agent_override: str | None, config_path: Path | None) -> None:
-    from superseded.review.engine import AGENT_MAP
-
+def _run_init(force: bool, config_path: Path | None) -> None:
     target = config_path or Path(".superseded.yaml")
 
     if target.exists() and not force:
         _status(f"Error: {target} already exists. Use --force to overwrite.")
         sys.exit(2)
 
-    statuses = detect_agents()
-    available = [s.name for s in statuses if s.available]
-    missing = [s.name for s in statuses if not s.available]
-    if available:
-        _status(f"Detected agent CLIs: {', '.join(available)}")
-    if missing:
-        _status(f"Missing: {', '.join(missing)}")
-
-    gh_ok = detect_gh()
-    if gh_ok:
+    if shutil.which("gh") is not None:
         _status("gh CLI: found")
     else:
         _status("gh CLI: not found (PR features will be disabled)")
 
-    if detect_code_review_graph(Path.cwd()):
-        _status("code-review-graph: found")
+    if (Path.cwd() / ".code-review-graph").is_dir():
+        try:
+            import code_review_graph  # noqa: F401
+
+            _status("code-review-graph: found")
+        except ImportError:
+            _status("code-review-graph: graph dir present but package not installed")
     else:
         _status(
             "code-review-graph: not installed "
@@ -754,83 +664,14 @@ def _run_init(force: bool, agent_override: str | None, config_path: Path | None)
             "uv add code-review-graph && code-review-graph build)"
         )
 
-    if agent_override is not None:
-        if agent_override not in AGENT_MAP:
-            _status(f"Error: unknown agent '{agent_override}'. Choose from: {', '.join(AGENT_MAP)}")
-            sys.exit(2)
-        if agent_override not in available:
-            _status(f"Error: selected agent '{agent_override}' is not installed on PATH.")
-            sys.exit(2)
-        chosen = agent_override
+    if os.environ.get("SUPERSEDED_DEEPSEEK_API_KEY"):
+        _status("SUPERSEDED_DEEPSEEK_API_KEY: set")
     else:
-        chosen = pick_agent(available)
-        if chosen is None:
-            _status(
-                f"Error: no supported AI CLI found on PATH. Install one of: {', '.join(AGENT_MAP)}."
-            )
-            sys.exit(1)
+        _status("SUPERSEDED_DEEPSEEK_API_KEY: not set — set it before running `superseded review`.")
 
-    model = default_model_for(chosen)
-    cfg = Config(agent=chosen, model=model)
+    cfg = Config(provider="deepseek")
     write_config(cfg, target)
-
-    _status(f"Selected agent: {chosen}" + (f" ({model})" if model else ""))
-    _status(f"Wrote {target}")
-
-
-@cli.group()
-@click.pass_context
-def skill(ctx: click.Context) -> None:
-    """Install or print the superseded agent skill."""
-
-
-@skill.command("install")
-@click.option(
-    "--agent",
-    "-a",
-    "agents",
-    multiple=True,
-    help="Limit to a specific agent (repeatable). One of: claude-code, opencode, codex.",
-)
-@click.option("--force", is_flag=True, help="Overwrite a target whose content differs.")
-@click.pass_context
-def skill_install(ctx: click.Context, agents: tuple[str, ...], force: bool) -> None:
-    """Install the superseded SKILL.md into each agent's personal skill dir."""
-    setup_logging(
-        resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
-        resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
-    )
-    _run_skill_install(selected=list(agents), force=force)
-
-
-@skill.command("print")
-@click.pass_context
-def skill_print(ctx: click.Context) -> None:
-    """Print the canonical superseded SKILL.md to stdout."""
-    setup_logging(
-        resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
-        resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
-    )
-    click.echo(build_skill_text())
-
-
-def _run_skill_install(selected: list[str], force: bool) -> None:
-    targets = selected or list(SKILL_AGENTS)
-    unknown = [a for a in targets if a not in SKILL_AGENTS]
-    if unknown:
-        click.echo(
-            f"Error: unknown agent(s): {', '.join(unknown)}. "
-            f"Choose from: {', '.join(SKILL_AGENTS)}",
-            err=True,
-        )
-        sys.exit(2)
-
-    written, skipped = install_skill(targets, force=force, status=_status)
-    if written:
-        _status(f"Installed skill for: {', '.join(written)}")
-    if skipped:
-        _status(f"Skipped (differs, use --force): {', '.join(skipped)}")
-        sys.exit(2)
+    _status(f"Wrote {target} (provider: deepseek)")
 
 
 @cli.command()
@@ -969,10 +810,11 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
     from contextlib import asynccontextmanager
 
     from superseded.memory.backend import make_store
+    from superseded.providers import DeepSeekProvider
     from superseded.server.config import ServerConfig
     from superseded.server.github import GitHubApp
     from superseded.server.repo_manager import RepoManager
-    from superseded.server.worker import ReviewWorker, SandboxSettings
+    from superseded.server.worker import ReviewWorker
 
     config = ServerConfig.from_yaml(Path(config_path)) if config_path else ServerConfig.from_env()
 
@@ -982,26 +824,9 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
         click.echo(f"Error: {err}", err=True)
         sys.exit(2)
 
-    # The server reviews PRs from arbitrary repos (including forks). With the
-    # sandbox disabled, the AI CLI and its shell tools run directly on the host
-    # inside the attacker-controlled checkout, so a crafted PR can reach the
-    # review host. Refuse to serve in that state unless the operator explicitly
-    # opts out via SUPERSEDED_ALLOW_NO_SANDBOX=1 (an assertion that the host is
-    # throwaway / isolated / trusted).
-    if not config.sandbox_enabled and os.environ.get(
-        "SUPERSEDED_ALLOW_NO_SANDBOX", ""
-    ).lower() not in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    ):
+    if not config.deepseek_api_key:
         click.echo(
-            "Error: refusing to serve without a sandbox. The review server runs "
-            "agent CLIs over arbitrary PR contents; without a sandbox a crafted "
-            "PR can execute on the host. Set SUPERSEDED_SANDBOX=1 (and configure "
-            "docker-sbx or a smolvm image), or set SUPERSEDED_ALLOW_NO_SANDBOX=1 "
-            "to accept the risk on an isolated host.",
+            "Error: SUPERSEDED_DEEPSEEK_API_KEY must be set to serve.",
             err=True,
         )
         sys.exit(2)
@@ -1018,27 +843,14 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
     )
     repo_manager = RepoManager(base_path=config.temp_dir)
     store = make_store(config.database_url, max_size=config.max_concurrent_reviews + 2)
-    sandbox = SandboxSettings(
-        enabled=config.sandbox_enabled,
-        kind=config.sandbox_kind,
-        binary=config.sbx_binary,
-        timeout=config.sandbox_timeout,
-        keep_on_error=config.sandbox_keep_on_error,
-        io_mode=config.sandbox_io_mode,
-        smolvm_binary=config.smolvm_binary,
-        smolvm_image=config.smolvm_image,
-        smolvm_image_claude=config.smolvm_image_claude,
-        smolvm_image_opencode=config.smolvm_image_opencode,
-        smolvm_image_codex=config.smolvm_image_codex,
-    )
     worker = ReviewWorker(
         github=github,
         repo_manager=repo_manager,
         max_concurrent=config.max_concurrent_reviews,
         store=store,
-        server_agent=config.agent,
+        server_provider=config.provider,
         server_model=config.model,
-        sandbox=sandbox,
+        provider=DeepSeekProvider(api_key=config.deepseek_api_key),
     )
 
     import uvicorn

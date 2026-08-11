@@ -223,64 +223,24 @@ def test_server_config_behind_proxy_falsey_from_env(monkeypatch, tmp_path):
     assert cfg.behind_proxy is False
 
 
-def test_server_config_sandbox_defaults():
+def test_server_config_deepseek_key_defaults_none():
+    """Sandbox fields were removed; verify the deepseek_api_key field exists instead."""
     config = ServerConfig()
-    assert config.sandbox_enabled is True
-    assert config.sbx_binary == "sbx"
-    assert config.sandbox_timeout == 600
-    assert config.sandbox_keep_on_error is False
-    assert config.sandbox_io_mode == "exec"
+    assert config.deepseek_api_key is None
 
 
-def test_server_config_sandbox_from_env(monkeypatch, tmp_path):
+def test_server_config_deepseek_api_key_from_env(monkeypatch, tmp_path):
     key_file = tmp_path / "key.pem"
     key_file.write_text("fake-private-key")
     monkeypatch.setenv("SUPERSEDED_APP_ID", "12345")
     monkeypatch.setenv("SUPERSEDED_WEBHOOK_SECRET", "whsec_test")
     monkeypatch.setenv("SUPERSEDED_PRIVATE_KEY_PATH", str(key_file))
-    monkeypatch.setenv("SUPERSEDED_SANDBOX", "0")
-    monkeypatch.setenv("SUPERSEDED_SANDBOX_TIMEOUT", "900")
-    monkeypatch.setenv("SUPERSEDED_SANDBOX_IO_MODE", "cp")
+    monkeypatch.setenv("SUPERSEDED_DEEPSEEK_API_KEY", "dsk-test")
 
     config = ServerConfig.from_env()
-    assert config.sandbox_enabled is False
-    assert config.sandbox_timeout == 900
-    assert config.sandbox_io_mode == "cp"
+    assert config.deepseek_api_key == "dsk-test"
 
 
-def test_from_env_sandbox_kind_smolvm(monkeypatch):
-    _set_required_server_env(monkeypatch)
-    monkeypatch.setenv("SUPERSEDED_SANDBOX_KIND", "smolvm")
-    cfg = ServerConfig.from_env()
-    assert cfg.sandbox_kind == "smolvm"
-
-
-def test_from_env_sandbox_kind_default_is_sbx(monkeypatch):
-    _set_required_server_env(monkeypatch)
-    cfg = ServerConfig.from_env()
-    assert cfg.sandbox_kind == "sbx"
-
-
-def test_from_env_smolvm_binary(monkeypatch):
-    _set_required_server_env(monkeypatch)
-    monkeypatch.setenv("SUPERSEDED_SMOLVM_BINARY", "/opt/smolvm/bin/smol")
-    cfg = ServerConfig.from_env()
-    assert cfg.smolvm_binary == "/opt/smolvm/bin/smol"
-
-
-def test_from_env_smolvm_images_per_agent(monkeypatch):
-    _set_required_server_env(monkeypatch)
-    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CLAUDE", "gcr/x/c:1")
-    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_OPENCODE", "gcr/x/o:1")
-    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE_CODEX", "gcr/x/d:1")
-    cfg = ServerConfig.from_env()
-    assert cfg.smolvm_image_claude == "gcr/x/c:1"
-    assert cfg.smolvm_image_opencode == "gcr/x/o:1"
-    assert cfg.smolvm_image_codex == "gcr/x/d:1"
-
-
-def test_from_env_smolvm_image_host_wide(monkeypatch):
-    _set_required_server_env(monkeypatch)
-    monkeypatch.setenv("SUPERSEDED_SMOLVM_IMAGE", "gcr/x/all:1")
-    cfg = ServerConfig.from_env()
-    assert cfg.smolvm_image == "gcr/x/all:1"
+def test_server_config_provider_defaults_to_deepseek():
+    config = ServerConfig()
+    assert config.provider == "deepseek"

@@ -464,7 +464,7 @@ def test_context_enrichment_called(monkeypatch):
     _run_review(
         pr=None,
         diff_range="HEAD~1..HEAD",
-        agent=None,
+        provider=None,
         model=None,
         output_format="json",
         post=False,
@@ -515,7 +515,7 @@ def test_context_disabled_skips_enrichment(monkeypatch):
     _run_review(
         pr=None,
         diff_range="HEAD~1..HEAD",
-        agent=None,
+        provider=None,
         model=None,
         output_format="json",
         post=False,
@@ -556,7 +556,7 @@ def test_conventions_and_specs_called_and_forwarded(monkeypatch):
     _run_review(
         pr=None,
         diff_range="HEAD~1..HEAD",
-        agent=None,
+        provider=None,
         model=None,
         output_format="json",
         post=False,
@@ -600,7 +600,7 @@ def test_no_conventions_flag_skips_discover(monkeypatch):
     _run_review(
         pr=None,
         diff_range="HEAD~1..HEAD",
-        agent=None,
+        provider=None,
         model=None,
         output_format="json",
         post=False,
@@ -629,7 +629,6 @@ def test_review_progressive_writes_watermark_after_success(
     mock_engine = MagicMock()
     mock_engine_cls.select.return_value = mock_engine
     mock_engine.review.return_value = ReviewResult(findings=[])
-    mock_engine.agent.is_available.return_value = True
     mock_repo.return_value = "owner/repo"
     store = FakeStore()
     mock_store_cls.return_value = store
@@ -656,7 +655,6 @@ def test_review_noop_when_identical(
     mock_ctx.return_value = "ctx"
     mock_engine = MagicMock()
     mock_engine_cls.select.return_value = mock_engine
-    mock_engine.agent.is_available.return_value = True
     mock_repo.return_value = "owner/repo"
     store = FakeStore()
     mock_store_cls.return_value = store
@@ -683,8 +681,7 @@ def test_review_engine_failure_does_not_advance_watermark(
     mock_ctx.return_value = "ctx"
     mock_engine = MagicMock()
     mock_engine_cls.select.return_value = mock_engine
-    mock_engine.agent.is_available.return_value = True
-    mock_engine.review.side_effect = RuntimeError("agent crashed")
+    mock_engine.review.side_effect = RuntimeError("provider crashed")
     mock_repo.return_value = "owner/repo"
     store = FakeStore()
     mock_store_cls.return_value = store
@@ -720,7 +717,6 @@ def test_review_full_flag_skips_resolve_and_advances(
     mock_engine = MagicMock()
     mock_engine_cls.select.return_value = mock_engine
     mock_engine.review.return_value = ReviewResult(findings=[])
-    mock_engine.agent.is_available.return_value = True
     mock_repo.return_value = "owner/repo"
     store = FakeStore()
     mock_store_cls.return_value = store
@@ -760,7 +756,6 @@ def test_review_init_real_store_before_progressive_read(
     mock_engine = MagicMock()
     mock_engine_cls.select.return_value = mock_engine
     mock_engine.review.return_value = ReviewResult(findings=[])
-    mock_engine.agent.is_available.return_value = True
     mock_repo.return_value = "owner/repo"
     mock_head.return_value = "headsha"
     mock_diff.return_value = "DIFF"
@@ -796,7 +791,6 @@ def test_learned_context_injected_when_enabled(
     mock_engine = MagicMock()
     mock_engine_cls.select.return_value = mock_engine
     mock_engine.review.return_value = ReviewResult(findings=[])
-    mock_engine.agent.is_available.return_value = True
     mock_repo.return_value = "owner/repo"
 
     store = FakeStore()
@@ -841,7 +835,6 @@ def test_learned_context_is_none_when_disabled(
     mock_engine = MagicMock()
     mock_engine_cls.select.return_value = mock_engine
     mock_engine.review.return_value = ReviewResult(findings=[])
-    mock_engine.agent.is_available.return_value = True
     mock_repo.return_value = "owner/repo"
     mock_store_cls.return_value = FakeStore()
 
@@ -865,8 +858,6 @@ def test_learned_context_none_when_no_memory(mock_desc, mock_ctx, mock_engine_cl
     mock_engine = MagicMock()
     mock_engine_cls.select.return_value = mock_engine
     mock_engine.review.return_value = ReviewResult(findings=[])
-    mock_engine.agent.is_available.return_value = True
-
     with patch("superseded.cli.current_repo", return_value=None):
         runner = CliRunner()
         result = runner.invoke(cli, ["review", "--pr", "5", "--no-memory"])
