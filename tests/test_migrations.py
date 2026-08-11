@@ -92,18 +92,61 @@ def test_upgrade_pre_alembic_db_stamps_and_preserves_data(tmp_path):
     assert asyncio.run(count_findings()) == 1
 
 
+_LEGACY_SCHEMA = """
+CREATE TABLE findings (
+    id TEXT PRIMARY KEY, repo TEXT, pass TEXT, severity TEXT,
+    file TEXT, line INTEGER, reasoning TEXT DEFAULT '',
+    title TEXT, description TEXT, dismissed BOOLEAN DEFAULT FALSE,
+    comment_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    finding_id TEXT REFERENCES findings(id),
+    action TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE installations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_installation_id INTEGER UNIQUE NOT NULL,
+    owner TEXT NOT NULL, repos TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE review_watermarks (
+    repo TEXT NOT NULL, pr_number INTEGER NOT NULL, head_sha TEXT NOT NULL,
+    reviewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (repo, pr_number)
+);
+CREATE TABLE review_stats (
+    repo TEXT NOT NULL, pass TEXT NOT NULL, severity TEXT NOT NULL,
+    file_pattern TEXT NOT NULL DEFAULT '*',
+    total INTEGER NOT NULL DEFAULT 0, accepted INTEGER NOT NULL DEFAULT 0,
+    dismissed INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (repo, pass, severity, file_pattern)
+);
+CREATE TABLE learned_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, repo TEXT NOT NULL, rule_text TEXT NOT NULL,
+    evidence_count INTEGER NOT NULL DEFAULT 0, confidence REAL NOT NULL DEFAULT 1.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, last_applied_at TIMESTAMP
+);
+CREATE TABLE reflection_state (
+    repo TEXT NOT NULL, last_feedback_id INTEGER NOT NULL,
+    last_reflection_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (repo)
+);
+CREATE TABLE installation_config (
+    installation_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
+    PRIMARY KEY (installation_id, key)
+);
+"""
+
+
 async def _seed_legacy_db(db: Path) -> None:
+    """Seed a realistic pre-Alembic DB (the full 8-table schema ``store.init()``
+    created before Alembic) plus one findings row. Adoption stamps such a DB at
+    0001, so the seed must include every table later migrations touch — a
+    findings-only seed regressed when 0003 added a column to ``feedback``."""
     async with aiosqlite.connect(db) as conn:
-        await conn.executescript(
-            """
-            CREATE TABLE findings (
-                id TEXT PRIMARY KEY, repo TEXT, pass TEXT, severity TEXT,
-                file TEXT, line INTEGER, reasoning TEXT DEFAULT '',
-                title TEXT, description TEXT, dismissed BOOLEAN DEFAULT FALSE,
-                comment_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """
-        )
+        await conn.executescript(_LEGACY_SCHEMA)
         await conn.execute(
             "INSERT INTO findings (id, repo, pass, severity, file, line, title, description) "
             "VALUES ('abc', 'o/r', 'security', 'high', 'f.py', 1, 't', 'd')"
