@@ -1432,3 +1432,57 @@ async def test_process_post_false_skips_check_run():
     worker.github.update_check_run.assert_not_called()
     status = worker.get_job_status(job.job_id)
     assert status.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_enqueue_records_failed_when_queue_full():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(),
+        repo_manager=FakeRepoManager(),
+        max_queue=1,
+        provider=_make_provider(),
+    )
+    job_a = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    job_b = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=2, head_sha="c", base_sha="d"
+    )
+    await worker.enqueue(job_a)
+    with pytest.raises(asyncio.QueueFull):
+        await worker.enqueue(job_b)
+    status = worker.get_job_status(job_b.job_id)
+    assert status is not None
+    assert status.status == "failed"
+    assert status.error == "queue full"
+    status_a = worker.get_job_status(job_a.job_id)
+    assert status_a is not None
+    assert status_a.status == "queued"
+
+
+@pytest.mark.asyncio
+async def test_run_task_records_failed_on_cancellation():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def blocking_process(_job):
+        started.set()
+        await release.wait()
+
+    worker._process = blocking_process  # type: ignore[assignment]
+
+    task = asyncio.create_task(worker._run_task(job))
+    await asyncio.wait_for(started.wait(), timeout=5)
+    task.cancel()
+    await task
+
+    status = worker.get_job_status(job.job_id)
+    assert status is not None
+    assert status.status == "failed"
+    assert status.error == "cancelled"
