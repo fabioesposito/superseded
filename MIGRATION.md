@@ -74,3 +74,12 @@ The only new field is `deepseek_api_key`.
 - Provider: `deepseek`
 - Model: `deepseek-v4-flash` (override with `--model` / `SUPERSEDED_MODEL` / `.superseded.yaml`)
 - Reasoning effort: max (override with `--reasoning-effort` / `SUPERSEDED_REASONING_EFFORT` / `.superseded.yaml`)
+
+## New providers (v0.7)
+
+v0.7 adds OpenAI (GPT-5.6, Responses API) and Anthropic (Claude, Messages API)
+providers alongside DeepSeek. Set `SUPERSEDED_OPENAI_API_KEY` or
+`SUPERSEDED_ANTHROPIC_API_KEY` and pass `--provider openai` / `--provider
+anthropic` (or set `provider:` in `.superseded.yaml`). Reasoning effort gained
+a `medium` level: `low | medium | high | max` (default `max`; Anthropic maps
+`max` to `xhigh`). No existing configs break.

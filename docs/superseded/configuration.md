@@ -2,6 +2,16 @@
 
 Superseded looks for `.superseded.yaml` in the repository root. If the file doesn't exist, sensible defaults are used.
 
+## Providers
+
+| Provider | Env var | Default model |
+|---|---|---|
+| `deepseek` (default) | `SUPERSEDED_DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
+| `openai` | `SUPERSEDED_OPENAI_API_KEY` | `gpt-5.6-terra` |
+| `anthropic` | `SUPERSEDED_ANTHROPIC_API_KEY` | `claude-sonnet-5` |
+
+Set the env var for the provider you want, then either pass `--provider openai` (or `anthropic`) on the CLI or set `provider:` in `.superseded.yaml`.
+
 ## Generating a Config
 
 ```bash
@@ -12,7 +22,7 @@ superseded init
 superseded init --force
 ```
 
-`init` is non-interactive. It probes PATH for `gh`, checks for an installed `code-review-graph`, checks that `SUPERSEDED_DEEPSEEK_API_KEY` is set, and writes `.superseded.yaml` with `provider: deepseek`.
+`init` is non-interactive. It probes PATH for `gh`, checks for an installed `code-review-graph`, checks for the provider API keys (`SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`), and writes `.superseded.yaml` with `provider: deepseek`.
 
 ## Full Reference
 
@@ -20,9 +30,9 @@ superseded init --force
 # .superseded.yaml — all fields with their defaults
 
 # --- Provider ---
-provider: deepseek                       # model provider (deepseek is the only one)
-model: null                              # null = provider default (deepseek-v4-flash)
-reasoning_effort: max                    # low | high | max — DeepSeek thinking-mode effort
+provider: deepseek                       # deepseek | openai | anthropic
+model: null                              # null = provider default (deepseek-v4-flash / gpt-5.6-terra / claude-sonnet-5)
+reasoning_effort: max                    # low | medium | high | max — mapped per provider (anthropic max → xhigh)
 
 # --- Output ---
 format: table                           # table | json | markdown
@@ -60,7 +70,18 @@ verify: true                            # Post-review verification pass (extra A
 
 `SUPERSEDED_PROVIDER` / `SUPERSEDED_MODEL` / `SUPERSEDED_REASONING_EFFORT` env vars **override everything**. This is designed for CI secrets — set them in your GitHub Action and they cannot be overridden by a config file. (`SUPERSEDED_AGENT` still works as a deprecated alias for `SUPERSEDED_PROVIDER`.)
 
-The provider requires a DeepSeek API key: `SUPERSEDED_DEEPSEEK_API_KEY` — without it, `superseded review` fails.
+| Env var | Purpose |
+|---|---|
+| `SUPERSEDED_PROVIDER` | `deepseek` (default) \| `openai` \| `anthropic` |
+| `SUPERSEDED_MODEL` | Override the provider's default model |
+| `SUPERSEDED_REASONING_EFFORT` | `low` \| `medium` \| `high` \| `max` (default `max`) |
+| `SUPERSEDED_DEEPSEEK_API_KEY` | Key for the `deepseek` provider |
+| `SUPERSEDED_OPENAI_API_KEY` | Key for the `openai` provider |
+| `SUPERSEDED_ANTHROPIC_API_KEY` | Key for the `anthropic` provider |
+
+The provider requires the matching API key: `SUPERSEDED_DEEPSEEK_API_KEY`,
+`SUPERSEDED_OPENAI_API_KEY`, or `SUPERSEDED_ANTHROPIC_API_KEY` — without the
+key for the selected provider, `superseded review` fails.
 
 ```
 environment variable > --provider/--model flag > config file
@@ -88,17 +109,19 @@ SUPERSEDED_LOG_FORMAT / SUPERSEDED_LOG_LEVEL env var > --log-format / --log-leve
 
 Which model provider to use. The provider is called directly over its API — no external CLI is involved. Choices:
 
-| Provider | Auth |
-|---|---|
-| `deepseek` | `SUPERSEDED_DEEPSEEK_API_KEY` (required) |
+| Provider | Auth | Default model |
+|---|---|---|
+| `deepseek` (default) | `SUPERSEDED_DEEPSEEK_API_KEY` (required) | `deepseek-v4-flash` |
+| `openai` | `SUPERSEDED_OPENAI_API_KEY` (required) | `gpt-5.6-terra` |
+| `anthropic` | `SUPERSEDED_ANTHROPIC_API_KEY` (required) | `claude-sonnet-5` |
 
 ### `model`
 
-The model ID sent with each review prompt. Set to `null` to use the provider's default (`deepseek-v4-flash` for `deepseek`).
+The model ID sent with each review prompt. Set to `null` to use the provider's default (`deepseek-v4-flash` for `deepseek`, `gpt-5.6-terra` for `openai`, `claude-sonnet-5` for `anthropic`).
 
 ### `reasoning_effort`
 
-DeepSeek thinking-mode (chain-of-thought) effort: `low` | `high` | `max` (default `max`). Higher effort produces deeper reasoning at the cost of latency and tokens. In thinking mode the API ignores `temperature`/`top_p` silently. Override with `--reasoning-effort` or `SUPERSEDED_REASONING_EFFORT`.
+Reasoning depth for the selected provider: `low` | `medium` | `high` | `max` (default `max`). Higher effort produces deeper reasoning at the cost of latency and tokens. The value is mapped per provider (e.g. Anthropic maps `max` to `xhigh`). In thinking mode the API ignores `temperature`/`top_p` silently. Override with `--reasoning-effort` or `SUPERSEDED_REASONING_EFFORT`.
 
 ### `format`
 

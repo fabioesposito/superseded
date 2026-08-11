@@ -117,6 +117,8 @@ Progressive review needs `memory: true` and a PR number. It is **skipped** when 
 ```bash
 # Explicit provider
 superseded review --pr 123 --provider deepseek
+superseded review --pr 123 --provider openai
+superseded review --pr 123 --provider anthropic
 
 # Explicit model
 superseded review --pr 123 --provider deepseek --model deepseek-v4-flash
@@ -127,9 +129,20 @@ export SUPERSEDED_MODEL=deepseek-v4-flash
 superseded review --pr 123
 ```
 
-The provider requires a DeepSeek API key — set `SUPERSEDED_DEEPSEEK_API_KEY`
-(get one at <https://platform.deepseek.com>). `SUPERSEDED_AGENT` still works as
-a deprecated alias for `SUPERSEDED_PROVIDER`.
+`--provider` accepts `deepseek` (default), `openai`, or `anthropic`. Each
+provider needs its own API key — set `SUPERSEDED_DEEPSEEK_API_KEY`
+(platform.deepseek.com), `SUPERSEDED_OPENAI_API_KEY` (platform.openai.com), or
+`SUPERSEDED_ANTHROPIC_API_KEY` (console.anthropic.com) for the provider you
+select. `SUPERSEDED_AGENT` still works as a deprecated alias for
+`SUPERSEDED_PROVIDER`.
+
+Default models:
+
+| Provider | Default model |
+|---|---|
+| `deepseek` | `deepseek-v4-flash` |
+| `openai` | `gpt-5.6-terra` |
+| `anthropic` | `claude-sonnet-5` |
 
 Precedence: **env vars > CLI flags > config file**.
 

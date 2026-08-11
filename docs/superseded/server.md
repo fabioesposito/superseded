@@ -23,9 +23,11 @@ max_concurrent_reviews: 3
 temp_dir: "/tmp/superseded"
 log_level: "info"
 database_url: null                    # null = SQLite, or postgresql://...
-provider: deepseek                    # provider is fixed server-side
+provider: deepseek                    # deepseek | openai | anthropic — provider is fixed server-side
 model: null                           # null = use repo's .superseded.yaml
 deepseek_api_key: "sk-..."            # or set SUPERSEDED_DEEPSEEK_API_KEY
+# openai_api_key: "sk-..."            # for provider: openai (or SUPERSEDED_OPENAI_API_KEY)
+# anthropic_api_key: "sk-ant-..."     # for provider: anthropic (or SUPERSEDED_ANTHROPIC_API_KEY)
 ```
 
 Environment variables (prefixed with `SUPERSEDED_`):
@@ -35,7 +37,9 @@ Environment variables (prefixed with `SUPERSEDED_`):
 | `SUPERSEDED_APP_ID` | `app_id` | Yes | — |
 | `SUPERSEDED_WEBHOOK_SECRET` | `webhook_secret` | Yes | — |
 | `SUPERSEDED_PRIVATE_KEY_PATH` | `private_key_path` | Yes | — |
-| `SUPERSEDED_DEEPSEEK_API_KEY` | `deepseek_api_key` | Yes | — |
+| `SUPERSEDED_DEEPSEEK_API_KEY` | `deepseek_api_key` | No (unless `provider: deepseek`) | — |
+| `SUPERSEDED_OPENAI_API_KEY` | `openai_api_key` | No (unless `provider: openai`) | — |
+| `SUPERSEDED_ANTHROPIC_API_KEY` | `anthropic_api_key` | No (unless `provider: anthropic`) | — |
 | `SUPERSEDED_PORT` | `port` | No | `8000` |
 | `SUPERSEDED_HOST` | `host` | No | `127.0.0.1` |
 | `SUPERSEDED_BEHIND_PROXY` | `behind_proxy` | No | `false` |
@@ -48,15 +52,19 @@ Environment variables (prefixed with `SUPERSEDED_`):
 | `SUPERSEDED_TLS_KEY` | `tls_key_path` | No | — |
 | `SUPERSEDED_SERVER_MODEL` | `model` | No | None |
 
-`SUPERSEDED_DEEPSEEK_API_KEY` is the key for the DeepSeek API — the server
-refuses to start without it. `SUPERSEDED_API_KEY` (optional) is the bearer key
+The server requires the API key matching its `provider:` — one of
+`SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, or
+`SUPERSEDED_ANTHROPIC_API_KEY` — and refuses to start without it.
+`SUPERSEDED_API_KEY` (optional) is the bearer key
 for the `/review/pr` endpoint that the GitHub Action calls (the Action's
 `server-key` input). Upgrading from v0.5.x? See [MIGRATION.md](../../MIGRATION.md).
 
 Launch:
 
 ```bash
-export SUPERSEDED_DEEPSEEK_API_KEY=sk-...   # required — the server refuses to start without it
+export SUPERSEDED_DEEPSEEK_API_KEY=sk-...   # the key matching your provider: — required
+export SUPERSEDED_OPENAI_API_KEY=sk-...     # ...or these, for provider: openai / anthropic
+export SUPERSEDED_ANTHROPIC_API_KEY=sk-ant-...
 superseded serve --config superseded-server.yaml
 # or with overrides
 superseded serve --port 9000 --host 0.0.0.0
@@ -114,11 +122,12 @@ On startup, `superseded serve` runs pending Alembic migrations against the confi
 
 The GitHub Action (`action.yml`) is a **composite** Action — a single `curl` step
 that POSTs `{owner, repo, pr_number, passes?}` to your running review server's
-`/review/pr` endpoint. The server calls the DeepSeek API directly and posts the
+`/review/pr` endpoint. The server calls the configured provider API directly and posts the
 review via its GitHub App. No Docker image is built in CI and no credentials
-live on the runner — the server owns provider/model/credentials, and the DeepSeek
-API key (`SUPERSEDED_DEEPSEEK_API_KEY`) lives in the server's environment only;
-the Action never receives it.
+live on the runner — the server owns provider/model/credentials, and the
+provider API key (one of `SUPERSEDED_DEEPSEEK_API_KEY`,
+`SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`) lives in the
+server's environment only; the Action never receives it.
 
 ### Usage
 
