@@ -236,6 +236,24 @@ def create_app(
         )
         return {"status": "enqueued", "job_id": job.job_id}
 
+    @app.get("/review/jobs/{job_id}")
+    async def get_job_status(job_id: str, request: Request) -> Response:
+        if not config.api_key:
+            return Response(status_code=501, content="API key not configured on this server.")
+        auth = request.headers.get("Authorization", "")
+        expected = f"Bearer {config.api_key}"
+        if not hmac.compare_digest(auth, expected):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        status = worker.get_job_status(job_id)
+        if status is None:
+            raise HTTPException(status_code=404, detail="Unknown or evicted job_id.")
+
+        payload: dict = {"status": status.status, "result": None, "error": status.error}
+        if status.status == "completed" and status.result is not None:
+            payload["result"] = status.result.model_dump(mode="json")
+        return payload
+
     @app.post("/webhook")
     async def webhook(request: Request, background_tasks: BackgroundTasks) -> Response:
         client_ip = request.client.host if request.client else "unknown"
