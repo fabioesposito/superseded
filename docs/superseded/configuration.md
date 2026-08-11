@@ -5,26 +5,23 @@ Superseded looks for `.superseded.yaml` in the repository root. If the file does
 ## Generating a Config
 
 ```bash
-# Auto-detect installed CLIs and write config
+# Probe the environment and write a config
 superseded init
-
-# Force a specific agent
-superseded init --agent codex
 
 # Overwrite existing config
 superseded init --force
 ```
 
-`init` is non-interactive. It probes PATH for `claude`, `opencode`, and `codex`, picks the highest-priority one available, and writes `.superseded.yaml`. It also checks for `gh` and `code-review-graph`.
+`init` is non-interactive. It probes PATH for `gh`, checks for an installed `code-review-graph`, checks that `SUPERSEDED_DEEPSEEK_API_KEY` is set, and writes `.superseded.yaml` with `provider: deepseek`.
 
 ## Full Reference
 
 ```yaml
 # .superseded.yaml — all fields with their defaults
 
-# --- Agent ---
-agent: opencode                         # claude-code | opencode | codex
-model: deepseek-v4-pro                  # Model ID (can be null)
+# --- Provider ---
+provider: deepseek                       # model provider (deepseek is the only one)
+model: null                              # null = provider default (deepseek-v4-flash)
 
 # --- Output ---
 format: table                           # table | json | markdown
@@ -53,16 +50,19 @@ usage_retrieval: true                   # Cross-file caller search via rg
 conventions: true                       # Inject AGENTS.md, CLAUDE.md, etc.
 spec_retrieval: true                    # Inject relevant specs & plans
 graph: true                             # Use code-review-graph for usage retrieval
+verify: true                            # Post-review verification pass (extra API call)
 ```
 
 ## Configuration Precedence
 
-### Agent and Model
+### Provider and Model
 
-`SUPERSEDED_AGENT` / `SUPERSEDED_MODEL` env vars **override everything**. This is designed for CI secrets — set them in your GitHub Action and they cannot be overridden by a config file.
+`SUPERSEDED_PROVIDER` / `SUPERSEDED_MODEL` env vars **override everything**. This is designed for CI secrets — set them in your GitHub Action and they cannot be overridden by a config file. (`SUPERSEDED_AGENT` still works as a deprecated alias for `SUPERSEDED_PROVIDER`.)
+
+The provider requires a DeepSeek API key: `SUPERSEDED_DEEPSEEK_API_KEY` — without it, `superseded review` fails.
 
 ```
-environment variable > --agent/--model flag > config file
+environment variable > --provider/--model flag > config file
 ```
 
 ### Graph
@@ -83,19 +83,17 @@ SUPERSEDED_LOG_FORMAT / SUPERSEDED_LOG_LEVEL env var > --log-format / --log-leve
 
 ## Config Fields Explained
 
-### `agent`
+### `provider`
 
-Which external AI CLI to use. Must be installed on PATH. Choices:
+Which model provider to use. The provider is called directly over its API — no external CLI is involved. Choices:
 
-| Agent | Binary | Default Model |
-|---|---|---|
-| `claude-code` | `claude` | `claude-sonnet-4-6` |
-| `opencode` | `opencode` | `opencode/big-pickle` |
-| `codex` | `codex` | `gpt-5.4-mini` |
+| Provider | Auth |
+|---|---|
+| `deepseek` | `SUPERSEDED_DEEPSEEK_API_KEY` (required) |
 
 ### `model`
 
-The model ID passed to the agent CLI. Set to `null` to use the agent's own default.
+The model ID sent with each review prompt. Set to `null` to use the provider's default (`deepseek-v4-flash` for `deepseek`).
 
 ### `format`
 
@@ -133,7 +131,7 @@ When `true` and memory is enabled, superseded only reviews new commits since the
 
 When `true` and memory is enabled, superseded builds a learned context from past feedback:
 1. Gathers stats on which finding types are accepted or dismissed
-2. When feedback events exceed `reflection_threshold`, sends them to an AI agent to infer team-preference rules
+2. When feedback events exceed `reflection_threshold`, sends them to the provider to infer team-preference rules
 3. Injects the top `max_learned_rules` into future review prompts
 
 Example learned rules:
@@ -169,7 +167,7 @@ Results are capped at 4000 characters total.
 
 ### `usage_retrieval`
 
-When enabled, superseded extracts changed symbol names from the diff (functions, classes, constants) and searches the repo for callers using `rg` (ripgrep). This gives the AI agent context about who depends on the changed code. Capped at 25 symbols and 6000 characters.
+When enabled, superseded extracts changed symbol names from the diff (functions, classes, constants) and searches the repo for callers using `rg` (ripgrep). This gives the model context about who depends on the changed code. Capped at 25 symbols and 6000 characters.
 
 ### `conventions`
 
@@ -203,3 +201,7 @@ To set it up:
 uv add code-review-graph
 code-review-graph build
 ```
+
+### `verify`
+
+When enabled (default) and the run produced findings, superseded makes one extra provider call that double-checks each finding against the diff and drops false positives. Disable with `verify: false`, `--no-verify`, or `SUPERSEDED_VERIFY=0` to save tokens.

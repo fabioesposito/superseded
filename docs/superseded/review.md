@@ -78,7 +78,7 @@ Each finding becomes an inline PR review comment on the relevant line. Findings 
 
 ## Context Grounding
 
-Superseded injects context into every AI prompt so the agent sees more than just the diff:
+Superseded injects context into every AI prompt so the model sees more than just the diff:
 
 | Context source | What it provides | Controlled by |
 |---|---|---|
@@ -112,20 +112,24 @@ superseded review --pr 123 --full
 
 Progressive review needs `memory: true` and a PR number. It is **skipped** when memory is disabled (falls back to full review) or when the head diverges (force-push/rebuild triggers a full review).
 
-## Agent Selection
+## Provider Selection
 
 ```bash
-# Explicit agent
-superseded review --pr 123 --agent claude-code
+# Explicit provider
+superseded review --pr 123 --provider deepseek
 
 # Explicit model
-superseded review --pr 123 --agent codex --model gpt-5.4-mini
+superseded review --pr 123 --provider deepseek --model deepseek-v4-flash
 
 # Environment variables override everything
-export SUPERSEDED_AGENT=opencode
-export SUPERSEDED_MODEL=deepseek-v4-pro
+export SUPERSEDED_PROVIDER=deepseek
+export SUPERSEDED_MODEL=deepseek-v4-flash
 superseded review --pr 123
 ```
+
+The provider requires a DeepSeek API key — set `SUPERSEDED_DEEPSEEK_API_KEY`
+(get one at <https://platform.deepseek.com>). `SUPERSEDED_AGENT` still works as
+a deprecated alias for `SUPERSEDED_PROVIDER`.
 
 Precedence: **env vars > CLI flags > config file**.
 
@@ -141,7 +145,7 @@ superseded --log-format json review --diff HEAD~3..HEAD
 superseded --log-level INFO review --pr 123
 ```
 
-`--log-format` accepts `text` (default) or `json`; `--log-level` accepts any standard level name (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`). Server mode defaults to JSON logging. Precedence is **env vars > CLI flags > config file**, same as agent/model:
+`--log-format` accepts `text` (default) or `json`; `--log-level` accepts any standard level name (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`). Server mode defaults to JSON logging. Precedence is **env vars > CLI flags > config file**, same as provider/model:
 
 ```bash
 export SUPERSEDED_LOG_FORMAT=json
@@ -164,7 +168,7 @@ If a single pass times out or fails, it logs a warning and the review continues 
 The `review` command exits with:
 
 - `0` — review completed cleanly (with or without findings).
-- `1` — hard error (agent unavailable, diff fetch failed, etc.).
+- `1` — hard error (provider unavailable, diff fetch failed, etc.).
 - `2` — usage / configuration error.
 - `3` — **partial review**: the run completed and emitted output, but at least one pass was skipped (e.g. a transient provider failure). Output is still printed and persisted before this exit, so CI can detect infra degradation without losing the partial results — pair it with `jq '.warnings'` on the JSON output for the list of skipped passes.
 
