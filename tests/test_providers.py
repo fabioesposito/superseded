@@ -208,7 +208,7 @@ def test_deepseek_provider_uses_env_when_no_arg(monkeypatch):
 
 def test_deepseek_provider_raises_when_no_key(monkeypatch):
     monkeypatch.delenv(DEEPSEEK_API_KEY_ENV, raising=False)
-    with pytest.raises(ProviderConfigError, match="No DeepSeek API key"):
+    with pytest.raises(ProviderConfigError, match="No deepseek API key"):
         DeepSeekProvider()
 
 
@@ -233,7 +233,7 @@ def test_deepseek_complete_returns_content(monkeypatch):
                 content='[{"severity": "critical"}]', prompt_tokens=42, completion_tokens=7
             )
 
-    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
     p = DeepSeekProvider(api_key="sk-test")
     resp = p.complete(
         "the prompt", model="deepseek-v4-flash", timeout=120.0, reasoning_effort="max"
@@ -269,7 +269,7 @@ def test_deepseek_complete_omits_reasoning_effort_when_none(monkeypatch):
             captured.update(kw)
             return _fake_completion()
 
-    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
     p = DeepSeekProvider(api_key="sk-test")
     p.complete("p", reasoning_effort=None)
     assert "reasoning_effort" not in captured
@@ -292,7 +292,7 @@ def test_deepseek_complete_uses_default_model_when_none(monkeypatch):
             assert kw["model"] == DEEPSEEK_DEFAULT_MODEL
             return _fake_completion()
 
-    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
     p = DeepSeekProvider(api_key="sk-test")
     p.complete("p")
 
@@ -322,7 +322,7 @@ def test_deepseek_complete_ignores_reasoning_content(monkeypatch):
             usage = type("Usage", (), {"prompt_tokens": 1, "completion_tokens": 1})()
             return type("Resp", (), {"choices": [choice], "usage": usage, "model": "x"})
 
-    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
     p = DeepSeekProvider(api_key="sk-test")
     resp = p.complete("p")
     assert resp.content == "[]"
@@ -349,7 +349,7 @@ def test_deepseek_complete_handles_null_content(monkeypatch):
             usage = type("Usage", (), {"prompt_tokens": 0, "completion_tokens": 0})()
             return type("Resp", (), {"choices": [choice], "usage": usage, "model": "x"})
 
-    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
     p = DeepSeekProvider(api_key="sk-test")
     resp = p.complete("p")
     assert resp.content == ""
@@ -363,7 +363,7 @@ def test_deepseek_init_forwards_base_url_and_retries(monkeypatch):
         def __init__(self, **kw):
             captured.update(kw)
 
-    monkeypatch.setattr("superseded.providers.deepseek.OpenAI", FakeClient)
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
     DeepSeekProvider(api_key="sk-test")
     assert captured["base_url"] == DEEPSEEK_DEFAULT_BASE_URL
     assert captured["max_retries"] == 2
