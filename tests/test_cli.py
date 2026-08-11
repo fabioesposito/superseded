@@ -82,6 +82,42 @@ def test_resolve_provider_legacy_agent_env_alias():
         assert resolve_provider(None, Config()) == "deepseek"
 
 
+def test_resolve_provider_env_overrides_config():
+    with patch.dict("os.environ", {"SUPERSEDED_PROVIDER": "other"}, clear=False):
+        assert resolve_provider(None, Config()) == "other"
+
+
+def test_resolve_provider_env_overrides_flag():
+    """Env beats flag per documented precedence: env > flag > config."""
+    with patch.dict("os.environ", {"SUPERSEDED_PROVIDER": "other"}, clear=False):
+        assert resolve_provider("deepseek", Config()) == "other"
+
+
+def test_resolve_provider_legacy_agent_warns_without_new_env():
+    with (
+        patch.dict("os.environ", {"SUPERSEDED_AGENT": "legacy-agent"}, clear=False),
+        pytest.warns(DeprecationWarning, match="SUPERSEDED_AGENT is deprecated"),
+    ):
+        assert resolve_provider(None, Config()) == "legacy-agent"
+
+
+def test_resolve_provider_new_env_wins_over_legacy():
+    """When both env vars are set, SUPERSEDED_PROVIDER wins and no deprecation warning fires."""
+    import warnings
+
+    with (
+        patch.dict(
+            "os.environ",
+            {"SUPERSEDED_AGENT": "legacy-agent", "SUPERSEDED_PROVIDER": "new-provider"},
+            clear=False,
+        ),
+        warnings.catch_warnings(record=True) as recorded,
+    ):
+        warnings.simplefilter("always")
+        assert resolve_provider(None, Config()) == "new-provider"
+    assert not [w for w in recorded if issubclass(w.category, DeprecationWarning)]
+
+
 def test_resolve_model_env_overrides():
     with patch.dict("os.environ", {"SUPERSEDED_MODEL": "gpt-5"}, clear=False):
         assert resolve_model(None, Config()) == "gpt-5"

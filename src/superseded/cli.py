@@ -34,6 +34,7 @@ from superseded.output.github_pr import current_repo, post_review_to_pr
 from superseded.output.json_out import format_json
 from superseded.output.markdown import format_markdown
 from superseded.output.table import format_table
+from superseded.providers import ProviderConfigError
 from superseded.review.engine import ReviewEngine
 
 MODEL_ENV = "SUPERSEDED_MODEL"
@@ -80,7 +81,8 @@ PROVIDER_ENV = "SUPERSEDED_PROVIDER"
 
 def resolve_provider(provider_flag: str | None, config: Config) -> str:
     legacy = os.environ.get("SUPERSEDED_AGENT")
-    if legacy and not os.environ.get(PROVIDER_ENV):
+    env_provider = os.environ.get(PROVIDER_ENV)
+    if legacy and not env_provider:
         import warnings
 
         warnings.warn(
@@ -89,6 +91,8 @@ def resolve_provider(provider_flag: str | None, config: Config) -> str:
             stacklevel=2,
         )
         return legacy
+    if env_provider:
+        return env_provider
     if provider_flag is not None:
         return provider_flag
     return config.provider
@@ -398,7 +402,7 @@ def _run_review(
 
     try:
         engine = ReviewEngine.select(provider_name, model=model_name, config=config)
-    except ValueError as err:
+    except (ValueError, ProviderConfigError) as err:
         click.echo(f"Error: {err}", err=True)
         sys.exit(2)
 

@@ -90,7 +90,7 @@ def test_parse_findings_json_no_array_returns_empty_list():
 
 
 def test_parse_findings_json_malformed_array_returns_empty_list():
-    # Truncated/garbled array — return [] so the retry path (engine) can react.
+    # Truncated/garbled array — no parseable array present, return [].
     assert parse_findings_json("[{bad json", "security") == []
 
 
@@ -109,6 +109,67 @@ def test_parse_findings_json_injects_pass_name_into_each_item():
     items = parse_findings_json(raw, "architecture")
     assert all(i["pass_name"] == "architecture" for i in items)
     assert len(items) == 2
+
+
+def test_parse_findings_json_returns_first_of_two_arrays():
+    """`[A] garbage [B]` must yield A, not [] and not B."""
+    raw = (
+        '[{"severity": "critical", "file": "a.py", "line": 1}] '
+        "garbage between "
+        '[{"severity": "nit", "file": "b.py", "line": 2}]'
+    )
+    items = parse_findings_json(raw, "security")
+    assert len(items) == 1
+    assert items[0]["file"] == "a.py"
+
+
+def test_parse_findings_json_recovers_valid_array_after_garbage():
+    """`[garbage [valid]` — the greedy regex spans the garbage; the balanced scan recovers."""
+    raw = '[not valid json [{"severity": "critical", "file": "a.py", "line": 1}] trailing'
+    items = parse_findings_json(raw, "correctness")
+    assert len(items) == 1
+    assert items[0]["file"] == "a.py"
+
+
+def test_parse_findings_json_closing_brace_in_string_does_not_truncate():
+    r"""A `}]` substring inside a string value must not truncate the array."""
+    raw = (
+        "preamble\n"
+        '[{"severity": "critical", "file": "a.py", "line": 1, '
+        '"title": "beware }] injection", "suggestion": "s"}]\n'
+        "trailing commentary\n"
+    )
+    items = parse_findings_json(raw, "security")
+    assert len(items) == 1
+    assert items[0]["title"] == "beware }] injection"
+    assert items[0]["file"] == "a.py"
+
+
+def test_parse_findings_json_no_catastrophic_backtracking():
+    """Greedy .* under DOTALL must not cause catastrophic backtracking on big inputs."""
+    import time
+
+    large = "[{" + "x" * 50_000 + "}] not json"
+    start = time.time()
+    items = parse_findings_json(large, "security")
+    elapsed = time.time() - start
+    assert items == []
+    assert elapsed < 1.0, f"parse_findings_json took {elapsed:.2f}s on 50KB input"
+
+
+def test_parse_findings_json_caps_at_max_per_pass():
+    from superseded.providers.parsing import MAX_FINDINGS_PER_PASS
+
+    raw = (
+        "["
+        + ",".join(
+            f'{{"severity": "nit", "file": "f.py", "line": {i}}}'
+            for i in range(MAX_FINDINGS_PER_PASS + 50)
+        )
+        + "]"
+    )
+    items = parse_findings_json(raw, "style")
+    assert len(items) == MAX_FINDINGS_PER_PASS
 
 
 def _fake_completion(

@@ -444,6 +444,7 @@ async def _run_review_for_job(
             learned_context = assemble_learned_context(None, all_rules, config.max_learned_rules)
 
         engine = ReviewEngine(provider=provider, config=config)
+        engine.model = config.model
         result = await asyncio.to_thread(
             engine.review,
             diff=diff,
@@ -502,11 +503,22 @@ async def _run_review_for_job(
                 await store.set_watermark(repo_key, job.pr_number, job.head_sha)
 
             if config.learned_review:
+                from superseded.audit.reflector import PatternReflector
+
                 aggregator = StatsAggregator(store)
                 await aggregator._refresh(repo_key)
-                await aggregator.get_stats_context(repo_key)
+                stats_text = await aggregator.get_stats_context(repo_key)
+
+                reflector = PatternReflector(
+                    provider=provider, store=store, threshold=config.reflection_threshold
+                )
+                await reflector.maybe_reflect(repo_key)
 
                 await store.prune_stale_rules(repo_key)
+                all_rules = await store.get_learned_rules(repo_key, limit=config.max_learned_rules)
+                learned_context = assemble_learned_context(
+                    stats_text, all_rules, config.max_learned_rules
+                )
 
         conclusion = "success" if payload["event"] != "REQUEST_CHANGES" else "failure"
         title = build_check_run_title(result)

@@ -56,11 +56,14 @@ class ReviewEngine:
         findings, errors, usage = self._run_and_validate(pass_name, prompt, timeout)
         if errors:
             logger.info("Retrying pass %s: %d finding(s) failed validation", pass_name, len(errors))
-            retried, _, _ = self._run_and_validate(
+            retried, _, retry_usage = self._run_and_validate(
                 pass_name, build_retry_prompt(prompt, errors), timeout
             )
             if retried:
                 findings = retried
+                # The retry supersedes the first attempt's findings; credit its
+                # usage alone rather than accumulating both calls.
+                usage = retry_usage
         if progress is not None:
             progress(pass_name, "done")
         return findings, usage
