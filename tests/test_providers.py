@@ -9,6 +9,7 @@ from superseded.providers.deepseek import (
     DEEPSEEK_DEFAULT_MODEL,
     DeepSeekProvider,
 )
+from superseded.providers.openai_compat import EFFORT_MAP, OpenAICompatProvider
 from superseded.providers.parsing import parse_findings_json
 
 
@@ -380,3 +381,26 @@ def test_provider_map_exports():
 
     assert "deepseek" in PROVIDER_MAP
     assert PROVIDER_MAP["deepseek"] is DeepSeekProvider
+
+
+def test_effort_map_deepseek():
+    assert EFFORT_MAP["deepseek"] == {"low": "low", "medium": "high", "high": "high", "max": "max"}
+
+
+def test_effort_map_openai():
+    assert EFFORT_MAP["openai"] == {"low": "low", "medium": "medium", "high": "high", "max": "max"}
+
+
+def test_effort_map_anthropic():
+    assert EFFORT_MAP["anthropic"] == {
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "max": "xhigh",
+    }
+
+
+def test_openai_compat_provider_requires_configured_subclass():
+    """The base must refuse instantiation without subclass class-attributes."""
+    with pytest.raises((TypeError, ProviderConfigError)):
+        OpenAICompatProvider()
