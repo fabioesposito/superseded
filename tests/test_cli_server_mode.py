@@ -180,3 +180,64 @@ def test_review_server_mode_warnings_exit_3():
             ["review", "--server", "https://srv", "--server-key", "sk", "--pr", "7"],
         )
     assert result.exit_code == 3
+
+
+def test_review_server_mode_warns_ignored_flags():
+    runner = CliRunner()
+    with (
+        patch("superseded.cli.current_repo", lambda: "octocat/hello-world"),
+        patch("superseded.cli.review_via_server", return_value=_ok_result()),
+    ):
+        result = runner.invoke(
+            cli,
+            [
+                "review",
+                "--server",
+                "https://srv",
+                "--server-key",
+                "sk",
+                "--pr",
+                "7",
+                "--full",
+                "--no-memory",
+                "--verify",
+            ],
+        )
+    assert result.exit_code == 0
+    assert "--full" in result.output
+    assert "--no-memory" in result.output
+    assert "--provider" not in result.output
+    assert "--model" not in result.output
+
+
+def test_review_server_mode_config_sourced_warns(tmp_path, monkeypatch):
+    monkeypatch.delenv("SUPERSEDED_SERVER_URL", raising=False)
+    monkeypatch.delenv("SUPERSEDED_SERVER_KEY", raising=False)
+    cfg = tmp_path / ".superseded.yaml"
+    cfg.write_text("server: https://cfg.example.com\nserver_key: cfgkey\n")
+    runner = CliRunner()
+    with (
+        patch("superseded.cli.current_repo", lambda: "octocat/hello-world"),
+        patch("superseded.cli.review_via_server", return_value=_ok_result()) as mock_rev,
+    ):
+        result = runner.invoke(cli, ["review", "--config", str(cfg), "--pr", "7"])
+    assert result.exit_code == 0
+    assert mock_rev.call_args.kwargs["server_url"] == "https://cfg.example.com"
+    assert "server-mode enabled by 'server:'" in result.output
+
+
+def test_review_server_mode_flag_overrides_env(monkeypatch):
+    monkeypatch.setenv("SUPERSEDED_SERVER_URL", "https://env.example.com")
+    monkeypatch.setenv("SUPERSEDED_SERVER_KEY", "envkey")
+    runner = CliRunner()
+    with (
+        patch("superseded.cli.current_repo", lambda: "octocat/hello-world"),
+        patch("superseded.cli.review_via_server", return_value=_ok_result()) as mock_rev,
+    ):
+        result = runner.invoke(
+            cli,
+            ["review", "--server", "https://flag.example.com", "--pr", "7"],
+        )
+    assert result.exit_code == 0
+    assert mock_rev.call_args.kwargs["server_url"] == "https://flag.example.com"
+    assert "server-mode enabled by" not in result.output

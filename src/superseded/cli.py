@@ -155,11 +155,11 @@ def resolve_verify(cli_value: bool | None, config: Config) -> bool:
 
 
 def resolve_server(server_flag: str | None, config: Config) -> str | None:
-    return os.environ.get(SERVER_URL_ENV) or server_flag or config.server
+    return server_flag or os.environ.get(SERVER_URL_ENV) or config.server
 
 
 def resolve_server_key(key_flag: str | None, config: Config) -> str | None:
-    return os.environ.get(SERVER_KEY_ENV) or key_flag or config.server_key
+    return key_flag or os.environ.get(SERVER_KEY_ENV) or config.server_key
 
 
 def resolve_log_format(flag: str | None, config: Config | None = None) -> str:
@@ -409,6 +409,12 @@ def review(
                 err=True,
             )
             sys.exit(2)
+        if log_config.server and not os.environ.get(SERVER_URL_ENV) and server_url_flag is None:
+            _status(
+                f"Warning: server-mode enabled by 'server:' in "
+                f"{config_path or '.superseded.yaml'}. Use SUPERSEDED_SERVER_URL or "
+                "--server to override; remove the key to disable."
+            )
         _run_review_remote(
             server_url=server_url,
             server_key=resolve_server_key(server_key_flag, log_config),
@@ -417,6 +423,19 @@ def review(
             repo_flag=repo_name,
             post=not no_post,
             post_flag_set=post,
+            ignored_flags=_ignored_server_mode_flags(
+                provider=provider,
+                model=model,
+                reasoning_effort=reasoning_effort,
+                no_memory=no_memory,
+                full_review=full_review,
+                no_static=no_static,
+                no_usage=no_usage,
+                no_conventions=no_conventions,
+                no_specs=no_specs,
+                graph=graph,
+                verify=verify,
+            ),
             output_format=output_format,
             passes=passes,
             timeout=timeout,
@@ -720,6 +739,47 @@ async def _build_learned_context(
     return assemble_learned_context(stats_text, all_rules, config.max_learned_rules)
 
 
+def _ignored_server_mode_flags(
+    *,
+    provider: str | None,
+    model: str | None,
+    reasoning_effort: str | None,
+    no_memory: bool,
+    full_review: bool,
+    no_static: bool,
+    no_usage: bool,
+    no_conventions: bool,
+    no_specs: bool,
+    graph: bool | None,
+    verify: bool | None,
+) -> list[str]:
+    """Flag names the user passed that server-mode silently ignores."""
+    flags: list[str] = []
+    if provider is not None:
+        flags.append("--provider")
+    if model is not None:
+        flags.append("--model")
+    if reasoning_effort is not None:
+        flags.append("--reasoning-effort")
+    if no_memory:
+        flags.append("--no-memory")
+    if full_review:
+        flags.append("--full")
+    if no_static:
+        flags.append("--no-static")
+    if no_usage:
+        flags.append("--no-usage")
+    if no_conventions:
+        flags.append("--no-conventions")
+    if no_specs:
+        flags.append("--no-specs")
+    if graph is not None:
+        flags.append("--graph" if graph else "--no-graph")
+    if verify is not None:
+        flags.append("--verify" if verify else "--no-verify")
+    return flags
+
+
 def _run_review_remote(
     *,
     server_url: str,
@@ -729,6 +789,7 @@ def _run_review_remote(
     repo_flag: str | None,
     post: bool,
     post_flag_set: bool,
+    ignored_flags: list[str],
     output_format: str | None,
     passes: str | None,
     timeout: int | None,
@@ -764,6 +825,13 @@ def _run_review_remote(
         _status(
             "Warning: --post has no effect in server-mode; the server posts by "
             "default. Use --no-post to suppress."
+        )
+
+    if ignored_flags:
+        _status(
+            "Warning: the following flags are ignored in server-mode: "
+            + ", ".join(ignored_flags)
+            + "."
         )
 
     config = load_config(config_path)
