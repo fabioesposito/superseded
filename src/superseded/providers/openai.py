@@ -20,7 +20,12 @@ class OpenAIProvider(OpenAICompatProvider):
     def _call(self, kwargs: dict):
         # Responses API uses `input` (not Chat Completions' `messages`) and
         # accepts a plain string. We always send exactly one user message.
+        # The SDK's Responses.create has no `reasoning_effort` kwarg; effort
+        # goes in the `reasoning` dict instead.
         input_ = kwargs.pop("messages")[0]["content"]
+        effort = kwargs.pop("reasoning_effort", None)
+        if effort is not None:
+            kwargs["reasoning"] = {"effort": effort}
         return self._client.responses.create(input=input_, **kwargs)
 
     def _parse_response(self, resp, resolved: str) -> ProviderResponse:

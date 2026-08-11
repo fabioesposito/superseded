@@ -454,6 +454,10 @@ def test_openai_complete_uses_responses_api(monkeypatch):
             return self
 
         def create(self, **kw):
+            # Simulate the real SDK's typed signature: no **kwargs for
+            # unknown params like `reasoning_effort`.
+            if "reasoning_effort" in kw:
+                raise TypeError("Responses.create() got an unexpected keyword argument")
             captured["create_kwargs"] = kw
             return _fake_responses(
                 text='[{"severity": "critical"}]', input_tokens=42, output_tokens=7
@@ -468,7 +472,9 @@ def test_openai_complete_uses_responses_api(monkeypatch):
     # Responses API: single user message translated to `input` (a string).
     assert captured["create_kwargs"]["input"] == "the prompt"
     assert "messages" not in captured["create_kwargs"]
-    assert captured["create_kwargs"]["reasoning_effort"] == "max"
+    # effort maps into the `reasoning` dict; the SDK has no reasoning_effort kwarg.
+    assert captured["create_kwargs"]["reasoning"] == {"effort": "max"}
+    assert "reasoning_effort" not in captured["create_kwargs"]
 
 
 def test_openai_complete_maps_effort(monkeypatch):
@@ -489,9 +495,9 @@ def test_openai_complete_maps_effort(monkeypatch):
     monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
     p = OpenAIProvider(api_key="sk-test")
     p.complete("p", reasoning_effort="medium")
-    assert captured["reasoning_effort"] == "medium"
+    assert captured["reasoning"] == {"effort": "medium"}
     p.complete("p", reasoning_effort="max")
-    assert captured["reasoning_effort"] == "max"
+    assert captured["reasoning"] == {"effort": "max"}
 
 
 def _fake_messages(*, blocks=("[]",), input_tokens=13, output_tokens=8, model="claude-sonnet-5"):

@@ -278,7 +278,7 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
     "reasoning_effort",
     type=click.Choice(["low", "medium", "high", "max"]),
     default=None,
-    help="DeepSeek thinking-mode effort (default: max). Env: SUPERSEDED_REASONING_EFFORT.",
+    help="Reasoning depth (low|medium|high|max; mapped per provider). Env: SUPERSEDED_REASONING_EFFORT.",
 )
 @click.option(
     "--format",
