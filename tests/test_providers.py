@@ -2,6 +2,12 @@ from __future__ import annotations
 
 import pytest
 
+from superseded.providers.anthropic import (
+    ANTHROPIC_API_KEY_ENV,
+    ANTHROPIC_DEFAULT_MODEL,
+    ANTHROPIC_MAX_TOKENS,
+    AnthropicProvider,
+)
 from superseded.providers.base import Provider, ProviderConfigError, ProviderResponse
 from superseded.providers.deepseek import (
     DEEPSEEK_API_KEY_ENV,
@@ -486,3 +492,84 @@ def test_openai_complete_maps_effort(monkeypatch):
     assert captured["reasoning_effort"] == "medium"
     p.complete("p", reasoning_effort="max")
     assert captured["reasoning_effort"] == "max"
+
+
+def _fake_messages(*, blocks=("[]",), input_tokens=13, output_tokens=8, model="claude-sonnet-5"):
+    """Quacks like an anthropic Messages API response."""
+    content = []
+    for b in blocks:
+        content.append(type("Block", (), {"type": "text", "text": b})())
+    usage = type("Usage", (), {"input_tokens": input_tokens, "output_tokens": output_tokens})()
+    return type("Resp", (), {"content": content, "usage": usage, "model": model})()
+
+
+def test_anthropic_constants():
+    assert ANTHROPIC_API_KEY_ENV == "SUPERSEDED_ANTHROPIC_API_KEY"
+    assert ANTHROPIC_DEFAULT_MODEL == "claude-sonnet-5"
+    assert ANTHROPIC_MAX_TOKENS == 128_000
+
+
+def test_anthropic_provider_name():
+    p = AnthropicProvider(api_key="sk-test")
+    assert p.name == "anthropic"
+
+
+def test_anthropic_provider_raises_when_no_key(monkeypatch):
+    monkeypatch.delenv(ANTHROPIC_API_KEY_ENV, raising=False)
+    with pytest.raises(ProviderConfigError, match="No anthropic API key"):
+        AnthropicProvider()
+
+
+def test_anthropic_complete_uses_messages_api(monkeypatch):
+    captured = {}
+
+    class FakeMessages:
+        def __init__(self, **kw):
+            captured["init_kwargs"] = kw
+
+        @property
+        def messages(self):
+            return self
+
+        def create(self, **kw):
+            captured["create_kwargs"] = kw
+            return _fake_messages(blocks=("first ", "second"), input_tokens=5, output_tokens=3)
+
+    monkeypatch.setattr("superseded.providers.anthropic.Anthropic", FakeMessages)
+    p = AnthropicProvider(api_key="sk-test")
+    resp = p.complete("the prompt", reasoning_effort="max")
+    # text blocks joined
+    assert resp.content == "first second"
+    assert resp.prompt_tokens == 5
+    assert resp.completion_tokens == 3
+    assert captured["create_kwargs"]["messages"] == [{"role": "user", "content": "the prompt"}]
+    assert captured["create_kwargs"]["max_tokens"] == 128_000
+    # effort mapped: max -> xhigh (Anthropic vocabulary), via extra_body
+    # (this SDK version's create() has no `effort` kwarg; extra_body is
+    # the documented forward-compat escape hatch for API params).
+    assert captured["create_kwargs"]["extra_body"] == {"effort": "xhigh"}
+
+
+def test_anthropic_complete_maps_effort(monkeypatch):
+    captured = {}
+
+    class FakeMessages:
+        def __init__(self, **kw):
+            pass
+
+        @property
+        def messages(self):
+            return self
+
+        def create(self, **kw):
+            captured.update(kw)
+            return _fake_messages()
+
+    monkeypatch.setattr("superseded.providers.anthropic.Anthropic", FakeMessages)
+    p = AnthropicProvider(api_key="sk-test")
+    p.complete("p", reasoning_effort="low")
+    assert captured["extra_body"]["effort"] == "low"
+    p.complete("p", reasoning_effort="high")
+    assert captured["extra_body"]["effort"] == "high"
+    p.complete("p", reasoning_effort="max")
+    assert captured["extra_body"]["effort"] == "xhigh"
