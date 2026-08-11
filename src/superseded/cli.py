@@ -42,6 +42,7 @@ from superseded.providers import (
     ProviderConfigError,
 )
 from superseded.review.engine import ReviewEngine
+from superseded.server.client import ServerReviewError, review_via_server
 
 if TYPE_CHECKING:
     from superseded.server.config import ServerConfig
@@ -53,6 +54,8 @@ VERIFY_ENV = "SUPERSEDED_VERIFY"
 LOG_FORMAT_ENV = "SUPERSEDED_LOG_FORMAT"
 LOG_LEVEL_ENV = "SUPERSEDED_LOG_LEVEL"
 VERBOSE_ENV = "VERBOSE"
+SERVER_URL_ENV = "SUPERSEDED_SERVER_URL"
+SERVER_KEY_ENV = "SUPERSEDED_SERVER_KEY"
 _TRUTHY = ("1", "true", "yes", "on")
 
 
@@ -149,6 +152,14 @@ def resolve_verify(cli_value: bool | None, config: Config) -> bool:
     if cli_value is not None:
         return cli_value
     return config.verify
+
+
+def resolve_server(server_flag: str | None, config: Config) -> str | None:
+    return os.environ.get(SERVER_URL_ENV) or server_flag or config.server
+
+
+def resolve_server_key(key_flag: str | None, config: Config) -> str | None:
+    return os.environ.get(SERVER_KEY_ENV) or key_flag or config.server_key
 
 
 def resolve_log_format(flag: str | None, config: Config | None = None) -> str:
@@ -292,6 +303,15 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
     help="Output format",
 )
 @click.option("--post", is_flag=True, help="Post review to GitHub PR (requires --pr)")
+@click.option("--server", "server_url_flag", default=None, help="Review server URL (server-mode).")
+@click.option("--server-key", "server_key_flag", default=None, help="Review server bearer key.")
+@click.option("--owner", default=None, help="PR repo owner (defaults to current git remote).")
+@click.option(
+    "--repo", "repo_name", default=None, help="PR repo name (defaults to current git remote)."
+)
+@click.option(
+    "--no-post", "no_post", is_flag=True, help="Suppress server-side PR posting (server-mode)."
+)
 @click.option(
     "--passes",
     default=None,
@@ -349,6 +369,11 @@ def review(
     reasoning_effort: str | None,
     output_format: str | None,
     post: bool,
+    server_url_flag: str | None,
+    server_key_flag: str | None,
+    owner: str | None,
+    repo_name: str | None,
+    no_post: bool,
     passes: str | None,
     timeout: int | None,
     config_path: Path | None,
@@ -375,6 +400,29 @@ def review(
         resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None, log_config),
         resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None, log_config),
     )
+
+    server_url = resolve_server(server_url_flag, log_config)
+    if server_url:
+        if files or diff_range or staged:
+            click.echo(
+                "Error: --server cannot be combined with --diff/--files/--staged.",
+                err=True,
+            )
+            sys.exit(2)
+        _run_review_remote(
+            server_url=server_url,
+            server_key=resolve_server_key(server_key_flag, log_config),
+            pr=pr,
+            owner_flag=owner,
+            repo_flag=repo_name,
+            post=not no_post,
+            post_flag_set=post,
+            output_format=output_format,
+            passes=passes,
+            timeout=timeout,
+            config_path=config_path,
+        )
+        return
 
     if post and pr is None:
         click.echo("Error: --post requires --pr (cannot post from a local diff).", err=True)
@@ -670,6 +718,87 @@ async def _build_learned_context(
     await store.prune_stale_rules(repo)
     all_rules = await store.get_learned_rules(repo, limit=config.max_learned_rules)
     return assemble_learned_context(stats_text, all_rules, config.max_learned_rules)
+
+
+def _run_review_remote(
+    *,
+    server_url: str,
+    server_key: str | None,
+    pr: int | None,
+    owner_flag: str | None,
+    repo_flag: str | None,
+    post: bool,
+    post_flag_set: bool,
+    output_format: str | None,
+    passes: str | None,
+    timeout: int | None,
+    config_path: Path | None,
+) -> None:
+    if pr is None:
+        click.echo("Error: --server requires --pr.", err=True)
+        sys.exit(2)
+    if server_key is None:
+        click.echo(
+            "Error: server key required. Set --server-key, SUPERSEDED_SERVER_KEY, "
+            "or 'server_key:' in .superseded.yaml.",
+            err=True,
+        )
+        sys.exit(2)
+
+    owner = owner_flag
+    repo = repo_flag
+    if owner is None or repo is None:
+        remote = current_repo()
+        if remote and "/" in remote:
+            r_owner, _, r_name = remote.partition("/")
+            owner = owner or r_owner
+            repo = repo or r_name
+    if not owner or not repo:
+        click.echo(
+            "Error: could not resolve owner/repo. Pass --owner and --repo.",
+            err=True,
+        )
+        sys.exit(2)
+
+    if post_flag_set:
+        _status(
+            "Warning: --post has no effect in server-mode; the server posts by "
+            "default. Use --no-post to suppress."
+        )
+
+    config = load_config(config_path)
+    fmt = output_format or config.format
+    pass_list = _parse_passes(passes)
+    poll_budget = float(timeout if timeout is not None else DEFAULT_TIMEOUT)
+
+    try:
+        result = review_via_server(
+            server_url=server_url,
+            server_key=server_key,
+            owner=owner,
+            repo=repo,
+            pr_number=pr,
+            passes=pass_list,
+            post=post,
+            poll_budget=poll_budget,
+            on_status=_status,
+        )
+    except ServerReviewError as err:
+        click.echo(f"Error: {err}", err=True)
+        sys.exit(err.exit_code)
+
+    if fmt == "json":
+        click.echo(format_json(result))
+    elif fmt == "markdown":
+        click.echo(format_markdown(result))
+    else:
+        click.echo(format_table(result))
+
+    for w in result.warnings:
+        click.echo(f"\nWarning: {w}", err=True)
+
+    if result.warnings:
+        sys.exit(EXIT_PARTIAL_FAILURE)
 
 
 @cli.command()
