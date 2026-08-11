@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -10,14 +9,13 @@ from typing import TYPE_CHECKING
 import yaml
 
 from superseded.audit.guidelines import assemble_learned_context, format_memory_context
-from superseded.audit.reflector import PatternReflector
 from superseded.audit.stats import StatsAggregator
 from superseded.config import Config
 from superseded.context.gathering import gather_context
 from superseded.models import ReviewResult
 from superseded.output.github_pr import build_review_payload
+from superseded.providers import Provider
 from superseded.review.engine import ReviewEngine
-from superseded.review.executor import build_agent_env
 from superseded.server.checkout import checkout_repo
 
 if TYPE_CHECKING:
@@ -51,55 +49,6 @@ class ReviewOutcome:
     summary: str = ""
 
 
-@dataclass
-class SandboxSettings:
-    """Whether/how the server runs agents inside a sandbox microVM."""
-
-    enabled: bool = False
-    kind: str = "sbx"  # "sbx" | "smolvm"
-    binary: str = "sbx"  # sbx
-    timeout: int = 600
-    keep_on_error: bool = False
-    io_mode: str = "exec"  # sbx only
-    smolvm_binary: str = "smolvm"  # unused by SDK; kept for messages
-    smolvm_image: str | None = None  # host-wide override
-    smolvm_image_claude: str | None = None  # per-agent
-    smolvm_image_opencode: str | None = None  # per-agent
-    smolvm_image_codex: str | None = None  # per-agent
-
-
-_SMOLVM_AGENT_IMAGE_FIELD: dict[str, str] = {
-    "claude-code": "smolvm_image_claude",
-    "opencode": "smolvm_image_opencode",
-    "codex": "smolvm_image_codex",
-}
-
-
-def _agent_smolvm_image(sandbox: SandboxSettings, agent_name: str) -> str | None:
-    """Resolve the smolvm image for ``agent_name``.
-
-    Host-wide ``smolvm_image`` overrides the per-agent field.
-    """
-    if sandbox.smolvm_image:
-        return sandbox.smolvm_image
-    field = _SMOLVM_AGENT_IMAGE_FIELD.get(agent_name)
-    return getattr(sandbox, field) if field else None
-
-
-def _sandbox_unavailable_msg(sandbox: SandboxSettings) -> str:
-    if sandbox.kind == "smolvm":
-        return (
-            "sandbox unavailable: smolmachines extra not installed or no image "
-            "configured. Run `uv sync --extra sandbox` and set "
-            "SUPERSEDED_SMOLVM_IMAGE (or the per-agent "
-            "SUPERSEDED_SMOLVM_IMAGE_<AGENT>) to run smolvm-sandboxed reviews."
-        )
-    return (
-        f"sandbox unavailable: '{sandbox.binary}' not found on PATH "
-        "(install docker-sbx to run sandboxed reviews)."
-    )
-
-
 def build_check_run_title(result: ReviewResult) -> str:
     total = len(result.findings)
     summary = result.summary
@@ -115,9 +64,10 @@ class ReviewWorker:
         max_concurrent: int = 3,
         max_queue: int = 100,
         store: Store | None = None,
-        server_agent: str | None = None,
+        server_provider: str | None = None,
         server_model: str | None = None,
-        sandbox: SandboxSettings | None = None,
+        server_reasoning_effort: str | None = None,
+        provider: Provider | None = None,
     ) -> None:
         self.github = github
         self.repo_manager = repo_manager
@@ -129,9 +79,12 @@ class ReviewWorker:
         self._active_count = 0
         self._tasks: set[asyncio.Task] = set()
         self.store = store
-        self.server_agent = server_agent
+        self.server_provider = server_provider
         self.server_model = server_model
-        self._sandbox = sandbox
+        self.server_reasoning_effort = server_reasoning_effort
+        if provider is None:
+            raise ValueError("ReviewWorker requires a Provider")
+        self._provider = provider
 
     @property
     def active_count(self) -> int:
@@ -245,9 +198,10 @@ class ReviewWorker:
                 job=job,
                 correlation_id=correlation_id,
                 store=self.store,
-                server_agent=self.server_agent,
+                server_provider=self.server_provider,
                 server_model=self.server_model,
-                sandbox=self._sandbox,
+                server_reasoning_effort=self.server_reasoning_effort,
+                provider=self._provider,
             )
 
             await self.github.update_check_run(
@@ -308,18 +262,19 @@ async def _load_safe_config(
     repo: str,
     installation_id: int | None = None,
     store: Store | None = None,
-    server_agent: str | None = None,
+    server_provider: str | None = None,
     server_model: str | None = None,
+    server_reasoning_effort: str | None = None,
 ) -> Config:
     """Load repo config from the default branch (trusted), not the PR head.
 
     A PR can commit a malicious ``.superseded.yaml`` that disables
     ``static_analysis`` (suppressing gitleaks) or forces an expensive
-    ``agent``/``model``. Reading from the default branch avoids this.
+    ``provider``/``model``. Reading from the default branch avoids this.
     ``static_analysis`` is forced on regardless, so secret scanning
     cannot be suppressed by repo config in server mode.  The server
-    operator can also pin a specific agent/model, overriding any
-    repo-level choice.
+    operator can also pin a specific provider/model/reasoning effort,
+    overriding any repo-level choice.
 
     Per-installation config overrides from ``installation_config`` take
     precedence over the repo's ``.superseded.yaml`` but are overridden by
@@ -354,10 +309,12 @@ async def _load_safe_config(
 
     config.static_analysis = True
     config.passes.security = True
-    if server_agent is not None:
-        config.agent = server_agent
+    if server_provider is not None:
+        config.provider = server_provider
     if server_model is not None:
         config.model = server_model
+    if server_reasoning_effort is not None:
+        config.reasoning_effort = server_reasoning_effort
     return config
 
 
@@ -368,9 +325,10 @@ async def _run_review_for_job(
     job: ReviewJob,
     correlation_id: str,
     store: Store | None = None,
-    server_agent: str | None = None,
+    server_provider: str | None = None,
     server_model: str | None = None,
-    sandbox: SandboxSettings | None = None,
+    server_reasoning_effort: str | None = None,
+    provider: Provider | None = None,
 ) -> ReviewOutcome:
     tmp_dir = repo_manager.job_dir(
         job.installation_id, job.owner, job.repo, job.pr_number, job.job_id
@@ -398,8 +356,9 @@ async def _run_review_for_job(
             job.repo,
             installation_id=job.installation_id,
             store=store,
-            server_agent=server_agent,
+            server_provider=server_provider,
             server_model=server_model,
+            server_reasoning_effort=server_reasoning_effort,
         )
 
         repo_key = f"{job.owner}/{job.repo}"
@@ -492,37 +451,9 @@ async def _run_review_for_job(
             all_rules = await store.get_learned_rules(repo_key, limit=config.max_learned_rules)
             learned_context = assemble_learned_context(None, all_rules, config.max_learned_rules)
 
-        engine = ReviewEngine.select(config.agent, model=config.model, config=config)
-
-        executor = None
-        if sandbox is not None and sandbox.enabled:
-            from superseded.review.executor import make_sandbox_executor
-
-            resolved_image: str | None = None
-            if sandbox.kind == "smolvm":
-                resolved_image = _agent_smolvm_image(sandbox, config.agent)
-                if not resolved_image:
-                    raise RuntimeError(
-                        f"smolvm sandbox selected for agent {config.agent!r} "
-                        "but no image configured (set SUPERSEDED_SMOLVM_IMAGE or "
-                        f"SUPERSEDED_SMOLVM_IMAGE_"
-                        f"{config.agent.upper().replace('-', '_')})."
-                    )
-            executor = make_sandbox_executor(
-                kind=sandbox.kind,
-                agent_name=config.agent,
-                name=f"superseded-{job.job_id}",
-                timeout=sandbox.timeout,
-                keep_on_error=sandbox.keep_on_error,
-                binary=sandbox.binary,
-                io_mode=sandbox.io_mode,
-                smolvm_binary=sandbox.smolvm_binary,
-                resolved_image=resolved_image if sandbox.kind == "smolvm" else None,
-            )
-            if not executor.available(engine.agent):
-                raise RuntimeError(_sandbox_unavailable_msg(sandbox))
-
-        _server_env = build_agent_env(os.environ)
+        engine = ReviewEngine(provider=provider, config=config)
+        engine.model = config.model
+        engine.reasoning_effort = config.reasoning_effort
         result = await asyncio.to_thread(
             engine.review,
             diff=diff,
@@ -535,9 +466,8 @@ async def _run_review_for_job(
             spec_signals=spec_signals,
             learned_context=learned_context,
             passes=job.passes,
-            cwd=repo_path,
-            env=_server_env,
-            executor=executor,
+            timeout=600,
+            progress=None,
         )
 
         payload = build_review_payload(result)
@@ -582,21 +512,22 @@ async def _run_review_for_job(
                 await store.set_watermark(repo_key, job.pr_number, job.head_sha)
 
             if config.learned_review:
+                from superseded.audit.reflector import PatternReflector
+
                 aggregator = StatsAggregator(store)
                 await aggregator._refresh(repo_key)
-                await aggregator.get_stats_context(repo_key)
+                stats_text = await aggregator.get_stats_context(repo_key)
+
+                reflector = PatternReflector(
+                    provider=provider, store=store, threshold=config.reflection_threshold
+                )
+                await reflector.maybe_reflect(repo_key)
 
                 await store.prune_stale_rules(repo_key)
-
-                engine_for_reflection = ReviewEngine.select(
-                    config.agent, model=config.model, config=config
+                all_rules = await store.get_learned_rules(repo_key, limit=config.max_learned_rules)
+                learned_context = assemble_learned_context(
+                    stats_text, all_rules, config.max_learned_rules
                 )
-                reflector = PatternReflector(
-                    agent=engine_for_reflection.agent,
-                    store=store,
-                    threshold=config.reflection_threshold,
-                )
-                await reflector.maybe_reflect(repo_key, cwd=repo_path)
 
         conclusion = "success" if payload["event"] != "REQUEST_CHANGES" else "failure"
         title = build_check_run_title(result)

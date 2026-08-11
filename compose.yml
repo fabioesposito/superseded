@@ -18,9 +18,6 @@ services:
       context: .
       dockerfile: docker/Dockerfile
       target: api
-      args:
-        # Slim the image by installing only the AI CLI(s) you run. Default: all three.
-        AI_CLIS: ${AI_CLIS:-@anthropic-ai/claude-code @openai/codex opencode-ai}
     depends_on:
       db:
         condition: service_healthy
@@ -37,19 +34,13 @@ services:
       # Do NOT publish port 8000 directly without TLS: the bearer API key and
       # webhook signatures would traverse cleartext.
       SUPERSEDED_BEHIND_PROXY: ${SUPERSEDED_BEHIND_PROXY:-1}
-      # Agents run over arbitrary PR contents. The sandbox (docker-sbx or a
-      # smolvm image) keeps that execution off the host; default ON. To disable
-      # on an isolated/throwaway host set SUPERSEDED_SANDBOX=0 AND
-      # SUPERSEDED_ALLOW_NO_SANDBOX=1 on the server (it refuses to boot
-      # otherwise).
-      SUPERSEDED_SANDBOX: ${SUPERSEDED_SANDBOX:-1}
-      SUPERSEDED_SANDBOX_KIND: ${SUPERSEDED_SANDBOX_KIND:-sbx}
+      # The server calls the DeepSeek API directly over the network — no local
+      # agent execution, so no sandbox is needed. Set the key in the host
+      # environment: SUPERSEDED_DEEPSEEK_API_KEY=... docker compose up
+      SUPERSEDED_DEEPSEEK_API_KEY: ${SUPERSEDED_DEEPSEEK_API_KEY:-}
       SUPERSEDED_LOG_FORMAT: json
       SUPERSEDED_LOG_LEVEL: ${SUPERSEDED_LOG_LEVEL:-info}
-      SUPERSEDED_SERVER_AGENT: ${SUPERSEDED_SERVER_AGENT:-}
       SUPERSEDED_SERVER_MODEL: ${SUPERSEDED_SERVER_MODEL:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes:
       - ./keys:/keys:ro
       - superseded-tmp:/tmp/superseded

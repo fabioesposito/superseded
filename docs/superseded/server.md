@@ -23,8 +23,12 @@ max_concurrent_reviews: 3
 temp_dir: "/tmp/superseded"
 log_level: "info"
 database_url: null                    # null = SQLite, or postgresql://...
-agent: null                           # null = use repo's .superseded.yaml
+provider: deepseek                    # deepseek | openai | anthropic — provider is fixed server-side
 model: null                           # null = use repo's .superseded.yaml
+reasoning_effort: max                 # server-side pin; null/unset = repo's choice
+deepseek_api_key: "sk-..."            # or set SUPERSEDED_DEEPSEEK_API_KEY
+# openai_api_key: "sk-..."            # for provider: openai (or SUPERSEDED_OPENAI_API_KEY)
+# anthropic_api_key: "sk-ant-..."     # for provider: anthropic (or SUPERSEDED_ANTHROPIC_API_KEY)
 ```
 
 Environment variables (prefixed with `SUPERSEDED_`):
@@ -34,21 +38,39 @@ Environment variables (prefixed with `SUPERSEDED_`):
 | `SUPERSEDED_APP_ID` | `app_id` | Yes | — |
 | `SUPERSEDED_WEBHOOK_SECRET` | `webhook_secret` | Yes | — |
 | `SUPERSEDED_PRIVATE_KEY_PATH` | `private_key_path` | Yes | — |
+| `SUPERSEDED_DEEPSEEK_API_KEY` | `deepseek_api_key` | No (unless `provider: deepseek`) | — |
+| `SUPERSEDED_OPENAI_API_KEY` | `openai_api_key` | No (unless `provider: openai`) | — |
+| `SUPERSEDED_ANTHROPIC_API_KEY` | `anthropic_api_key` | No (unless `provider: anthropic`) | — |
 | `SUPERSEDED_PORT` | `port` | No | `8000` |
 | `SUPERSEDED_HOST` | `host` | No | `127.0.0.1` |
 | `SUPERSEDED_BEHIND_PROXY` | `behind_proxy` | No | `false` |
 | `SUPERSEDED_MAX_CONCURRENT` | `max_concurrent_reviews` | No | `3` |
 | `SUPERSEDED_LOG_LEVEL` | `log_level` | No | `info` |
 | `SUPERSEDED_HEALTH_TOKEN` | `health_token` | No | — |
+| `SUPERSEDED_API_KEY` | `api_key` | No | — |
 | `SUPERSEDED_DATABASE_URL` | `database_url` | No | SQLite |
 | `SUPERSEDED_TLS_CERT` | `tls_cert_path` | No | — |
 | `SUPERSEDED_TLS_KEY` | `tls_key_path` | No | — |
-| `SUPERSEDED_SERVER_AGENT` | `agent` | No | None |
 | `SUPERSEDED_SERVER_MODEL` | `model` | No | None |
+| `SUPERSEDED_SERVER_REASONING_EFFORT` | `reasoning_effort` | No | `max` |
+
+Like `model:`, a server-level `reasoning_effort` pins the value for every
+review, overriding the repo's `.superseded.yaml`. Leave it unset (default
+`max`) to let each repo choose via `reasoning_effort:`.
+
+The server requires the API key matching its `provider:` — one of
+`SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, or
+`SUPERSEDED_ANTHROPIC_API_KEY` — and refuses to start without it.
+`SUPERSEDED_API_KEY` (optional) is the bearer key
+for the `/review/pr` endpoint that the GitHub Action calls (the Action's
+`server-key` input). Upgrading from v0.5.x? See [MIGRATION.md](../../MIGRATION.md).
 
 Launch:
 
 ```bash
+export SUPERSEDED_DEEPSEEK_API_KEY=sk-...   # the key matching your provider: — required
+export SUPERSEDED_OPENAI_API_KEY=sk-...     # ...or these, for provider: openai / anthropic
+export SUPERSEDED_ANTHROPIC_API_KEY=sk-ant-...
 superseded serve --config superseded-server.yaml
 # or with overrides
 superseded serve --port 9000 --host 0.0.0.0
@@ -65,7 +87,7 @@ SUPERSEDED_TLS_CERT=/etc/ssl/cert.pem SUPERSEDED_TLS_KEY=/etc/ssl/key.pem supers
 | `installation` (deleted) | Removes installation record |
 | `push` | Logged only |
 
-The server clones the repo into `/tmp/superseded/` (or your configured `temp_dir`), checks out the PR head, and runs the review. Results appear as a GitHub Check Run on the PR with findings listed.
+The server clones the repo into `/tmp/superseded/` (or your configured `temp_dir`), checks out the PR head, and runs the review. Results appear as a GitHub Check Run on the PR with findings listed. The server never invokes `gh` — it talks to the GitHub REST API directly and clones via `git`.
 
 ### Security
 
@@ -102,107 +124,16 @@ This enables concurrent access from multiple server instances. The SQLite path i
 
 On startup, `superseded serve` runs pending Alembic migrations against the configured database (SQLite or Postgres) before serving requests. To run or inspect migrations deliberately — e.g. ahead of a deploy, or to diagnose a stuck migration — run `superseded migrate` (honors `SUPERSEDED_DATABASE_URL`, or pass `--database-url`). Pre-existing databases from older versions are auto-adopted on first run with no data loss.
 
-### Docker / Compose Deployment
-
-Ship the server as a container backed by Postgres. The image is the `api` target
-of the multi-stage `docker/Dockerfile`; `compose.yml` wires it to a Postgres
-service.
-
-```bash
-cp .env.example .env                       # fill in the required values
-mkdir -p keys && cp /path/to/private-key.pem keys/private-key.pem
-docker compose up -d                       # api + postgres
-```
-
-`.env` holds the non-file secrets; the GitHub App private key is mounted
-read-only from `./keys/private-key.pem` (never baked into the image or stored in
-`.env`). Required `.env` values: `POSTGRES_PASSWORD`, `SUPERSEDED_APP_ID`,
-`SUPERSEDED_WEBHOOK_SECRET`.
-
-The API binds `0.0.0.0:8000` **inside the compose network only** — there is no
-published port. Terminate TLS at a reverse proxy in front of compose (nginx,
-Caddy, Traefik) and forward to the `api` service. Because the bind is
-non-loopback without in-process TLS, set `SUPERSEDED_BEHIND_PROXY=1` (compose
-sets this for you): it tells the server that TLS terminates upstream, relaxing
-the otherwise-strict "non-loopback requires TLS" guard. (Direct public binds
-without TLS still raise at startup — the guard is only relaxed when
-`behind_proxy` is explicitly enabled.)
-
-**Build the images directly** (without compose):
-
-```bash
-# CLI image (all three AI CLIs + gh) — also what the GitHub Action builds.
-docker build -f docker/Dockerfile --target cli -t superseded-cli .
-
-# Server image.
-docker build -f docker/Dockerfile --target api -t superseded-api .
-
-# Slim image carrying only the agent you actually run (~1 GB vs ~2 GB).
-docker build -f docker/Dockerfile --build-arg AI_CLIS=@anthropic-ai/claude-code \
-    --target api -t superseded-api-claude .
-```
-
-`AI_CLIS` is a space-separated list of npm package specs; the default installs
-`@anthropic-ai/claude-code @openai/codex opencode-ai`. Override it via
-`--build-arg`, or in compose via the `AI_CLIS` variable in `.env`.
-
-> The server never invokes `gh` — it uses the GitHub REST API directly (and
-> clones via `git`) — so `gh` is installed only in the CLI image, not the server
-> image.
-
-## Smolvm Sandbox
-
-The `smolvm` sandbox backend boots agent OCI images as microVMs. Set `SUPERSEDED_SANDBOX_KIND=smolvm` and provide per-agent images via env vars.
-
-### Image Boot Sources
-
-Images resolve to one of three boot sources:
-
-| Source | Trigger | Example | Overhead |
-|---|---|---|---|
-| `file` | Path on disk exists | `SUPERSEDED_SMOLVM_IMAGE=/tmp/opencode.tar` | Minimal — reads archive directly |
-| `docker` | Bare local Docker tag | `SUPERSEDED_SMOLVM_IMAGE=superseded-smolvm-opencode:latest` | ~5s of `docker save` per run (re-serializes image) |
-| `registry` | Anything else (OCI ref) | `SUPERSEDED_SMOLVM_IMAGE=ghcr.io/org/opencode:latest` | Registry pull latency at boot |
-
-### Startup Benchmarks
-
-Measured with `superseded-smolvm-opencode:latest` (808 MB Docker image) on a KVM-capable Linux host:
-
-| Boot source | Create | Start (VM boot) | Total lifecycle |
-|---|---|---|---|
-| docker pipe | 4.9s | 9.5s | 16.3s |
-| file path | 0.8s | 9.1s | 10.7s |
-| registry (SDK) | — | — | (not benchmarked) |
-
-The VM boot itself (~9s) is the dominant fixed cost. The docker pipe adds ~5s of `docker save` overhead because the image is re-serialized on every run even though it hasn't changed.
-
-### Optimizing Startup
-
-Pre-export the image to a tar file once, then point at the file path:
-
-```bash
-docker save superseded-smolvm-opencode:latest -o /var/lib/superseded/images/opencode.tar
-export SUPERSEDED_SMOLVM_IMAGE_OPENCODE=/var/lib/superseded/images/opencode.tar
-```
-
-This cuts startup from ~16s to ~11s by skipping the `docker save` re-serialization.
-
-### Per-Agent Vars
-
-| Env var | Agent |
-|---|---|
-| `SUPERSEDED_SMOLVM_IMAGE_CLAUDE_CODE` | claude-code |
-| `SUPERSEDED_SMOLVM_IMAGE_OPENCODE` | opencode |
-| `SUPERSEDED_SMOLVM_IMAGE_CODEX` | codex |
-| `SUPERSEDED_SMOLVM_IMAGE` | Fallback for all agents |
-
 ## GitHub Action
 
 The GitHub Action (`action.yml`) is a **composite** Action — a single `curl` step
 that POSTs `{owner, repo, pr_number, passes?}` to your running review server's
-`/review/pr` endpoint. The server runs the agents in sandboxes and posts the
-review via its GitHub App. No Docker image is built in CI and no agent
-credentials live on the runner — the server owns agent/model/credentials.
+`/review/pr` endpoint. The server calls the configured provider API directly and posts the
+review via its GitHub App. No Docker image is built in CI and no credentials
+live on the runner — the server owns provider/model/credentials, and the
+provider API key (one of `SUPERSEDED_DEEPSEEK_API_KEY`,
+`SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`) lives in the
+server's environment only; the Action never receives it.
 
 ### Usage
 

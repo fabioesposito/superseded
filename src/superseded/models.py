@@ -52,10 +52,17 @@ class Finding(BaseModel):
         return med
 
 
+class ReviewUsage(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    per_pass: dict[str, tuple[int, int]] = Field(default_factory=dict)
+
+
 class ReviewResult(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     dropped_findings: list[Finding] = Field(default_factory=list)
+    usage: ReviewUsage = Field(default_factory=ReviewUsage)
 
     @property
     def summary(self) -> dict[str, int]:

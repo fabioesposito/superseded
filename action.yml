@@ -1,5 +1,8 @@
 name: "Superseded Code Review"
-description: "Requests a multi-pass AI code review from a running Superseded server, which runs the agents in sandboxes and posts the review via its GitHub App. The App must be installed on the repository."
+description: "Requests a multi-pass AI code review from a running Superseded server, which runs the review via the DeepSeek API and posts it via its GitHub App. The App must be installed on the repository."
+# NOTE: the review server must have SUPERSEDED_DEEPSEEK_API_KEY set in its
+# environment (it refuses to start without it). This Action never receives or
+# forwards the DeepSeek key — it is server-side only.
 inputs:
   server-url:
     description: "Base URL of the running Superseded review server (e.g. https://reviews.example.com). Env SUPERSEDED_SERVER_URL overrides this."

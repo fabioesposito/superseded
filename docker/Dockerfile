@@ -2,37 +2,20 @@
 #
 # Build the base layer once and reuse it for the CLI and API targets:
 #
-#   # full images (all three AI CLIs):
 #   docker build -f docker/Dockerfile --target base -t superseded-base .
 #   docker build -f docker/Dockerfile --target cli   -t superseded-cli  .
 #   docker build -f docker/Dockerfile --target api   -t superseded-api  .
 #
-#   # slim variant (one agent only):
-#   docker build -f docker/Dockerfile --build-arg AI_CLIS=@anthropic-ai/claude-code \
-#       --target cli -t superseded-cli-claude .
-#
-# compose.yml builds the `api` target (override AI_CLIS via .env or
-# --build-arg). The GitHub Action is a composite client that POSTs to a running
-# server; it no longer builds this image. The `cli` stage is kept last on
-# purpose so an untargeted build resolves to the CLI image. Do not reorder the
-# stages.
-
-# Space-separated npm package specs of the AI CLI(s) to install. Override with
-# --build-arg (or compose build.args / .env AI_CLIS) to build a slim image that
-# carries only the agent you actually run.
-ARG AI_CLIS="@anthropic-ai/claude-code @openai/codex opencode-ai"
+# compose.yml builds the `api` target. The GitHub Action is a composite client
+# that POSTs to a running server; it no longer builds this image. The `cli`
+# stage is kept last on purpose so an untargeted build resolves to the CLI
+# image. Do not reorder the stages.
 
 FROM python:3.14-slim AS base
 
-ARG AI_CLIS
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git curl ca-certificates nodejs npm \
+        git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
-RUN npm install -g --no-save \
-        ${AI_CLIS} \
-    && npm cache clean --force > /dev/null 2>&1 || true
 
 WORKDIR /app
 COPY . .

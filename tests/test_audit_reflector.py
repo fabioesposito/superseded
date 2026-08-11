@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -10,15 +11,41 @@ from superseded.audit.reflector import (
     PatternReflector,
     _build_reflection_prompt,
 )
+from superseded.providers import ProviderResponse
+
+
+class FakeProvider:
+    """Test double matching the Provider protocol."""
+
+    name = "fake"
+
+    def __init__(self, responses: list[str] | None = None, default: str = "[]"):
+        self._responses = list(responses or [])
+        self._default = default
+        self.calls: list[str] = []
+
+    def complete(
+        self, prompt, *, model=None, timeout=600.0, temperature=0.0, reasoning_effort=None
+    ):
+        self.calls.append(prompt)
+        if self._responses:
+            return ProviderResponse(content=self._responses.pop(0))
+        return ProviderResponse(content=self._default)
+
+
+class FailingProvider(FakeProvider):
+    """Provider whose complete() always raises (transport failure)."""
+
+    def complete(
+        self, prompt, *, model=None, timeout=600.0, temperature=0.0, reasoning_effort=None
+    ):
+        self.calls.append(prompt)
+        raise RuntimeError("connection reset")
 
 
 @pytest.fixture
-def mock_agent():
-    agent = MagicMock()
-    agent.name = "test-agent"
-    agent.build_command.return_value = ["echo", "ok"]
-    agent.parse_output.return_value = []
-    return agent
+def provider():
+    return FakeProvider()
 
 
 @pytest.fixture
@@ -71,20 +98,20 @@ def _make_feedback_rows(count: int, *, last_id: int = 0) -> list[tuple[Any, ...]
 
 
 @pytest.mark.asyncio
-async def test_below_threshold(mock_agent, mock_store):
+async def test_below_threshold(provider, mock_store):
     """Fewer than REFLECTION_THRESHOLD feedback items returns []."""
     mock_store.get_reflection_state = AsyncMock(return_value=0)
     _setup_mock_store_db(mock_store, _make_feedback_rows(3))
 
-    reflector = PatternReflector(mock_agent, mock_store)
+    reflector = PatternReflector(provider, mock_store)
     result = await reflector.maybe_reflect("owner/repo")
 
     assert result == []
-    mock_agent.build_command.assert_not_called()
+    assert provider.calls == []
 
 
 @pytest.mark.asyncio
-async def test_threshold_param_lowers_minimum_feedback(mock_agent, mock_store):
+async def test_threshold_param_lowers_minimum_feedback(mock_store):
     """threshold=1 triggers reflection with fewer than the default 5 feedback items."""
     mock_store.get_reflection_state = AsyncMock(return_value=0)
     mock_store.set_reflection_state = AsyncMock()
@@ -93,20 +120,18 @@ async def test_threshold_param_lowers_minimum_feedback(mock_agent, mock_store):
     rules = [
         {"rule": "Do not flag naming conventions in test files", "evidence": "e", "confidence": 0.7}
     ]
-    mock_agent.parse_output.return_value = rules
+    provider = FakeProvider(responses=[json.dumps(rules)])
 
-    with patch("superseded.audit.reflector.subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="json output", stderr="")
-        reflector = PatternReflector(mock_agent, mock_store, threshold=1)
-        result = await reflector.maybe_reflect("owner/repo")
+    reflector = PatternReflector(provider, mock_store, threshold=1)
+    result = await reflector.maybe_reflect("owner/repo")
 
     assert len(result) == 1
-    mock_run.assert_called_once()
+    assert len(provider.calls) == 1
 
 
 @pytest.mark.asyncio
-async def test_processes_feedback(mock_agent, mock_store):
-    """Valid feedback triggers agent call and returns parsed rules."""
+async def test_processes_feedback(mock_store):
+    """Valid feedback triggers provider call and returns parsed rules."""
     mock_store.get_reflection_state = AsyncMock(return_value=0)
     mock_store.set_reflection_state = AsyncMock()
     _setup_mock_store_db(mock_store, _make_feedback_rows(6))
@@ -118,73 +143,63 @@ async def test_processes_feedback(mock_agent, mock_store):
             "confidence": 0.85,
         }
     ]
-    mock_agent.parse_output.return_value = rules
+    provider = FakeProvider(responses=[json.dumps(rules)])
 
-    with patch("superseded.audit.reflector.subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="json output", stderr="")
-        reflector = PatternReflector(mock_agent, mock_store)
-        result = await reflector.maybe_reflect("owner/repo")
+    reflector = PatternReflector(provider, mock_store)
+    result = await reflector.maybe_reflect("owner/repo")
 
     assert len(result) == 1
     assert result[0]["rule"] == "Do not flag naming in test files"
     assert result[0]["confidence"] == 0.85
+    assert len(provider.calls) == 1
     mock_store.set_reflection_state.assert_called_once_with("owner/repo", 6)
 
 
 @pytest.mark.asyncio
-async def test_handles_agent_failure(mock_agent, mock_store):
-    """FileNotFoundError from agent returns [] and updates state."""
+async def test_handles_provider_failure(mock_store):
+    """Exception from provider.complete returns [] and updates state."""
     mock_store.get_reflection_state = AsyncMock(return_value=0)
     mock_store.set_reflection_state = AsyncMock()
     _setup_mock_store_db(mock_store, _make_feedback_rows(6))
 
-    with patch("superseded.audit.reflector.subprocess.run") as mock_run:
-        mock_run.side_effect = FileNotFoundError("no such binary")
-        reflector = PatternReflector(mock_agent, mock_store)
-        result = await reflector.maybe_reflect("owner/repo")
+    reflector = PatternReflector(FailingProvider(), mock_store)
+    result = await reflector.maybe_reflect("owner/repo")
 
     assert result == []
     mock_store.set_reflection_state.assert_called_once_with("owner/repo", 6)
 
 
 @pytest.mark.asyncio
-async def test_handles_invalid_json(mock_agent, mock_store):
-    """Agent returns garbage output → returns [], state still updated."""
+async def test_handles_invalid_json(mock_store):
+    """Provider returns garbage output → returns [], state still updated."""
     mock_store.get_reflection_state = AsyncMock(return_value=0)
     mock_store.set_reflection_state = AsyncMock()
     _setup_mock_store_db(mock_store, _make_feedback_rows(6))
 
-    mock_agent.parse_output.side_effect = ValueError("invalid json")
-
-    with patch("superseded.audit.reflector.subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="not json", stderr="")
-        reflector = PatternReflector(mock_agent, mock_store)
-        result = await reflector.maybe_reflect("owner/repo")
+    provider = FakeProvider(default="not json")
+    reflector = PatternReflector(provider, mock_store)
+    result = await reflector.maybe_reflect("owner/repo")
 
     assert result == []
     mock_store.set_reflection_state.assert_called_once_with("owner/repo", 6)
 
 
 @pytest.mark.asyncio
-async def test_empty_rules_updates_state(mock_agent, mock_store):
-    """Agent returns [] — state IS updated (feedback was processed)."""
+async def test_empty_rules_updates_state(mock_store):
+    """Provider returns [] — state IS updated (feedback was processed)."""
     mock_store.get_reflection_state = AsyncMock(return_value=0)
     mock_store.set_reflection_state = AsyncMock()
     _setup_mock_store_db(mock_store, _make_feedback_rows(6))
 
-    mock_agent.parse_output.return_value = []
-
-    with patch("superseded.audit.reflector.subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="[]", stderr="")
-        reflector = PatternReflector(mock_agent, mock_store)
-        result = await reflector.maybe_reflect("owner/repo")
+    reflector = PatternReflector(FakeProvider(), mock_store)
+    result = await reflector.maybe_reflect("owner/repo")
 
     assert result == []
     mock_store.set_reflection_state.assert_called_once_with("owner/repo", 6)
 
 
 @pytest.mark.asyncio
-async def test_prompt_includes_both(mock_agent, mock_store):
+async def test_prompt_includes_both(mock_store):
     """Prompt contains ACCEPTED and DISMISSED sections."""
     mock_store.get_reflection_state = AsyncMock(return_value=0)
     mock_store.set_reflection_state = AsyncMock()
@@ -199,20 +214,12 @@ async def test_prompt_includes_both(mock_agent, mock_store):
     ]
     _setup_mock_store_db(mock_store, rows)
 
-    captured_prompt = None
+    provider = FakeProvider()
+    reflector = PatternReflector(provider, mock_store)
+    await reflector.maybe_reflect("owner/repo")
 
-    def capture_run(*args, **kwargs):
-        nonlocal captured_prompt
-        captured_prompt = kwargs.get("input") or (args[0] if args else None)
-        return MagicMock(returncode=0, stdout="[]", stderr="")
-
-    mock_agent.parse_output.return_value = []
-
-    with patch("superseded.audit.reflector.subprocess.run", side_effect=capture_run):
-        reflector = PatternReflector(mock_agent, mock_store)
-        await reflector.maybe_reflect("owner/repo")
-
-    assert captured_prompt is not None
+    assert len(provider.calls) == 1
+    captured_prompt = provider.calls[0]
     assert "ACCEPTED findings" in captured_prompt
     assert "DISMISSED findings" in captured_prompt
     assert "<untrusted>" in captured_prompt

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, model_validator
@@ -24,20 +25,13 @@ class ServerConfig(BaseModel):
     database_url: str | None = None
     tls_cert_path: Path | None = None
     tls_key_path: Path | None = None
-    agent: str | None = None
     model: str | None = None
+    reasoning_effort: Literal["low", "medium", "high", "max"] = "max"
     behind_proxy: bool = False
-    sandbox_enabled: bool = True
-    sbx_binary: str = "sbx"
-    sandbox_timeout: int = 600
-    sandbox_keep_on_error: bool = False
-    sandbox_io_mode: str = "exec"
-    sandbox_kind: str = "sbx"
-    smolvm_binary: str = "smolvm"
-    smolvm_image: str | None = None
-    smolvm_image_claude: str | None = None
-    smolvm_image_opencode: str | None = None
-    smolvm_image_codex: str | None = None
+    deepseek_api_key: str | None = None
+    openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    provider: str = "deepseek"
 
     @property
     def is_configured(self) -> bool:
@@ -144,13 +138,13 @@ class ServerConfig(BaseModel):
         if api_key:
             kwargs["api_key"] = api_key
 
-        agent = os.environ.get("SUPERSEDED_SERVER_AGENT")
-        if agent:
-            kwargs["agent"] = agent
-
         model = os.environ.get("SUPERSEDED_SERVER_MODEL")
         if model:
             kwargs["model"] = model
+
+        reasoning_effort = os.environ.get("SUPERSEDED_SERVER_REASONING_EFFORT")
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
 
         behind_proxy = os.environ.get("SUPERSEDED_BEHIND_PROXY")
         if behind_proxy:
@@ -161,54 +155,16 @@ class ServerConfig(BaseModel):
                 "on",
             )
 
-        sandbox = os.environ.get("SUPERSEDED_SANDBOX")
-        if sandbox:
-            kwargs["sandbox_enabled"] = sandbox.strip().lower() in ("1", "true", "yes", "on")
+        deepseek_api_key = os.environ.get("SUPERSEDED_DEEPSEEK_API_KEY")
+        if deepseek_api_key:
+            kwargs["deepseek_api_key"] = deepseek_api_key
 
-        sbx_binary = os.environ.get("SUPERSEDED_SBX_BINARY")
-        if sbx_binary:
-            kwargs["sbx_binary"] = sbx_binary
-
-        sandbox_timeout = os.environ.get("SUPERSEDED_SANDBOX_TIMEOUT")
-        if sandbox_timeout:
-            kwargs["sandbox_timeout"] = int(sandbox_timeout)
-
-        sandbox_keep = os.environ.get("SUPERSEDED_SANDBOX_KEEP_ON_ERROR")
-        if sandbox_keep:
-            kwargs["sandbox_keep_on_error"] = sandbox_keep.strip().lower() in (
-                "1",
-                "true",
-                "yes",
-                "on",
-            )
-
-        sandbox_io = os.environ.get("SUPERSEDED_SANDBOX_IO_MODE")
-        if sandbox_io:
-            kwargs["sandbox_io_mode"] = sandbox_io
-
-        sandbox_kind = os.environ.get("SUPERSEDED_SANDBOX_KIND")
-        if sandbox_kind:
-            kwargs["sandbox_kind"] = sandbox_kind
-
-        smolvm_binary = os.environ.get("SUPERSEDED_SMOLVM_BINARY")
-        if smolvm_binary:
-            kwargs["smolvm_binary"] = smolvm_binary
-
-        smolvm_image = os.environ.get("SUPERSEDED_SMOLVM_IMAGE")
-        if smolvm_image:
-            kwargs["smolvm_image"] = smolvm_image
-
-        smolvm_image_claude = os.environ.get("SUPERSEDED_SMOLVM_IMAGE_CLAUDE")
-        if smolvm_image_claude:
-            kwargs["smolvm_image_claude"] = smolvm_image_claude
-
-        smolvm_image_opencode = os.environ.get("SUPERSEDED_SMOLVM_IMAGE_OPENCODE")
-        if smolvm_image_opencode:
-            kwargs["smolvm_image_opencode"] = smolvm_image_opencode
-
-        smolvm_image_codex = os.environ.get("SUPERSEDED_SMOLVM_IMAGE_CODEX")
-        if smolvm_image_codex:
-            kwargs["smolvm_image_codex"] = smolvm_image_codex
+        openai_api_key = os.environ.get("SUPERSEDED_OPENAI_API_KEY")
+        if openai_api_key:
+            kwargs["openai_api_key"] = openai_api_key
+        anthropic_api_key = os.environ.get("SUPERSEDED_ANTHROPIC_API_KEY")
+        if anthropic_api_key:
+            kwargs["anthropic_api_key"] = anthropic_api_key
 
         return cls(**kwargs)
 

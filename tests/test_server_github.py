@@ -74,7 +74,7 @@ async def test_fetch_repo_file_returns_contents(app, monkeypatch):
             pass
 
         def json(self) -> dict:
-            return {"content": "YWdlbnQ6IGNsYXVkZS1jb2RlCg==", "encoding": "base64"}
+            return {"content": "cHJvdmlkZXI6IGRlZXBzZWVrCg==", "encoding": "base64"}
 
     class FakeClient:
         def __init__(self, *args, **kwargs) -> None:
@@ -98,7 +98,7 @@ async def test_fetch_repo_file_returns_contents(app, monkeypatch):
     )
 
     content = await app.fetch_repo_file("tok", "octocat", "hello-world", ".superseded.yaml")
-    assert content == "agent: claude-code\n"
+    assert content == "provider: deepseek\n"
     assert "repos/octocat/hello-world/contents/.superseded.yaml" in captured["url"]
     assert captured["params"]["ref"] == "main"
 

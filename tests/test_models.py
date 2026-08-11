@@ -222,3 +222,27 @@ def test_finding_verification_reestimate():
     )
     assert f.verification == "kept"
     assert f.verified_severity == "suggestion"
+
+
+def test_review_usage_defaults():
+    from superseded.models import ReviewUsage
+
+    u = ReviewUsage()
+    assert u.prompt_tokens == 0
+    assert u.completion_tokens == 0
+    assert u.per_pass == {}
+
+
+def test_review_usage_per_pass_dict():
+    from superseded.models import ReviewUsage
+
+    u = ReviewUsage(prompt_tokens=100, completion_tokens=50, per_pass={"security": (60, 30)})
+    assert u.per_pass["security"] == (60, 30)
+
+
+def test_review_result_has_usage_field():
+    from superseded.models import ReviewResult, ReviewUsage
+
+    r = ReviewResult()
+    assert isinstance(r.usage, ReviewUsage)
+    assert r.usage.prompt_tokens == 0

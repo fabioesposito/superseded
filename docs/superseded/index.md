@@ -1,6 +1,6 @@
 # Superseded — Reviews That Supersede Themselves
 
-Superseded is a CLI tool that runs **five parallel AI code review passes** over your changes, then merges and deduplicates the findings. It shells out to external AI CLIs (`claude`, `opencode`, `codex`) so you can use whichever agent you already have installed. Over time, it **learns** from your feedback — dismissed false positives stop reappearing, and helpful findings get reinforced.
+Superseded is a CLI tool that runs **five parallel AI code review passes** over your changes, then merges and deduplicates the findings. It calls your choice of DeepSeek, OpenAI, or Anthropic API directly — no external AI CLIs to install or configure. Over time, it **learns** from your feedback — dismissed false positives stop reappearing, and helpful findings get reinforced.
 
 ## Why use it?
 
@@ -8,7 +8,7 @@ Superseded is a CLI tool that runs **five parallel AI code review passes** over 
 |---|---|
 | **Five specialised passes** | Security, correctness, performance, style, architecture — each with a focused prompt |
 | **Grounded context** | Injects your project conventions, relevant design specs, static analysis results, and cross-file usage into every prompt |
-| **Multi-agent** | Pick `claude-code`, `opencode`, or `codex` — whichever you already use |
+| **Direct API provider** | Reviews run over DeepSeek, OpenAI, or Anthropic — no CLI agents or sandboxes to manage |
 | **Progressive review** | On PRs, only reviews new commits since the last pass. No wasted tokens |
 | **Adaptive learning** | Tracks which findings you accept or dismiss. Infers team preferences and adjusts future reviews |
 | **GitHub integration** | Post inline comments, check reactions for feedback, run as a GitHub Action |
@@ -23,19 +23,26 @@ uv tool install git+https://github.com/fabioesposito/superseded
 #   git clone https://github.com/fabioesposito/superseded
 #   cd superseded && uv sync && uv tool install .
 
-# 2. Detect your AI CLI and write config
+# 2. Set your DeepSeek API key (get one at https://platform.deepseek.com)
+export SUPERSEDED_DEEPSEEK_API_KEY=sk-...
+
+# ...or use OpenAI or Anthropic instead
+export SUPERSEDED_OPENAI_API_KEY=sk-...    # https://platform.openai.com
+export SUPERSEDED_ANTHROPIC_API_KEY=sk-ant-...  # https://console.anthropic.com
+
+# 3. (Optional) Write a config file
 superseded init
 
-# 3. Review a PR
+# 4. Review a PR
 superseded review --pr 123
 
-# 4. Review a local diff
+# 5. Review a local diff
 superseded review --diff HEAD~3..HEAD
 
-# 5. Review specific files
+# 6. Review specific files
 superseded review src/auth.py src/models.py
 
-# 6. Review uncommitted changes (no args = git diff HEAD; --staged = index only)
+# 7. Review uncommitted changes (no args = git diff HEAD; --staged = index only)
 superseded review
 ```
 
@@ -67,7 +74,10 @@ superseded review --pr 123
 ## Requirements
 
 - **Python 3.14+**
-- One of: `claude` CLI, `opencode` CLI, or `codex` CLI on your PATH
+- **A provider API key** (one of):
+  - `SUPERSEDED_DEEPSEEK_API_KEY` — platform.deepseek.com
+  - `SUPERSEDED_OPENAI_API_KEY` — platform.openai.com
+  - `SUPERSEDED_ANTHROPIC_API_KEY` — console.anthropic.com
 - `gh` CLI (optional — required for local PR reviews and feedback; the server uses the GitHub REST API directly)
 
 ## Next Steps

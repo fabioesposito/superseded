@@ -44,6 +44,24 @@ superseded feedback --dismiss 42
 
 Comment IDs come from the output of `superseded review --post`. Without `--post`, there is no comment ID mapping and manual feedback won't work.
 
+## Managing Learned Rules
+
+Learned rules (section 3 below) can be inspected and overridden from the CLI:
+
+```bash
+# List all learned rules with their confidence and provenance
+superseded feedback --rules
+
+# Dismiss a rule so it stops being injected (by rule ID from --rules)
+superseded feedback --dismiss-rule 3
+
+# Reinforce a rule, raising its confidence (by rule ID from --rules)
+superseded feedback --helpful-rule 3
+```
+
+Dismissing a rule is permanent until the next reflection creates a replacement;
+it is the manual escape hatch if a rule does not match your team's preferences.
+
 ## How Adaptive Learning Works
 
 Superseded has a three-stage learning pipeline:
