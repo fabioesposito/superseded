@@ -86,8 +86,14 @@ async def test_worker_processes_job():
         base_sha="def456",
     )
 
+    outcome_tuple = (
+        ReviewOutcome(conclusion="success", title="0 findings", summary="ok"),
+        ReviewResult(),
+    )
     with patch(
-        "superseded.server.worker._run_review_for_job", new_callable=AsyncMock
+        "superseded.server.worker._run_review_for_job",
+        new_callable=AsyncMock,
+        return_value=outcome_tuple,
     ) as mock_review:
         await worker._process(job)
 
@@ -160,7 +166,7 @@ async def test_worker_success_updates_existing_check_run():
     with patch(
         "superseded.server.worker._run_review_for_job",
         new_callable=AsyncMock,
-        return_value=outcome,
+        return_value=(outcome, ReviewResult()),
     ):
         await worker._process(job)
 
@@ -642,7 +648,7 @@ async def test_run_review_for_job_end_to_end(tmp_path):
         patch("superseded.context.gathering.run_static_analysis", return_value=None),
         patch("superseded.context.gathering.retrieve_usages", return_value=None),
     ):
-        outcome = await _run_review_for_job(
+        outcome, _ = await _run_review_for_job(
             github=github,
             repo_manager=repo_manager,
             token="t",
@@ -760,7 +766,10 @@ async def test_concurrency_limit_blocks_second_job():
     async def slow_review(**kwargs):
         started.set()
         await release.wait()
-        return ReviewOutcome(conclusion="success", title="0 findings", summary="done")
+        return (
+            ReviewOutcome(conclusion="success", title="0 findings", summary="done"),
+            ReviewResult(),
+        )
 
     job1 = ReviewJob(1, "o", "r", 1, "a", "b")
     job2 = ReviewJob(1, "o", "r", 2, "a", "b")
@@ -802,7 +811,10 @@ async def test_enqueue_rejects_overflow():
 
     async def slow_review(**kwargs):
         await block.wait()
-        return ReviewOutcome(conclusion="success", title="0 findings", summary="done")
+        return (
+            ReviewOutcome(conclusion="success", title="0 findings", summary="done"),
+            ReviewResult(),
+        )
 
     with patch(
         "superseded.server.worker._run_review_for_job",
@@ -903,7 +915,7 @@ async def test_worker_progressive_noop_returns_success_without_review(tmp_path):
 
     with patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout:
         mock_checkout.return_value = tmp_path
-        outcome = await _run_review_for_job(
+        outcome, _ = await _run_review_for_job(
             github=github,
             repo_manager=repo_manager,
             token="tok",
@@ -1088,3 +1100,436 @@ async def test_worker_progressive_compare_diff_error_falls_back_to_full(tmp_path
 
     github.fetch_pr_diff.assert_awaited_once()
     assert await store.get_watermark("octocat/hello-world", 42) == "newhead"
+
+
+def test_record_job_creates_status_queued():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(),
+        repo_manager=FakeRepoManager(),
+        provider=_make_provider(),
+    )
+    worker._record_job("job-1", "queued")
+    status = worker.get_job_status("job-1")
+    assert status is not None
+    assert status.status == "queued"
+    assert status.result is None
+    assert status.error is None
+
+
+def test_record_job_evicts_oldest_over_cap(monkeypatch):
+    worker = ReviewWorker(
+        github=FakeGitHubApp(),
+        repo_manager=FakeRepoManager(),
+        provider=_make_provider(),
+    )
+    monkeypatch.setattr(worker, "_job_cap", 3)
+    for i in range(5):
+        worker._record_job(f"job-{i}", "queued")
+    assert worker.get_job_status("job-0") is None
+    assert worker.get_job_status("job-1") is None
+    assert worker.get_job_status("job-4") is not None
+    assert len(worker._jobs) == 3
+
+
+def test_record_job_marks_completed_at():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(),
+        repo_manager=FakeRepoManager(),
+        provider=_make_provider(),
+    )
+    worker._record_job("job-1", "queued")
+    assert worker.get_job_status("job-1").completed_at is None
+    worker._record_job("job-1", "completed", result=ReviewResult())
+    assert worker.get_job_status("job-1").completed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_returns_tuple_with_result():
+    """_run_review_for_job returns (ReviewOutcome, ReviewResult)."""
+    from superseded.config import Config
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    job = ReviewJob(
+        installation_id=123,
+        owner="octocat",
+        repo="hello-world",
+        pr_number=42,
+        head_sha="abc123",
+        base_sha="def456",
+    )
+    fake_result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="x.py",
+                line=1,
+                title="T",
+                description="D",
+                suggestion="S",
+            )
+        ]
+    )
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = fake_result
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch(
+            "superseded.server.worker._load_safe_config",
+            new_callable=AsyncMock,
+            return_value=Config(),
+        ),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
+        patch(
+            "superseded.server.worker.gather_context",
+            return_value={
+                "file_context": "fc",
+                "static_signals": "ss",
+                "usage_signals": "us",
+                "conventions_signals": "cv",
+                "spec_signals": "sp",
+            },
+        ),
+        patch(
+            "superseded.server.worker.build_review_payload",
+            return_value={"body": "b", "comments": [], "event": "COMMENT"},
+        ),
+    ):
+        mock_checkout.return_value = Path("/tmp/checkout")
+        outcome, result = await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="ghp_test",
+            job=job,
+            correlation_id="c1",
+            provider=_make_provider(),
+        )
+
+    assert isinstance(outcome, ReviewOutcome)
+    assert isinstance(result, ReviewResult)
+    assert result is fake_result
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_post_false_skips_posting():
+    """When job.post is False, github.post_review and build_review_payload are not called."""
+    from superseded.config import Config
+    from superseded.server.worker import _run_review_for_job
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    job = ReviewJob(
+        installation_id=123,
+        owner="octocat",
+        repo="hello-world",
+        pr_number=42,
+        head_sha="abc123",
+        base_sha="def456",
+        post=False,
+    )
+    mock_engine = MagicMock()
+    mock_engine.review.return_value = ReviewResult()
+
+    with (
+        patch("superseded.server.worker.checkout_repo", new_callable=AsyncMock) as mock_checkout,
+        patch(
+            "superseded.server.worker._load_safe_config",
+            new_callable=AsyncMock,
+            return_value=Config(),
+        ),
+        patch("superseded.server.worker.ReviewEngine", return_value=mock_engine),
+        patch(
+            "superseded.server.worker.gather_context",
+            return_value={
+                "file_context": "fc",
+                "static_signals": "ss",
+                "usage_signals": "us",
+                "conventions_signals": "cv",
+                "spec_signals": "sp",
+            },
+        ),
+        patch("superseded.server.worker.build_review_payload") as mock_payload,
+    ):
+        mock_checkout.return_value = Path("/tmp/checkout")
+        outcome, result = await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="ghp_test",
+            job=job,
+            correlation_id="c1",
+            provider=_make_provider(),
+        )
+
+    github.post_review.assert_not_called()
+    mock_payload.assert_not_called()
+    assert isinstance(outcome, ReviewOutcome)
+    assert isinstance(result, ReviewResult)
+
+
+@pytest.mark.asyncio
+async def test_run_review_for_job_post_false_persists_findings_without_linking(tmp_path):
+    """A post=False review persists findings + watermark but never links comment ids.
+
+    Regression: the comment-id linkage (zip over the empty comment_ids list with
+    strict=True) must not run when posting is skipped, or it raises ValueError.
+    """
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    await store.init()
+
+    finding = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        end_line=2,
+        title="t",
+        description="d",
+        suggestion="s",
+    )
+    fake_engine = MagicMock()
+    fake_engine.review.return_value = ReviewResult(findings=[finding])
+
+    github = FakeGitHubApp()
+    repo_manager = FakeRepoManager()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
+    job = ReviewJob(1, "owner", "repo", 7, "abc", "def", post=False)
+
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo",
+            new_callable=AsyncMock,
+            return_value=tmp_path,
+        ),
+        patch("superseded.config.load_config", return_value=Config()),
+        patch("superseded.server.worker.ReviewEngine", return_value=fake_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value=None),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
+        patch.object(
+            store, "record_findings_batch", wraps=store.record_findings_batch
+        ) as mock_record,
+        patch.object(
+            store, "set_comment_ids_batch", wraps=store.set_comment_ids_batch
+        ) as mock_link,
+    ):
+        outcome, result = await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="t",
+            job=job,
+            correlation_id="c",
+            store=store,
+            provider=_make_provider(),
+        )
+
+    github.post_review.assert_not_awaited()
+    mock_record.assert_called_once()
+    mock_link.assert_not_called()
+    assert isinstance(outcome, ReviewOutcome)
+    assert result.findings == [finding]
+    assert await store.get_watermark("owner/repo", 7) == "abc"
+
+
+@pytest.mark.asyncio
+async def test_enqueue_records_queued_status():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    await worker.enqueue(job)
+    status = worker.get_job_status(job.job_id)
+    assert status is not None
+    assert status.status == "queued"
+
+
+@pytest.mark.asyncio
+async def test_process_records_completed_with_result():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    fake_result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="style",
+                severity="nit",
+                file="f.py",
+                line=1,
+                title="t",
+                description="d",
+                suggestion="s",
+            )
+        ]
+    )
+    with patch(
+        "superseded.server.worker._run_review_for_job",
+        new_callable=AsyncMock,
+        return_value=(ReviewOutcome("success", "ok", "sum"), fake_result),
+    ):
+        await worker._process(job)
+
+    status = worker.get_job_status(job.job_id)
+    assert status.status == "completed"
+    assert status.result is fake_result
+    assert status.error is None
+    assert status.completed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_process_records_failed_on_review_exception():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    with patch(
+        "superseded.server.worker._run_review_for_job",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("boom"),
+    ):
+        await worker._process(job)
+
+    status = worker.get_job_status(job.job_id)
+    assert status.status == "failed"
+    assert status.error is not None
+    assert "boom" in status.error
+    assert status.completed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_process_post_false_skips_check_run():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123,
+        owner="o",
+        repo="r",
+        pr_number=1,
+        head_sha="a",
+        base_sha="b",
+        post=False,
+    )
+    with patch(
+        "superseded.server.worker._run_review_for_job",
+        new_callable=AsyncMock,
+        return_value=(ReviewOutcome("success", "ok", "sum"), ReviewResult()),
+    ):
+        await worker._process(job)
+
+    worker.github.create_check_run.assert_not_called()
+    worker.github.update_check_run.assert_not_called()
+    status = worker.get_job_status(job.job_id)
+    assert status.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_enqueue_records_failed_when_queue_full():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(),
+        repo_manager=FakeRepoManager(),
+        max_queue=1,
+        provider=_make_provider(),
+    )
+    job_a = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    job_b = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=2, head_sha="c", base_sha="d"
+    )
+    await worker.enqueue(job_a)
+    with pytest.raises(asyncio.QueueFull):
+        await worker.enqueue(job_b)
+    status = worker.get_job_status(job_b.job_id)
+    assert status is not None
+    assert status.status == "failed"
+    assert status.error == "queue full"
+    status_a = worker.get_job_status(job_a.job_id)
+    assert status_a is not None
+    assert status_a.status == "queued"
+
+
+@pytest.mark.asyncio
+async def test_run_task_records_failed_on_cancellation():
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def blocking_process(_job):
+        started.set()
+        await release.wait()
+
+    worker._process = blocking_process  # type: ignore[assignment]
+
+    task = asyncio.create_task(worker._run_task(job))
+    await asyncio.wait_for(started.wait(), timeout=5)
+    task.cancel()
+    await task
+
+    status = worker.get_job_status(job.job_id)
+    assert status is not None
+    assert status.status == "failed"
+    assert status.error == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_run_task_cancel_after_completed_preserves_completed():
+    """A cancel landing after _process already recorded completed must not downgrade.
+
+    Regression: _run_task's CancelledError handler used to unconditionally record
+    "failed", and _record_job preserves prior fields, producing an inconsistent
+    JobStatus(status="failed", error="cancelled", result=<ReviewResult>). The user
+    saw a spurious exit-1 for a review that actually finished.
+    """
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    fake_result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="f.py",
+                line=1,
+                title="t",
+                description="d",
+                suggestion="s",
+            )
+        ]
+    )
+
+    async def process_then_cancel(_job):
+        # _process records completed normally...
+        worker._record_job(_job.job_id, "completed", result=fake_result)
+        # ...then a cancel lands during teardown before _run_task's finally.
+        raise asyncio.CancelledError
+
+    worker._process = process_then_cancel  # type: ignore[assignment]
+
+    task = asyncio.create_task(worker._run_task(job))
+    await task
+
+    status = worker.get_job_status(job.job_id)
+    assert status is not None
+    assert status.status == "completed"
+    assert status.result is fake_result
+    assert status.error is None

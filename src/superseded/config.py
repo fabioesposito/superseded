@@ -37,6 +37,8 @@ class Config(BaseModel):
     reflection_threshold: int = 5
     max_learned_rules: int = 5
     verify: bool = True
+    server: str | None = None
+    server_key: str | None = None
 
     def is_pass_enabled(self, name: str) -> bool:
         return getattr(self.passes, name, False)

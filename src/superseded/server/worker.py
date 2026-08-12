@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -40,6 +41,7 @@ class ReviewJob:
     base_sha: str
     job_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     passes: list[str] | None = None
+    post: bool = True
 
 
 @dataclass
@@ -47,6 +49,19 @@ class ReviewOutcome:
     conclusion: str
     title: str
     summary: str = ""
+
+
+@dataclass
+class JobStatus:
+    job_id: str
+    status: str  # "queued" | "running" | "completed" | "failed"
+    result: ReviewResult | None = None
+    error: str | None = None
+    created_at: float = field(default_factory=time.time)
+    completed_at: float | None = None
+
+
+JOB_REGISTRY_CAP = 1000
 
 
 def build_check_run_title(result: ReviewResult) -> str:
@@ -85,18 +100,58 @@ class ReviewWorker:
         if provider is None:
             raise ValueError("ReviewWorker requires a Provider")
         self._provider = provider
+        self._jobs: dict[str, JobStatus] = {}
+        self._job_cap = JOB_REGISTRY_CAP
 
     @property
     def active_count(self) -> int:
         return self._active_count
 
+    def _record_job(
+        self,
+        job_id: str,
+        status: str,
+        result: ReviewResult | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Insert or update a job's status; evict oldest when over cap.
+
+        Single-threaded: called only from the worker event loop (enqueue,
+        _run_task, _process). No lock needed within one asyncio loop.
+        """
+        existing = self._jobs.get(job_id)
+        created_at = existing.created_at if existing else time.time()
+        completed_at = (
+            time.time()
+            if status in ("completed", "failed")
+            else (existing.completed_at if existing else None)
+        )
+        self._jobs[job_id] = JobStatus(
+            job_id=job_id,
+            status=status,
+            result=result if result is not None else (existing.result if existing else None),
+            error=error if error is not None else (existing.error if existing else None),
+            created_at=created_at,
+            completed_at=completed_at,
+        )
+        if len(self._jobs) > self._job_cap:
+            for stale_id in sorted(self._jobs, key=lambda j: self._jobs[j].created_at)[
+                : len(self._jobs) - self._job_cap
+            ]:
+                self._jobs.pop(stale_id, None)
+
+    def get_job_status(self, job_id: str) -> JobStatus | None:
+        return self._jobs.get(job_id)
+
     async def enqueue(self, job: ReviewJob) -> None:
+        self._record_job(job.job_id, "queued")
         # put_nowait raises QueueFull instantly; a failed enqueue is logged and
         # surfaced to the caller (webhook handler turns it into a 429) rather
         # than blocking the handler indefinitely or growing without limit.
         try:
             self.queue.put_nowait(job)
         except asyncio.QueueFull:
+            self._record_job(job.job_id, "failed", error="queue full")
             logger.warning(
                 "review_queue_full",
                 extra={
@@ -131,12 +186,16 @@ class ReviewWorker:
             async with self._semaphore:
                 async with self._lock:
                     self._active_count += 1
+                self._record_job(job.job_id, "running")
                 try:
                     await self._process(job)
                 finally:
                     async with self._lock:
                         self._active_count -= 1
         except asyncio.CancelledError:
+            cur = self._jobs.get(job.job_id)
+            if cur is None or cur.status not in ("completed", "failed"):
+                self._record_job(job.job_id, "failed", error="cancelled")
             logger.info(
                 "review_cancelled",
                 extra={"repo": f"{job.owner}/{job.repo}", "pr": job.pr_number},
@@ -169,7 +228,7 @@ class ReviewWorker:
 
         try:
             token = await self.github.get_installation_token(job.installation_id)
-        except Exception:
+        except Exception as err:
             logger.exception(
                 "review_failed",
                 extra={
@@ -178,20 +237,22 @@ class ReviewWorker:
                     "pr": job.pr_number,
                 },
             )
+            self._record_job(job.job_id, "failed", error=f"token fetch failed: {err}")
             return
 
         check_run_id = None
         try:
-            check_run_id = await self.github.create_check_run(
-                token=token,
-                owner=job.owner,
-                repo=job.repo,
-                name="Superseded Review",
-                head_sha=job.head_sha,
-                status="in_progress",
-            )
+            if job.post:
+                check_run_id = await self.github.create_check_run(
+                    token=token,
+                    owner=job.owner,
+                    repo=job.repo,
+                    name="Superseded Review",
+                    head_sha=job.head_sha,
+                    status="in_progress",
+                )
 
-            outcome = await _run_review_for_job(
+            outcome, result = await _run_review_for_job(
                 github=self.github,
                 repo_manager=self.repo_manager,
                 token=token,
@@ -204,16 +265,18 @@ class ReviewWorker:
                 provider=self._provider,
             )
 
-            await self.github.update_check_run(
-                token=token,
-                owner=job.owner,
-                repo=job.repo,
-                check_run_id=check_run_id,
-                status="completed",
-                conclusion=outcome.conclusion,
-                title=outcome.title,
-                summary=outcome.summary,
-            )
+            if check_run_id is not None:
+                await self.github.update_check_run(
+                    token=token,
+                    owner=job.owner,
+                    repo=job.repo,
+                    check_run_id=check_run_id,
+                    status="completed",
+                    conclusion=outcome.conclusion,
+                    title=outcome.title,
+                    summary=outcome.summary,
+                )
+            self._record_job(job.job_id, "completed", result=result)
         except asyncio.CancelledError:
             if check_run_id is not None:
                 try:
@@ -229,8 +292,9 @@ class ReviewWorker:
                     )
                 except Exception:
                     logger.exception("Failed to update check run on cancellation")
+            self._record_job(job.job_id, "failed", error="cancelled")
             raise
-        except Exception:
+        except Exception as err:
             logger.exception(
                 "review_failed",
                 extra={
@@ -253,6 +317,7 @@ class ReviewWorker:
                     )
                 except Exception:
                     logger.exception("Failed to update check run on error")
+            self._record_job(job.job_id, "failed", error=str(err))
 
 
 async def _load_safe_config(
@@ -329,7 +394,7 @@ async def _run_review_for_job(
     server_model: str | None = None,
     server_reasoning_effort: str | None = None,
     provider: Provider | None = None,
-) -> ReviewOutcome:
+) -> tuple[ReviewOutcome, ReviewResult]:
     tmp_dir = repo_manager.job_dir(
         job.installation_id, job.owner, job.repo, job.pr_number, job.job_id
     )
@@ -375,10 +440,13 @@ async def _run_review_for_job(
                             "pr": job.pr_number,
                         },
                     )
-                    return ReviewOutcome(
-                        conclusion="success",
-                        title="No new commits since last review",
-                        summary=f"Head {job.head_sha[:7]} unchanged since last review.",
+                    return (
+                        ReviewOutcome(
+                            conclusion="success",
+                            title="No new commits since last review",
+                            summary=f"Head {job.head_sha[:7]} unchanged since last review.",
+                        ),
+                        ReviewResult(),
                     )
                 try:
                     patch, status = await github.compare_diff(
@@ -470,17 +538,20 @@ async def _run_review_for_job(
             progress=None,
         )
 
-        payload = build_review_payload(result)
-
-        comment_ids = await github.post_review(
-            token=token,
-            owner=job.owner,
-            repo=job.repo,
-            pr_number=job.pr_number,
-            body=payload["body"],
-            comments=payload["comments"],
-            event=payload["event"],
-        )
+        comment_ids: list[int | None] = []
+        event = "COMMENT"
+        if job.post:
+            payload = build_review_payload(result)
+            event = payload["event"]
+            comment_ids = await github.post_review(
+                token=token,
+                owner=job.owner,
+                repo=job.repo,
+                pr_number=job.pr_number,
+                body=payload["body"],
+                comments=payload["comments"],
+                event=payload["event"],
+            )
 
         if store is not None:
             repo_key = f"{job.owner}/{job.repo}"
@@ -502,13 +573,14 @@ async def _run_review_for_job(
                         ],
                         repo_key,
                     )
-                pairs = [
-                    (f.id, cid)
-                    for f, cid in zip(result.findings, comment_ids, strict=True)
-                    if cid is not None
-                ]
-                if pairs:
-                    await store.set_comment_ids_batch(pairs)
+                if job.post:
+                    pairs = [
+                        (f.id, cid)
+                        for f, cid in zip(result.findings, comment_ids, strict=True)
+                        if cid is not None
+                    ]
+                    if pairs:
+                        await store.set_comment_ids_batch(pairs)
                 await store.set_watermark(repo_key, job.pr_number, job.head_sha)
 
             if config.learned_review:
@@ -529,7 +601,7 @@ async def _run_review_for_job(
                     stats_text, all_rules, config.max_learned_rules
                 )
 
-        conclusion = "success" if payload["event"] != "REQUEST_CHANGES" else "failure"
+        conclusion = "success" if event != "REQUEST_CHANGES" else "failure"
         title = build_check_run_title(result)
         passes_used = sorted({f.pass_name for f in result.findings})
         summary = (
@@ -545,6 +617,6 @@ async def _run_review_for_job(
                 "findings_count": len(result.findings),
             },
         )
-        return ReviewOutcome(conclusion=conclusion, title=title, summary=summary)
+        return ReviewOutcome(conclusion=conclusion, title=title, summary=summary), result
     finally:
         repo_manager.cleanup(tmp_dir)

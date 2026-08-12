@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -199,6 +200,10 @@ def create_app(
         if isinstance(passes_raw, str) and passes_raw.strip():
             passes_list = [p.strip() for p in passes_raw.split(",") if p.strip()]
 
+        post_field = body.get("post", True)
+        if not isinstance(post_field, bool):
+            raise HTTPException(status_code=422, detail="'post' must be a boolean if present.")
+
         installation_id = await github.resolve_installation(owner, repo)
         if installation_id is None:
             raise HTTPException(
@@ -228,13 +233,35 @@ def create_app(
             head_sha=pr_info["head_sha"],
             base_sha=pr_info["base_sha"],
             passes=passes_list,
+            post=post_field,
         )
-        await worker.enqueue(job)
+        try:
+            await worker.enqueue(job)
+        except asyncio.QueueFull:
+            raise HTTPException(status_code=429, detail="Review queue full") from None
         logger.info(
             "review_pr_enqueued",
             extra={"repo": f"{owner}/{repo}", "pr": pr_number, "job_id": job.job_id},
         )
         return {"status": "enqueued", "job_id": job.job_id}
+
+    @app.get("/review/jobs/{job_id}")
+    async def get_job_status(job_id: str, request: Request) -> Response:
+        if not config.api_key:
+            return Response(status_code=501, content="API key not configured on this server.")
+        auth = request.headers.get("Authorization", "")
+        expected = f"Bearer {config.api_key}"
+        if not hmac.compare_digest(auth, expected):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        status = worker.get_job_status(job_id)
+        if status is None:
+            raise HTTPException(status_code=404, detail="Unknown or evicted job_id.")
+
+        payload: dict = {"status": status.status, "result": None, "error": status.error}
+        if status.status == "completed" and status.result is not None:
+            payload["result"] = status.result.model_dump(mode="json")
+        return payload
 
     @app.post("/webhook")
     async def webhook(request: Request, background_tasks: BackgroundTasks) -> Response:

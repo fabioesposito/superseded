@@ -42,6 +42,7 @@ from superseded.providers import (
     ProviderConfigError,
 )
 from superseded.review.engine import ReviewEngine
+from superseded.server.client import ServerReviewError, review_via_server
 
 if TYPE_CHECKING:
     from superseded.server.config import ServerConfig
@@ -53,6 +54,8 @@ VERIFY_ENV = "SUPERSEDED_VERIFY"
 LOG_FORMAT_ENV = "SUPERSEDED_LOG_FORMAT"
 LOG_LEVEL_ENV = "SUPERSEDED_LOG_LEVEL"
 VERBOSE_ENV = "VERBOSE"
+SERVER_URL_ENV = "SUPERSEDED_SERVER_URL"
+SERVER_KEY_ENV = "SUPERSEDED_SERVER_KEY"
 _TRUTHY = ("1", "true", "yes", "on")
 
 
@@ -149,6 +152,14 @@ def resolve_verify(cli_value: bool | None, config: Config) -> bool:
     if cli_value is not None:
         return cli_value
     return config.verify
+
+
+def resolve_server(server_flag: str | None, config: Config) -> str | None:
+    return os.environ.get(SERVER_URL_ENV) or server_flag or config.server
+
+
+def resolve_server_key(key_flag: str | None, config: Config) -> str | None:
+    return os.environ.get(SERVER_KEY_ENV) or key_flag or config.server_key
 
 
 def resolve_log_format(flag: str | None, config: Config | None = None) -> str:
@@ -292,6 +303,15 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
     help="Output format",
 )
 @click.option("--post", is_flag=True, help="Post review to GitHub PR (requires --pr)")
+@click.option("--server", "server_url_flag", default=None, help="Review server URL (server-mode).")
+@click.option("--server-key", "server_key_flag", default=None, help="Review server bearer key.")
+@click.option("--owner", default=None, help="PR repo owner (defaults to current git remote).")
+@click.option(
+    "--repo", "repo_name", default=None, help="PR repo name (defaults to current git remote)."
+)
+@click.option(
+    "--no-post", "no_post", is_flag=True, help="Suppress server-side PR posting (server-mode)."
+)
 @click.option(
     "--passes",
     default=None,
@@ -301,7 +321,8 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
     "--timeout",
     type=int,
     default=None,
-    help=f"Per-pass provider timeout in seconds (default: {DEFAULT_TIMEOUT})",
+    help=f"Timeout in seconds (per pass locally; total poll budget in server-mode; "
+    f"default: {DEFAULT_TIMEOUT})",
 )
 @click.option(
     "--config",
@@ -349,6 +370,11 @@ def review(
     reasoning_effort: str | None,
     output_format: str | None,
     post: bool,
+    server_url_flag: str | None,
+    server_key_flag: str | None,
+    owner: str | None,
+    repo_name: str | None,
+    no_post: bool,
     passes: str | None,
     timeout: int | None,
     config_path: Path | None,
@@ -375,6 +401,53 @@ def review(
         resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None, log_config),
         resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None, log_config),
     )
+
+    server_url = resolve_server(server_url_flag, log_config)
+    if server_url:
+        if files or diff_range or staged:
+            click.echo(
+                "Error: --server cannot be combined with --diff/--files/--staged.",
+                err=True,
+            )
+            sys.exit(2)
+        if log_config.server and not os.environ.get(SERVER_URL_ENV) and server_url_flag is None:
+            _status(
+                f"Warning: server-mode enabled by 'server:' in "
+                f"{config_path or '.superseded.yaml'}. Use SUPERSEDED_SERVER_URL or "
+                "--server to override; remove the key to disable."
+            )
+        elif os.environ.get(SERVER_URL_ENV) and server_url_flag is None and not log_config.server:
+            _status(
+                "Warning: server-mode enabled by SUPERSEDED_SERVER_URL env var. "
+                "Unset it to force local review."
+            )
+        _run_review_remote(
+            server_url=server_url,
+            server_key=resolve_server_key(server_key_flag, log_config),
+            pr=pr,
+            owner_flag=owner,
+            repo_flag=repo_name,
+            post=not no_post,
+            post_flag_set=post,
+            ignored_flags=_ignored_server_mode_flags(
+                provider=provider,
+                model=model,
+                reasoning_effort=reasoning_effort,
+                no_memory=no_memory,
+                full_review=full_review,
+                no_static=no_static,
+                no_usage=no_usage,
+                no_conventions=no_conventions,
+                no_specs=no_specs,
+                graph=graph,
+                verify=verify,
+            ),
+            output_format=output_format,
+            passes=passes,
+            timeout=timeout,
+            config_path=config_path,
+        )
+        return
 
     if post and pr is None:
         click.echo("Error: --post requires --pr (cannot post from a local diff).", err=True)
@@ -672,6 +745,136 @@ async def _build_learned_context(
     return assemble_learned_context(stats_text, all_rules, config.max_learned_rules)
 
 
+def _ignored_server_mode_flags(
+    *,
+    provider: str | None,
+    model: str | None,
+    reasoning_effort: str | None,
+    no_memory: bool,
+    full_review: bool,
+    no_static: bool,
+    no_usage: bool,
+    no_conventions: bool,
+    no_specs: bool,
+    graph: bool | None,
+    verify: bool | None,
+) -> list[str]:
+    """Flag names the user passed that server-mode silently ignores."""
+    flags: list[str] = []
+    if provider is not None:
+        flags.append("--provider")
+    if model is not None:
+        flags.append("--model")
+    if reasoning_effort is not None:
+        flags.append("--reasoning-effort")
+    if no_memory:
+        flags.append("--no-memory")
+    if full_review:
+        flags.append("--full")
+    if no_static:
+        flags.append("--no-static")
+    if no_usage:
+        flags.append("--no-usage")
+    if no_conventions:
+        flags.append("--no-conventions")
+    if no_specs:
+        flags.append("--no-specs")
+    if graph is not None:
+        flags.append("--graph" if graph else "--no-graph")
+    if verify is not None:
+        flags.append("--verify" if verify else "--no-verify")
+    return flags
+
+
+def _run_review_remote(
+    *,
+    server_url: str,
+    server_key: str | None,
+    pr: int | None,
+    owner_flag: str | None,
+    repo_flag: str | None,
+    post: bool,
+    post_flag_set: bool,
+    ignored_flags: list[str],
+    output_format: str | None,
+    passes: str | None,
+    timeout: int | None,
+    config_path: Path | None,
+) -> None:
+    if pr is None:
+        click.echo("Error: --server requires --pr.", err=True)
+        sys.exit(2)
+    if server_key is None:
+        click.echo(
+            "Error: server key required. Set --server-key, SUPERSEDED_SERVER_KEY, "
+            "or 'server_key:' in .superseded.yaml.",
+            err=True,
+        )
+        sys.exit(2)
+
+    owner = owner_flag
+    repo = repo_flag
+    if owner is None or repo is None:
+        remote = current_repo()
+        if remote and "/" in remote:
+            r_owner, _, r_name = remote.partition("/")
+            owner = owner or r_owner
+            repo = repo or r_name
+    if not owner or not repo:
+        click.echo(
+            "Error: could not resolve owner/repo. Pass --owner and --repo.",
+            err=True,
+        )
+        sys.exit(2)
+
+    if post_flag_set:
+        _status(
+            "Warning: --post has no effect in server-mode; the server posts by "
+            "default. Use --no-post to suppress."
+        )
+
+    if ignored_flags:
+        _status(
+            "Warning: the following flags are ignored in server-mode: "
+            + ", ".join(ignored_flags)
+            + "."
+        )
+
+    config = load_config(config_path)
+    fmt = output_format or config.format
+    pass_list = _parse_passes(passes)
+    poll_budget = float(timeout if timeout is not None else DEFAULT_TIMEOUT)
+
+    try:
+        result = review_via_server(
+            server_url=server_url,
+            server_key=server_key,
+            owner=owner,
+            repo=repo,
+            pr_number=pr,
+            passes=pass_list,
+            post=post,
+            poll_budget=poll_budget,
+            on_status=_status,
+        )
+    except ServerReviewError as err:
+        click.echo(f"Error: {err}", err=True)
+        sys.exit(err.exit_code)
+
+    if fmt == "json":
+        click.echo(format_json(result))
+    elif fmt == "markdown":
+        click.echo(format_markdown(result))
+    else:
+        click.echo(format_table(result))
+
+    for w in result.warnings:
+        click.echo(f"\nWarning: {w}", err=True)
+
+    if result.warnings:
+        sys.exit(EXIT_PARTIAL_FAILURE)
+
+
 @cli.command()
 @click.option("--force", is_flag=True, help="Overwrite an existing .superseded.yaml")
 @click.option(
@@ -728,6 +931,17 @@ def _run_init(force: bool, config_path: Path | None) -> None:
         _status(
             "API keys: none set — set one of SUPERSEDED_DEEPSEEK_API_KEY, "
             "SUPERSEDED_OPENAI_API_KEY, SUPERSEDED_ANTHROPIC_API_KEY."
+        )
+
+    server_url = os.environ.get("SUPERSEDED_SERVER_URL")
+    server_key = os.environ.get("SUPERSEDED_SERVER_KEY")
+    if server_url:
+        _status(f"Review server: {server_url} (SUPERSEDED_SERVER_URL)")
+        if not server_key:
+            _status("  SUPERSEDED_SERVER_KEY not set — server-mode will need --server-key.")
+    elif server_key:
+        _status(
+            "SUPERSEDED_SERVER_KEY set but SUPERSEDED_SERVER_URL is not — server-mode disabled."
         )
 
     cfg = Config(provider="deepseek")

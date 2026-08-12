@@ -104,3 +104,26 @@ def test_init_crg_present_prints_found(tmp_path, monkeypatch):
     result = runner.invoke(cli, ["init"])
     assert result.exit_code == 0, result.output
     assert "code-review-graph" in result.output
+
+
+def test_init_reports_server_env_when_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUPERSEDED_SERVER_URL", "https://rev.example.com")
+    monkeypatch.setenv("SUPERSEDED_SERVER_KEY", "sk-test")
+    monkeypatch.setattr("shutil.which", lambda cmd: None)
+    target = tmp_path / ".superseded.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--config", str(target)])
+    assert result.exit_code == 0
+    assert "SUPERSEDED_SERVER_URL" in result.output
+    assert "https://rev.example.com" in result.output
+
+
+def test_init_reports_server_key_without_url(tmp_path, monkeypatch):
+    monkeypatch.delenv("SUPERSEDED_SERVER_URL", raising=False)
+    monkeypatch.setenv("SUPERSEDED_SERVER_KEY", "sk-test")
+    monkeypatch.setattr("shutil.which", lambda cmd: None)
+    target = tmp_path / ".superseded.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--config", str(target)])
+    assert result.exit_code == 0
+    assert "SUPERSEDED_SERVER_KEY set but SUPERSEDED_SERVER_URL is not" in result.output

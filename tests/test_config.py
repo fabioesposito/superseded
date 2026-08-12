@@ -248,3 +248,15 @@ def test_config_reasoning_effort_accepts_medium():
 
     assert Config(reasoning_effort="medium").reasoning_effort == "medium"
     assert Config().reasoning_effort == "max"
+
+
+def test_config_defaults_server_none():
+    cfg = Config()
+    assert cfg.server is None
+    assert cfg.server_key is None
+
+
+def test_config_roundtrips_server_fields():
+    cfg = Config(server="https://rev.example.com", server_key="sk-abc")
+    assert cfg.server == "https://rev.example.com"
+    assert cfg.server_key == "sk-abc"

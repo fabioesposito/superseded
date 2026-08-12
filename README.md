@@ -88,6 +88,28 @@ superseded migrate --database-url postgresql://user:pass@host/superseded   # pri
 
 The memory database (`.superseded/memory.db`, SQLite) and the server's Postgres backend are managed by Alembic migrations. The schema is brought to the latest revision automatically every time a store opens — you don't normally need to do anything. `superseded migrate` exists for running or inspecting migrations deliberately (e.g. before a server deploy); it prints the resulting revision. Pre-existing databases from older versions are adopted transparently on first run (no manual step, no data loss).
 
+### Server-mode (review via a running server)
+
+Point the CLI at a running review server instead of calling the provider
+locally. Only `--pr` is supported (the server fetches the diff via its GitHub
+App). No provider API key is needed on the client — only the server URL and key.
+
+```bash
+# Review PR 123 via a server (findings print locally; server also posts to the PR)
+SUPERSEDED_SERVER_URL=https://reviews.example.com \
+SUPERSEDED_SERVER_KEY=... \
+superseded review --pr 123
+
+# Same, but suppress the server's PR comments (silent preview)
+superseded review --server https://reviews.example.com --server-key ... --pr 123 --no-post
+```
+
+Precedence for both values: env var > CLI flag > `.superseded.yaml` (`server:` / `server_key:`).
+
+> **Deployment note:** the job registry is held in memory per process, so the
+> server must run with a single uvicorn worker (no `--workers N`) for CLI
+> polling to find the submitted job.
+
 ### GitHub Action
 
 The Action is a thin client: it POSTs the PR to a running Superseded server,
