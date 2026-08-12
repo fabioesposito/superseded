@@ -240,7 +240,7 @@ Dismissed findings are injected into future review prompts so the tool avoids re
 - **Structured output** — JSON for piping, markdown for docs, terminal table for quick scanning
 - **CI-native** — Composite GitHub Action hands each PR to your review server; no agents or secrets in CI
 - **Server mode** — Self-hosted GitHub App. Multiple repos, webhook-driven, configurable concurrency
-- **Static analysis pre-pass** — Auto-detects linters (ruff, mypy, eslint, bandit, gitleaks, go vet) and injects deterministic signals before AI review
+- **Static analysis pre-pass** — Auto-detects linters (ruff, mypy, bandit, eslint, tsc, gofmt, go vet, staticcheck, gitleaks) and injects deterministic signals before AI review
 - **Cross-file usage retrieval** — Extracts symbols from changed code, uses ripgrep to find callers across the repo
 - **Reasoning trail** — Each finding includes agent rationale. Collapsible details in markdown and PR comments
 

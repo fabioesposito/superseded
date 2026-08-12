@@ -34,8 +34,6 @@
             --red-soft: #fde8ec;
             --violet: #7c5bf5;
             --violet-soft: #eeebff;
-            --teal: #14b8a6;
-            --teal-soft: #e0faf7;
             --font-display: 'Fraunces', Georgia, serif;
             --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             --font-mono: 'Geist Mono', 'SF Mono', monospace;
@@ -418,113 +416,6 @@
         }
         .feature-card p { color: var(--text-secondary); font-size: 14px; line-height: 1.65; }
 
-        /* ── Isolation ── */
-        .isolation-section { padding: 120px 0; position: relative; overflow: hidden; }
-        .isolation-section::before {
-            content: ''; position: absolute; inset: 0;
-            background:
-                radial-gradient(ellipse 720px 460px at 50% 38%, var(--teal-soft) 0%, transparent 70%),
-                radial-gradient(ellipse 520px 360px at 82% 72%, var(--accent-soft) 0%, transparent 70%);
-            opacity: 0.55; pointer-events: none;
-        }
-        .isolation-section .container { position: relative; z-index: 1; text-align: center; }
-        .isolation-section .section-sub { margin: 0 auto 60px; }
-
-        .vault {
-            max-width: 760px; margin: 0 auto;
-            background: var(--ink);
-            border-radius: 22px;
-            padding: 42px 34px 28px;
-            text-align: left;
-            position: relative; overflow: hidden;
-            box-shadow: 0 24px 70px rgba(12,15,26,0.22), 0 1px 0 rgba(255,255,255,0.04) inset;
-        }
-        .vault::before {
-            content: ''; position: absolute; inset: 0;
-            background-image:
-                linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
-            background-size: 26px 26px;
-            -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 0%, transparent 78%);
-            mask-image: radial-gradient(ellipse at 50% 40%, #000 0%, transparent 78%);
-            pointer-events: none;
-        }
-        .vault-host {
-            position: absolute; top: 16px; right: 22px;
-            font-family: var(--font-mono); font-size: 11px;
-            color: rgba(255,255,255,0.3); letter-spacing: 0.5px; text-transform: uppercase;
-        }
-        .vault-vm {
-            position: relative; z-index: 1;
-            border: 1.5px dashed rgba(20,184,166,0.55);
-            border-radius: 16px;
-            padding: 28px 22px 22px;
-            background: rgba(20,184,166,0.04);
-            margin-bottom: 16px;
-        }
-        .vault-vm-label {
-            position: absolute; top: -11px; left: 22px;
-            background: var(--ink); padding: 0 10px;
-            font-family: var(--font-mono); font-size: 11px;
-            color: var(--teal); letter-spacing: 0.5px; text-transform: uppercase;
-        }
-        .vault-row { display: flex; gap: 12px; flex-wrap: wrap; }
-        .vault-chip {
-            flex: 1; min-width: 150px;
-            display: flex; align-items: center; gap: 11px;
-            padding: 13px 15px;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.09);
-            border-radius: 12px;
-        }
-        .vault-chip .glyph {
-            width: 30px; height: 30px; flex: none;
-            border-radius: 8px;
-            background: rgba(20,184,166,0.14); color: var(--teal);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 15px;
-        }
-        .vault-chip strong { display: block; color: #fff; font-weight: 600; font-size: 13px; letter-spacing: -0.1px; }
-        .vault-chip span { color: rgba(255,255,255,0.5); font-size: 12px; }
-        .vault-egress {
-            position: relative; z-index: 1;
-            display: inline-flex; align-items: center; gap: 9px;
-            padding: 11px 16px;
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 100px;
-            background: rgba(255,255,255,0.02);
-            font-family: var(--font-mono); font-size: 12px;
-            color: rgba(255,255,255,0.62);
-        }
-        .vault-egress .lock { color: var(--amber); font-size: 14px; }
-
-        .iso-points {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
-            max-width: 760px; margin: 30px auto 0;
-        }
-        .iso-point {
-            text-align: left;
-            padding: 22px 20px;
-            background: var(--white);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .iso-point:hover {
-            border-color: var(--border-hover);
-            box-shadow: 0 8px 28px rgba(12,15,26,0.06);
-            transform: translateY(-2px);
-        }
-        .iso-point .num {
-            width: 32px; height: 32px; border-radius: 9px;
-            background: var(--teal-soft); color: var(--teal);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 13px; font-weight: 700; margin-bottom: 13px;
-            font-family: var(--font-mono);
-        }
-        .iso-point h3 { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 6px; letter-spacing: -0.2px; }
-        .iso-point p { color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
-
         /* ── CTA ── */
         .cta-section {
             padding: 110px 0;
@@ -620,15 +511,13 @@
             .hero { padding: 140px 0 80px; }
             h1 { font-size: clamp(32px, 8vw, 48px); letter-spacing: -1px; }
             .hero-sub { font-size: 16px; }
-            .problem-section, .loop-section, .passes-section, .features-section, .isolation-section, .cta-section { padding: 80px 0; }
-            .vault { padding: 32px 22px 24px; }
-            .iso-points { grid-template-columns: repeat(2, 1fr); }
+            .problem-section, .loop-section, .passes-section, .features-section, .cta-section { padding: 80px 0; }
             .cta-cmd { min-width: auto; width: 100%; }
             footer .container { flex-direction: column; gap: 14px; text-align: center; }
         }
         @media (max-width: 480px) {
             .container { padding: 0 18px; }
-            .problem-grid, .features-grid, .passes-grid, .iso-points { grid-template-columns: 1fr; }
+            .problem-grid, .features-grid, .passes-grid { grid-template-columns: 1fr; }
             .loop-steps { grid-template-columns: 1fr; }
             .hero-actions { flex-direction: column; align-items: center; }
             .hero-actions .btn { width: 100%; max-width: 280px; justify-content: center; }
@@ -815,7 +704,7 @@
                 <div class="feature-card"><div class="feature-icon">&#x2665;</div><h3>GitHub Action</h3><p>Composite Action POSTs to your review server. No agents or secrets in CI &mdash; the server does the work.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x2660;</div><h3>Server mode</h3><p>Self-hosted GitHub App. Multiple repos, webhook-driven, configurable concurrency.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x25cb;</div><h3>Structured output</h3><p>JSON for piping, markdown for docs, terminal table for quick scanning.</p></div>
-                <div class="feature-card"><div class="feature-icon">&#x25a3;</div><h3>Static analysis</h3><p>Auto-detects linters (ruff, mypy, eslint, tsc, bandit, gitleaks, go vet) and injects signals before AI review.</p></div>
+                <div class="feature-card"><div class="feature-icon">&#x25a3;</div><h3>Static analysis</h3><p>Auto-detects your linters (ruff, mypy, eslint, tsc, gitleaks, and more) and injects signals before AI review.</p></div>
             </div>
         </div>
     </section>
@@ -827,7 +716,7 @@
             <div class="cta-commands reveal">
                 <div class="cta-cmd"><span class="prompt">$</span> uv tool install git+https://github.com/fabioesposito/superseded</div>
                 <div class="cta-cmd"><span class="prompt">$</span> superseded review --diff HEAD~1..HEAD</div>
-                <div class="cta-cmd"><span class="prompt">$</span> SUPERSEDED_SERVER_URL=... superseded review --pr 123</div>
+                <div class="cta-cmd"><span class="prompt">$</span> SUPERSEDED_SERVER_URL=... SUPERSEDED_SERVER_KEY=... superseded review --pr 123</div>
             </div>
             <div class="cta-actions reveal">
                 <a href="https://github.com/fabioesposito/superseded#readme" class="btn btn-primary">Read the Docs</a>

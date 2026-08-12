@@ -85,7 +85,7 @@ Superseded injects context into every AI prompt so the model sees more than just
 | **File context** | ±20 lines around each changed hunk | Always on |
 | **Conventions** | `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `CONTRIBUTING.md`, `.editorconfig` | `conventions: false` / `--no-conventions` |
 | **Specs & plans** | Relevant `docs/superseded/specs/*.md` and `plans/*.md` matching changed files | `spec_retrieval: false` / `--no-specs` |
-| **Static analysis** | ruff, mypy, bandit, eslint, tsc, go vet, staticcheck, gitleaks | `static_analysis: false` / `--no-static` |
+| **Static analysis** | ruff, mypy, bandit, eslint, tsc, gofmt, go vet, staticcheck, gitleaks | `static_analysis: false` / `--no-static` |
 | **Usage retrieval** | Cross-file callers of changed symbols (via `rg`) | `usage_retrieval: false` / `--no-usage` |
 | **Graph retrieval** | Alternative to usage retrieval — callers via `code-review-graph` | `graph: false` / `--no-graph` |
 
