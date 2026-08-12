@@ -137,6 +137,49 @@ def test_poll_review_returns_result():
     assert result.findings[0].file == "a.py"
 
 
+def test_poll_review_emits_status_during_polling():
+    call_count = {"n": 0}
+    statuses: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        call_count["n"] += 1
+        if call_count["n"] < 2:
+            return httpx.Response(200, json={"status": "running", "result": None, "error": None})
+        return httpx.Response(
+            200,
+            json={
+                "status": "completed",
+                "result": ReviewResult(
+                    findings=[
+                        Finding(
+                            pass_name="security",
+                            severity="critical",
+                            file="a.py",
+                            line=1,
+                            title="t",
+                            description="d",
+                            suggestion="s",
+                        )
+                    ]
+                ).model_dump(mode="json"),
+                "error": None,
+            },
+        )
+
+    result = poll_review(
+        server_url="https://srv",
+        server_key="sk",
+        job_id="abc",
+        budget=10.0,
+        interval=0.0,
+        on_status=statuses.append,
+        client=_client_with(handler),
+    )
+    assert isinstance(result, ReviewResult)
+    assert len(statuses) >= 1
+    assert any("in progress" in s for s in statuses)
+
+
 def test_poll_review_completed_without_result_raises():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"status": "completed", "result": None, "error": None})

@@ -86,6 +86,7 @@ def poll_review(
     job_id: str,
     budget: float,
     interval: float = DEFAULT_POLL_INTERVAL,
+    on_status: Callable[[str], None] | None = None,
     client: httpx.Client | None = None,
 ) -> ReviewResult:
     """Poll GET {server_url}/review/jobs/{job_id} until terminal. Raises ServerReviewError."""
@@ -113,6 +114,8 @@ def poll_review(
                     raise ServerReviewError("unexpected result from server", exit_code=1) from err
             if status == "failed":
                 raise ServerReviewError(data.get("error") or "review failed", exit_code=1)
+            if on_status is not None:
+                on_status(f"Review in progress (status: {status})…")
             if time.monotonic() >= deadline:
                 raise ServerReviewError(
                     f"review timed out (job {job_id} did not complete within budget)",
@@ -158,5 +161,6 @@ def review_via_server(
         job_id=job_id,
         budget=poll_budget,
         interval=poll_interval,
+        on_status=on_status,
         client=own_client,
     )

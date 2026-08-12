@@ -1486,3 +1486,50 @@ async def test_run_task_records_failed_on_cancellation():
     assert status is not None
     assert status.status == "failed"
     assert status.error == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_run_task_cancel_after_completed_preserves_completed():
+    """A cancel landing after _process already recorded completed must not downgrade.
+
+    Regression: _run_task's CancelledError handler used to unconditionally record
+    "failed", and _record_job preserves prior fields, producing an inconsistent
+    JobStatus(status="failed", error="cancelled", result=<ReviewResult>). The user
+    saw a spurious exit-1 for a review that actually finished.
+    """
+    worker = ReviewWorker(
+        github=FakeGitHubApp(), repo_manager=FakeRepoManager(), provider=_make_provider()
+    )
+    job = ReviewJob(
+        installation_id=123, owner="o", repo="r", pr_number=1, head_sha="a", base_sha="b"
+    )
+    fake_result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="f.py",
+                line=1,
+                title="t",
+                description="d",
+                suggestion="s",
+            )
+        ]
+    )
+
+    async def process_then_cancel(_job):
+        # _process records completed normally...
+        worker._record_job(_job.job_id, "completed", result=fake_result)
+        # ...then a cancel lands during teardown before _run_task's finally.
+        raise asyncio.CancelledError
+
+    worker._process = process_then_cancel  # type: ignore[assignment]
+
+    task = asyncio.create_task(worker._run_task(job))
+    await task
+
+    status = worker.get_job_status(job.job_id)
+    assert status is not None
+    assert status.status == "completed"
+    assert status.result is fake_result
+    assert status.error is None

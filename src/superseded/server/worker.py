@@ -193,7 +193,9 @@ class ReviewWorker:
                     async with self._lock:
                         self._active_count -= 1
         except asyncio.CancelledError:
-            self._record_job(job.job_id, "failed", error="cancelled")
+            cur = self._jobs.get(job.job_id)
+            if cur is None or cur.status not in ("completed", "failed"):
+                self._record_job(job.job_id, "failed", error="cancelled")
             logger.info(
                 "review_cancelled",
                 extra={"repo": f"{job.owner}/{job.repo}", "pr": job.pr_number},

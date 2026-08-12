@@ -214,39 +214,55 @@ class JobStatus:
     completed_at: float | None = None
 ```
 
-New state on `ReviewWorker`, guarded by the existing `self._lock`:
+New state on `ReviewWorker`, **unlocked** (see rationale below):
 
 ```python
 self._jobs: dict[str, JobStatus] = {}
 ```
+
+The registry is intentionally not guarded by `self._lock`. It is touched only
+from the worker's single asyncio event loop — `enqueue`, `_run_task`, `_process`,
+and `_record_job` are all invoked on that one loop, and Python dict get/set are
+atomic under the GIL within a single thread. The status endpoint's
+`worker.get_job_status(job_id)` is a plain dict lookup with no await in between,
+so there is no interleaving point where a coroutine swap could observe a
+half-written entry. `_record_job`'s docstring documents this single-loop
+invariant.
+
+**This is a deliberate simplification that breaks under multi-worker uvicorn.**
+Running the server with `--workers N` spawns N processes, each with its own
+in-memory `_jobs` registry; a job enqueued by process A cannot be polled from
+process B (the poll sees `404`). The server must run with a single uvicorn worker
+for CLI polling to find the submitted job — see the deployment note in
+`README.md`.
 
 Lifecycle updates:
 
 - `enqueue(job)` records `JobStatus(job_id=job.job_id, status="queued")`
   before `queue.put_nowait(job)`. If the queue is full, no status is recorded.
 - `_run_task(job)` sets `status="running"` before awaiting `_process(job)`.
-- `_process(job)` is changed to **return** a triple
-  `(status, result, error)` where `status ∈ {"completed", "failed"}`,
-  `result` is the `ReviewResult` (or `None`), and `error` is a reason string
-  (or `None`). Today `_process` returns `None` and swallows its own
-  exceptions (it logs and updates the check-run to `"failure"` internally but
-  does not re-raise), so `_run_task` cannot detect failure from exceptions.
-  The explicit return triple is the registry's signal. On every internal
-  failure path in `_process` (token-fetch failure, check-run creation
-  failure, the broad `except Exception` around the review, and the
-  `--no-post` equivalents), it returns `("failed", None, "<reason>")` after
-  performing its existing check-run update.   `CancelledError` still
-  propagates and is recorded as `"failed"` with error `"cancelled"` by
-  `_run_task`'s `except asyncio.CancelledError` branch.
-- After `_process` returns (or raises `CancelledError`), `_run_task` writes
-  the terminal `JobStatus` (with `completed_at = time.time()`) under
-  `self._lock`.
+- `_process(job)` **records the terminal status itself** and returns `None`
+  (as it did before this feature). It calls
+  `self._record_job(job.job_id, "completed", result=result)` on success, and
+  `self._record_job(job.job_id, "failed", error=...)` on every internal failure
+  path (token-fetch failure, check-run creation failure, the broad
+  `except Exception` around the review, and the `--no-post` equivalents), after
+  performing its existing check-run update. `_run_task` therefore does not need
+  to infer status from `_process`'s return value or exceptions — the registry is
+  the signal, written from inside `_process`.   `CancelledError` still
+  propagates and is handled by `_run_task`'s `except asyncio.CancelledError`
+  branch, which records `"failed"` with error `"cancelled"` **only if the job is
+  not already terminal** (so a cancel landing just after `_process` recorded
+  `"completed"` does not downgrade it).
+- After `_process` returns (or raises `CancelledError`), the terminal
+  `JobStatus` (with `completed_at = time.time()`) is already in the registry,
+  written by `_process` (or by `_run_task`'s cancel branch).
 - On each registry insert, if `len(self._jobs) > 1000`, the oldest entries
   by `created_at` are evicted. Bounded memory.
 
-The status endpoint reads `self._jobs.get(job_id)` under `self._lock` and
-serializes `result` via the existing `ReviewResult` model (the same shape the
-local `format_json` consumes).
+The status endpoint reads `self._jobs.get(job_id)` (unlocked — single event
+loop, see above) and serializes `result` via the existing `ReviewResult` model
+(the same shape the local `format_json` consumes).
 
 ### `_run_review_for_job` refactor
 
@@ -334,6 +350,11 @@ were decided during implementation:
   file `server:` key or the `SUPERSEDED_SERVER_URL` env var prints a warning
   to stderr (so the user can force local review by unsetting it); passing
   `--server` explicitly prints none.
+- **Status line emitted per non-terminal poll response.** `poll_review` calls
+  its `on_status` callback once for every non-terminal (queued/running) poll
+  response with `Review in progress (status: …)`, in addition to the single
+  "Review enqueued" line emitted right after submit. This keeps the CLI from
+  being silent for the multi-minute poll.
 
 ## Testing
 

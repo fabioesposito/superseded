@@ -106,6 +106,10 @@ superseded review --server https://reviews.example.com --server-key ... --pr 123
 
 Precedence for both values: env var > CLI flag > `.superseded.yaml` (`server:` / `server_key:`).
 
+> **Deployment note:** the job registry is held in memory per process, so the
+> server must run with a single uvicorn worker (no `--workers N`) for CLI
+> polling to find the submitted job.
+
 ### GitHub Action
 
 The Action is a thin client: it POSTs the PR to a running Superseded server,
