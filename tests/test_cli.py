@@ -749,6 +749,29 @@ def test_serve_refuses_without_deepseek_key(monkeypatch, tmp_path):
     assert "SUPERSEDED_DEEPSEEK_API_KEY" in result.output
 
 
+def test_serve_requires_qwen_key_when_configured(monkeypatch, tmp_path):
+    """serve with provider: qwen must exit 2 if SUPERSEDED_QWEN_API_KEY is not set."""
+    import pathlib
+
+    pk = pathlib.Path(tmp_path / "key.pem")
+    pk.write_text("dummy")
+    monkeypatch.delenv("SUPERSEDED_QWEN_API_KEY", raising=False)
+    config = tmp_path / "server.yaml"
+    config.write_text(
+        f"app_id: 123456\nwebhook_secret: whs\nprivate_key_path: {pk}\nprovider: qwen\n"
+    )
+
+    from click.testing import CliRunner
+
+    from superseded.cli import cli
+
+    result = CliRunner().invoke(
+        cli, ["serve", "--config", str(config), "--host", "127.0.0.1", "--port", "0"]
+    )
+    assert result.exit_code == 2
+    assert "SUPERSEDED_QWEN_API_KEY" in result.output
+
+
 def test_verify_flag_passed_to_run_review(monkeypatch):
     """--no-verify flag is parsed and passed through to _run_review."""
     captured: dict = {}
@@ -787,5 +810,5 @@ def test_cli_provider_choices_include_all_providers():
     runner = CliRunner()
     result = runner.invoke(cli, ["review", "--help"])
     assert result.exit_code == 0
-    assert "deepseek, openai, anthropic" in result.output
+    assert "deepseek, openai, anthropic, qwen" in " ".join(result.output.split())
     assert "medium" in result.output  # widened effort choice

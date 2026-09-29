@@ -119,6 +119,7 @@ Progressive review needs `memory: true` and a PR number. It is **skipped** when 
 superseded review --pr 123 --provider deepseek
 superseded review --pr 123 --provider openai
 superseded review --pr 123 --provider anthropic
+superseded review --pr 123 --provider qwen
 
 # Explicit model
 superseded review --pr 123 --provider deepseek --model deepseek-v4-flash
@@ -129,11 +130,12 @@ export SUPERSEDED_MODEL=deepseek-v4-flash
 superseded review --pr 123
 ```
 
-`--provider` accepts `deepseek` (default), `openai`, or `anthropic`. Each
-provider needs its own API key — set `SUPERSEDED_DEEPSEEK_API_KEY`
-(platform.deepseek.com), `SUPERSEDED_OPENAI_API_KEY` (platform.openai.com), or
-`SUPERSEDED_ANTHROPIC_API_KEY` (console.anthropic.com) for the provider you
-select. `SUPERSEDED_AGENT` still works as a deprecated alias for
+`--provider` accepts `deepseek` (default), `openai`, `anthropic`, or `qwen`.
+Each provider needs its own API key — set `SUPERSEDED_DEEPSEEK_API_KEY`
+(platform.deepseek.com), `SUPERSEDED_OPENAI_API_KEY` (platform.openai.com),
+`SUPERSEDED_ANTHROPIC_API_KEY` (console.anthropic.com), or
+`SUPERSEDED_QWEN_API_KEY` (Alibaba Cloud Model Studio / DashScope) for the
+provider you select. `SUPERSEDED_AGENT` still works as a deprecated alias for
 `SUPERSEDED_PROVIDER`.
 
 Default models:
@@ -143,6 +145,7 @@ Default models:
 | `deepseek` | `deepseek-v4-flash` |
 | `openai` | `gpt-5.6-terra` |
 | `anthropic` | `claude-sonnet-5` |
+| `qwen` | `qwen3.8-max` |
 
 Precedence: **env vars > CLI flags > config file**.
 

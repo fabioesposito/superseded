@@ -4,11 +4,13 @@ from superseded.providers.anthropic import AnthropicProvider
 from superseded.providers.base import Provider, ProviderConfigError, ProviderResponse
 from superseded.providers.deepseek import DeepSeekProvider
 from superseded.providers.openai import OpenAIProvider
+from superseded.providers.qwen import QwenProvider
 
 PROVIDER_MAP: dict[str, type[Provider]] = {
     "deepseek": DeepSeekProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
+    "qwen": QwenProvider,
 }
 
 __all__ = [
@@ -19,4 +21,5 @@ __all__ = [
     "Provider",
     "ProviderConfigError",
     "ProviderResponse",
+    "QwenProvider",
 ]

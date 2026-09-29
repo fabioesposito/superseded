@@ -40,6 +40,7 @@ from superseded.providers import (
     OpenAIProvider,
     Provider,
     ProviderConfigError,
+    QwenProvider,
 )
 from superseded.review.engine import ReviewEngine
 from superseded.server.client import ServerReviewError, review_via_server
@@ -133,6 +134,8 @@ def _build_server_provider(config: ServerConfig) -> Provider:
         return OpenAIProvider(api_key=config.openai_api_key)
     if config.provider == "anthropic":
         return AnthropicProvider(api_key=config.anthropic_api_key)
+    if config.provider == "qwen":
+        return QwenProvider(api_key=config.qwen_api_key)
     return DeepSeekProvider(api_key=config.deepseek_api_key)
 
 
@@ -286,7 +289,7 @@ def cli(ctx: click.Context, log_format: str | None, log_level: str | None) -> No
 @cli.command()
 @click.option("--pr", type=int, help="PR number to review")
 @click.option("--diff", "diff_range", help="Git diff range (e.g. HEAD~3..HEAD)")
-@click.option("--provider", default=None, help="Model provider (deepseek, openai, anthropic)")
+@click.option("--provider", default=None, help="Model provider (deepseek, openai, anthropic, qwen)")
 @click.option("--model", default=None, help="Model to use")
 @click.option(
     "--reasoning-effort",
@@ -924,13 +927,15 @@ def _run_init(force: bool, config_path: Path | None) -> None:
         "deepseek": bool(os.environ.get("SUPERSEDED_DEEPSEEK_API_KEY")),
         "openai": bool(os.environ.get("SUPERSEDED_OPENAI_API_KEY")),
         "anthropic": bool(os.environ.get("SUPERSEDED_ANTHROPIC_API_KEY")),
+        "qwen": bool(os.environ.get("SUPERSEDED_QWEN_API_KEY")),
     }
     if any(key_status.values()):
         _status("API keys: " + ", ".join(f"{k} {'✓' if v else '✗'}" for k, v in key_status.items()))
     else:
         _status(
             "API keys: none set — set one of SUPERSEDED_DEEPSEEK_API_KEY, "
-            "SUPERSEDED_OPENAI_API_KEY, SUPERSEDED_ANTHROPIC_API_KEY."
+            "SUPERSEDED_OPENAI_API_KEY, SUPERSEDED_ANTHROPIC_API_KEY, "
+            "SUPERSEDED_QWEN_API_KEY."
         )
 
     server_url = os.environ.get("SUPERSEDED_SERVER_URL")
@@ -1102,6 +1107,7 @@ def serve(ctx: click.Context, port: int | None, host: str | None, config_path: s
         "deepseek": "SUPERSEDED_DEEPSEEK_API_KEY",
         "openai": "SUPERSEDED_OPENAI_API_KEY",
         "anthropic": "SUPERSEDED_ANTHROPIC_API_KEY",
+        "qwen": "SUPERSEDED_QWEN_API_KEY",
     }
 
     if config.provider not in key_env_by_provider:

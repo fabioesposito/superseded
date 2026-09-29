@@ -1,6 +1,6 @@
 # Superseded
 
-Reviews that supersede themselves. Runs 5 parallel passes (security, correctness, performance, style, architecture) with the DeepSeek, OpenAI, or Anthropic API. Posts findings as PR comments. Gets smarter every time you dismiss a finding.
+Reviews that supersede themselves. Runs 5 parallel passes (security, correctness, performance, style, architecture) with the DeepSeek, OpenAI, Anthropic, or Qwen API. Posts findings as PR comments. Gets smarter every time you dismiss a finding.
 
 ## Setup (30 seconds)
 
@@ -21,13 +21,15 @@ cd superseded && uv sync && uv tool install .
 | DeepSeek | `SUPERSEDED_DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
 | OpenAI | `SUPERSEDED_OPENAI_API_KEY` | `gpt-5.6-terra` |
 | Anthropic | `SUPERSEDED_ANTHROPIC_API_KEY` | `claude-sonnet-5` |
+| Qwen | `SUPERSEDED_QWEN_API_KEY` | `qwen3.8-max` |
 
-Then `superseded review --provider openai` (or `anthropic`). Get keys at
-platform.deepseek.com, platform.openai.com, and console.anthropic.com.
+Then `superseded review --provider openai` (or `anthropic`, `qwen`). Get keys at
+platform.deepseek.com, platform.openai.com, console.anthropic.com, and the
+Alibaba Cloud Model Studio console (Qwen).
 
 **Prerequisites:**
 - Python 3.14+
-- A provider API key (one of `SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`)
+- A provider API key (one of `SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`, `SUPERSEDED_QWEN_API_KEY`)
 - GitHub CLI (`gh`) authenticated: `gh auth login`
 
 See `MIGRATION.md` if you're upgrading from v0.5.x.
@@ -53,6 +55,7 @@ superseded review --pr 123
 # Review with a different provider
 superseded review --pr 123 --provider openai
 superseded review --pr 123 --provider anthropic
+superseded review --pr 123 --provider qwen
 
 # Review a local diff
 superseded review --diff HEAD~3..HEAD
@@ -140,7 +143,7 @@ jobs:
           # SUPERSEDED_SERVER_KEY: ${{ secrets.SUPERSEDED_SERVER_KEY }}
 ```
 
-Set `server-url`/`server-key` (or the `SUPERSEDED_SERVER_URL`/`SUPERSEDED_SERVER_KEY` env vars) and install the App on the repo. The previous `agent`, `model`, `anthropic_api_key`, and `openai_api_key` inputs are removed — the server owns provider/model/credentials. The server must have the API key matching its `provider:` (`SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, or `SUPERSEDED_ANTHROPIC_API_KEY`) set in its environment; the Action does not take (and should not be given) the key.
+Set `server-url`/`server-key` (or the `SUPERSEDED_SERVER_URL`/`SUPERSEDED_SERVER_KEY` env vars) and install the App on the repo. The previous `agent`, `model`, `anthropic_api_key`, and `openai_api_key` inputs are removed — the server owns provider/model/credentials. The server must have the API key matching its `provider:` (`SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`, or `SUPERSEDED_QWEN_API_KEY`) set in its environment; the Action does not take (and should not be given) the key.
 
 ### Server Mode (Self-Hosted)
 
@@ -211,7 +214,7 @@ deepseek_api_key: sk-...   # or set SUPERSEDED_DEEPSEEK_API_KEY
 | `SUPERSEDED_BEHIND_PROXY` | Set `1` when TLS terminates at an upstream reverse proxy (allows binding `0.0.0.0` without in-process TLS) |
 | `SUPERSEDED_DATABASE_URL` | `postgresql://...` for Postgres; omit for SQLite |
 | `SUPERSEDED_SERVER_MODEL` | Override each repo's default model |
-| `SUPERSEDED_DEEPSEEK_API_KEY` | DeepSeek API key — required when `provider: deepseek` (the server refuses to start without the key matching its `provider:`; use `SUPERSEDED_OPENAI_API_KEY` or `SUPERSEDED_ANTHROPIC_API_KEY` for the other providers) |
+| `SUPERSEDED_DEEPSEEK_API_KEY` | DeepSeek API key — required when `provider: deepseek` (the server refuses to start without the key matching its `provider:`; use `SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`, or `SUPERSEDED_QWEN_API_KEY` for the other providers) |
 
 On startup, `superseded serve` runs pending Alembic migrations against the configured database (SQLite or Postgres) before accepting requests. To run or inspect migrations ahead of a deploy instead, run `superseded migrate --database-url ...` (honors `SUPERSEDED_DATABASE_URL`). Pre-existing databases are auto-adopted on first run.
 
@@ -236,7 +239,7 @@ Dismissed findings are injected into future review prompts so the tool avoids re
 - **Multi-pass review** — 5 specialized passes with focused prompts (security, correctness, performance, style, architecture)
 - **Feedback memory** — SQLite store tracks dismissed findings and their reasoning. Future reviews learn from your team's decisions
 - **GitHub integration** — Post findings as inline PR review comments. Critical issues request changes, suggestions post as comments
-- **Pluggable providers** — Direct DeepSeek, OpenAI, or Anthropic API calls. Choose per-review or configure as default
+- **Pluggable providers** — Direct DeepSeek, OpenAI, Anthropic, or Qwen API calls. Choose per-review or configure as default
 - **Structured output** — JSON for piping, markdown for docs, terminal table for quick scanning
 - **CI-native** — Composite GitHub Action hands each PR to your review server; no agents or secrets in CI
 - **Server mode** — Self-hosted GitHub App. Multiple repos, webhook-driven, configurable concurrency
@@ -251,6 +254,7 @@ Dismissed findings are injected into future review prompts so the tool avoids re
 | **deepseek** | `SUPERSEDED_DEEPSEEK_API_KEY` |
 | **openai** | `SUPERSEDED_OPENAI_API_KEY` |
 | **anthropic** | `SUPERSEDED_ANTHROPIC_API_KEY` |
+| **qwen** | `SUPERSEDED_QWEN_API_KEY` |
 
 ## Configuration
 
@@ -281,6 +285,7 @@ Selection precedence for `provider`/`model`: **env vars > CLI flags > config**:
   - `SUPERSEDED_DEEPSEEK_API_KEY` — platform.deepseek.com
   - `SUPERSEDED_OPENAI_API_KEY` — platform.openai.com
   - `SUPERSEDED_ANTHROPIC_API_KEY` — console.anthropic.com
+  - `SUPERSEDED_QWEN_API_KEY` — Alibaba Cloud Model Studio (DashScope)
 - **git** (required) — comes standard on most systems
 - **GitHub CLI (`gh`)** (required for `--pr` and `--post`): `gh auth login` must be authenticated
 - **gitleaks** (optional) — static analysis for secrets/hardcoded keys; runs automatically when on PATH. Install: `brew install gitleaks` or https://github.com/gitleaks/gitleaks

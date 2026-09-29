@@ -576,11 +576,12 @@
             </div>
             <p class="reveal" style="opacity:.6;font-size:.85rem;margin-top:.5rem">Requires Python 3.14+ and one provider API key.</p>
             <div class="reveal" style="max-width:640px;margin:26px auto 0;text-align:left">
-                <p style="opacity:.6;font-size:.85rem;margin-bottom:10px">Then set one provider key &mdash; <code style="font-family:var(--font-mono);font-size:.85em">superseded review --provider openai</code> (or <code style="font-family:var(--font-mono);font-size:.85em">anthropic</code>) switches provider:</p>
+                <p style="opacity:.6;font-size:.85rem;margin-bottom:10px">Then set one provider key &mdash; <code style="font-family:var(--font-mono);font-size:.85em">superseded review --provider openai</code> (or <code style="font-family:var(--font-mono);font-size:.85em">anthropic</code>, <code style="font-family:var(--font-mono);font-size:.85em">qwen</code>) switches provider:</p>
                 <div style="display:flex;flex-direction:column;gap:8px;font-family:var(--font-mono);font-size:13px;color:var(--text-secondary)">
                     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px"><span><span style="color:var(--green)">$</span> export SUPERSEDED_DEEPSEEK_API_KEY=sk-...</span><span style="color:var(--text-tertiary);font-size:12px">deepseek</span></div>
                     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px"><span><span style="color:var(--green)">$</span> export SUPERSEDED_OPENAI_API_KEY=sk-...</span><span style="color:var(--text-tertiary);font-size:12px">openai</span></div>
                     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px"><span><span style="color:var(--green)">$</span> export SUPERSEDED_ANTHROPIC_API_KEY=sk-ant-...</span><span style="color:var(--text-tertiary);font-size:12px">anthropic</span></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px"><span><span style="color:var(--green)">$</span> export SUPERSEDED_QWEN_API_KEY=sk-...</span><span style="color:var(--text-tertiary);font-size:12px">qwen</span></div>
                 </div>
             </div>
             <div class="quality-curve reveal">
@@ -700,7 +701,7 @@
             <p class="section-sub reveal">CLI for local dev. GitHub Actions for CI. Server mode for multi-repo. Memory that improves over time.</p>
             <div class="features-grid reveal">
                 <div class="feature-card"><div class="feature-icon">&#x2666;</div><h3>GitHub integration</h3><p>Post findings as inline PR review comments. Critical or important issues request changes. Uses gh CLI.</p></div>
-                <div class="feature-card"><div class="feature-icon">&#x2663;</div><h3>Provider choice</h3><p>DeepSeek, OpenAI, or Anthropic — one API key, one <code>--provider</code> flag. No CLI agents or sandboxes.</p></div>
+                <div class="feature-card"><div class="feature-icon">&#x2663;</div><h3>Provider choice</h3><p>DeepSeek, OpenAI, Anthropic, or Qwen — one API key, one <code>--provider</code> flag. No CLI agents or sandboxes.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x2665;</div><h3>GitHub Action</h3><p>Composite Action POSTs to your review server. No agents or secrets in CI &mdash; the server does the work.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x2660;</div><h3>Server mode</h3><p>Self-hosted GitHub App. Multiple repos, webhook-driven, configurable concurrency.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x25cb;</div><h3>Structured output</h3><p>JSON for piping, markdown for docs, terminal table for quick scanning.</p></div>

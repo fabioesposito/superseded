@@ -97,6 +97,14 @@ def test_engine_selects_provider(monkeypatch):
     assert isinstance(engine.provider, DeepSeekProvider)
 
 
+def test_engine_selects_qwen_provider(monkeypatch):
+    from superseded.providers import QwenProvider
+
+    monkeypatch.setenv("SUPERSEDED_QWEN_API_KEY", "test-key")
+    engine = ReviewEngine.select("qwen", model=None)
+    assert isinstance(engine.provider, QwenProvider)
+
+
 def test_engine_select_rejects_unknown_provider():
     import pytest
 

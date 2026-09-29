@@ -37,6 +37,7 @@ def test_init_reports_no_api_keys(tmp_path, monkeypatch):
     monkeypatch.delenv("SUPERSEDED_DEEPSEEK_API_KEY", raising=False)
     monkeypatch.delenv("SUPERSEDED_OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("SUPERSEDED_ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("SUPERSEDED_QWEN_API_KEY", raising=False)
     target = tmp_path / ".superseded.yaml"
     runner = CliRunner()
     result = runner.invoke(cli, ["init", "--config", str(target)])
@@ -48,12 +49,23 @@ def test_init_reports_configured_keys(tmp_path, monkeypatch):
     monkeypatch.setenv("SUPERSEDED_DEEPSEEK_API_KEY", "sk-test")
     monkeypatch.delenv("SUPERSEDED_OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("SUPERSEDED_ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("SUPERSEDED_QWEN_API_KEY", raising=False)
     target = tmp_path / ".superseded.yaml"
     runner = CliRunner()
     result = runner.invoke(cli, ["init", "--config", str(target)])
     assert result.exit_code == 0
     assert "API keys: deepseek ✓" in result.output
     assert "openai ✗" in result.output
+
+
+def test_init_reports_qwen_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("SUPERSEDED_DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setenv("SUPERSEDED_QWEN_API_KEY", "sk-test")
+    target = tmp_path / ".superseded.yaml"
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--config", str(target)])
+    assert result.exit_code == 0
+    assert "qwen ✓" in result.output
 
 
 def test_init_reports_gh_presence(tmp_path, monkeypatch):

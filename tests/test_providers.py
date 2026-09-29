@@ -23,6 +23,12 @@ from superseded.providers.openai import (
 )
 from superseded.providers.openai_compat import OpenAICompatProvider
 from superseded.providers.parsing import parse_findings_json
+from superseded.providers.qwen import (
+    QWEN_API_KEY_ENV,
+    QWEN_DEFAULT_BASE_URL,
+    QWEN_DEFAULT_MODEL,
+    QwenProvider,
+)
 
 
 def test_provider_response_defaults():
@@ -382,6 +388,133 @@ def test_deepseek_init_forwards_base_url_and_retries(monkeypatch):
     assert captured["api_key"] == "sk-test"
 
 
+def test_qwen_constants():
+    assert QWEN_API_KEY_ENV == "SUPERSEDED_QWEN_API_KEY"
+    assert QWEN_DEFAULT_BASE_URL == "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    assert QWEN_DEFAULT_MODEL == "qwen3.8-max"
+
+
+def test_qwen_provider_name():
+    p = QwenProvider(api_key="sk-test")
+    assert p.name == "qwen"
+
+
+def test_qwen_provider_uses_env_when_no_arg(monkeypatch):
+    monkeypatch.setenv(QWEN_API_KEY_ENV, "sk-from-env")
+    p = QwenProvider()
+    assert p.name == "qwen"  # construction succeeded
+
+
+def test_qwen_provider_raises_when_no_key(monkeypatch):
+    monkeypatch.delenv(QWEN_API_KEY_ENV, raising=False)
+    with pytest.raises(ProviderConfigError, match="No qwen API key"):
+        QwenProvider()
+
+
+def test_qwen_complete_returns_content(monkeypatch):
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            captured["init_kwargs"] = kw
+
+        @property
+        def chat(self):
+            return self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            captured["create_kwargs"] = kw
+            return _fake_completion(
+                content='[{"severity": "critical"}]',
+                prompt_tokens=42,
+                completion_tokens=7,
+                model="qwen3.8-max",
+            )
+
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
+    p = QwenProvider(api_key="sk-test")
+    resp = p.complete("the prompt", model="qwen3.8-max", timeout=120.0, reasoning_effort="max")
+    assert resp.content == '[{"severity": "critical"}]'
+    assert resp.prompt_tokens == 42
+    assert resp.completion_tokens == 7
+    assert resp.model == "qwen3.8-max"
+    assert captured["create_kwargs"]["messages"] == [{"role": "user", "content": "the prompt"}]
+    assert captured["create_kwargs"]["timeout"] == 120.0
+    assert captured["create_kwargs"]["model"] == "qwen3.8-max"
+    assert captured["create_kwargs"]["reasoning_effort"] == "max"
+
+
+def test_qwen_complete_omits_reasoning_effort_when_none(monkeypatch):
+    """When reasoning_effort is None, the kwarg is not sent to the API."""
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            pass
+
+        @property
+        def chat(self):
+            return self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            captured.update(kw)
+            return _fake_completion()
+
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
+    p = QwenProvider(api_key="sk-test")
+    p.complete("p", reasoning_effort=None)
+    assert "reasoning_effort" not in captured
+
+
+def test_qwen_complete_uses_default_model_when_none(monkeypatch):
+    class FakeClient:
+        def __init__(self, **kw):
+            pass
+
+        @property
+        def chat(self):
+            return self
+
+        @property
+        def completions(self):
+            return self
+
+        def create(self, **kw):
+            assert kw["model"] == QWEN_DEFAULT_MODEL
+            return _fake_completion()
+
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
+    p = QwenProvider(api_key="sk-test")
+    p.complete("p")
+
+
+def test_qwen_init_forwards_base_url_and_retries(monkeypatch):
+    """The OpenAI client must be configured with max_retries and the DashScope base_url."""
+    captured = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            captured.update(kw)
+
+    monkeypatch.setattr("superseded.providers.openai_compat.OpenAI", FakeClient)
+    QwenProvider(api_key="sk-test")
+    assert captured["base_url"] == QWEN_DEFAULT_BASE_URL
+    assert captured["max_retries"] == 2
+    assert captured["api_key"] == "sk-test"
+
+
+def test_effort_map_qwen():
+    assert EFFORT_MAP["qwen"] == {"low": "low", "medium": "medium", "high": "high", "max": "max"}
+
+
 def test_provider_map_exports():
     from superseded.providers import (  # noqa: F401
         PROVIDER_MAP,
@@ -581,9 +714,10 @@ def test_anthropic_complete_maps_effort(monkeypatch):
     assert captured["extra_body"]["effort"] == "xhigh"
 
 
-def test_provider_map_has_three_providers():
+def test_provider_map_has_four_providers():
     from superseded.providers import PROVIDER_MAP
 
-    assert set(PROVIDER_MAP) == {"deepseek", "openai", "anthropic"}
+    assert set(PROVIDER_MAP) == {"deepseek", "openai", "anthropic", "qwen"}
     assert PROVIDER_MAP["openai"] is OpenAIProvider
     assert PROVIDER_MAP["anthropic"] is AnthropicProvider
+    assert PROVIDER_MAP["qwen"] is QwenProvider

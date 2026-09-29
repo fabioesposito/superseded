@@ -7,6 +7,7 @@ EFFORT_MAP: dict[str, dict[str, str]] = {
     "deepseek": {"low": "low", "medium": "high", "high": "high", "max": "max"},
     "openai": {"low": "low", "medium": "medium", "high": "high", "max": "max"},
     "anthropic": {"low": "low", "medium": "medium", "high": "high", "max": "xhigh"},
+    "qwen": {"low": "low", "medium": "medium", "high": "high", "max": "max"},
 }
 
 

@@ -31,6 +31,7 @@ class ServerConfig(BaseModel):
     deepseek_api_key: str | None = None
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
+    qwen_api_key: str | None = None
     provider: str = "deepseek"
 
     @property
@@ -165,6 +166,10 @@ class ServerConfig(BaseModel):
         anthropic_api_key = os.environ.get("SUPERSEDED_ANTHROPIC_API_KEY")
         if anthropic_api_key:
             kwargs["anthropic_api_key"] = anthropic_api_key
+
+        qwen_api_key = os.environ.get("SUPERSEDED_QWEN_API_KEY")
+        if qwen_api_key:
+            kwargs["qwen_api_key"] = qwen_api_key
 
         return cls(**kwargs)
 
