@@ -1,135 +1,141 @@
 - name: sql-injection
+  passes: [security]
   diff: |
     diff --git a/app.py b/app.py
+    index 0000000..0000000 100644
     --- a/app.py
     +++ b/app.py
-    @@ -10,6 +10,8 @@ def get_user():
+    @@ -1,5 +1,5 @@
+     def get_user():
          user_id = request.args.get("id")
+    -    query = "SELECT * FROM users WHERE id = ?"
     +    query = f"SELECT * FROM users WHERE id = {user_id}"
-    +    result = db.execute(query)
+         result = db.execute(query, (user_id,))
          return result.fetchone()
   files:
     app.py: |
-      import db
-      from flask import request
-
       def get_user():
           user_id = request.args.get("id")
           query = f"SELECT * FROM users WHERE id = {user_id}"
-          result = db.execute(query)
+          result = db.execute(query, (user_id,))
           return result.fetchone()
   expected:
     - file: app.py
-      line: 7
+      line: 3
       title_contains: SQL injection
       severity: critical
 
 - name: command-injection
+  passes: [security]
   diff: |
     diff --git a/report.py b/report.py
+    index 0000000..0000000 100644
     --- a/report.py
     +++ b/report.py
-    @@ -4,6 +4,8 @@ def export_report(fmt):
+    @@ -1,4 +1,4 @@
+    -import subprocess
+    +import os
+     def export_report():
          name = request.args.get("name")
-    +    cmd = f"pdflatex {name}.tex"
-    +    os.system(cmd)
-         return send_file(f"{name}.pdf")
+    -    subprocess.run(["pdflatex", name + ".tex"])
+    +    os.system(f"pdflatex {name}.tex")
   files:
     report.py: |
       import os
-      from flask import request, send_file
-
-      def export_report(fmt):
+      def export_report():
           name = request.args.get("name")
-          cmd = f"pdflatex {name}.tex"
-          os.system(cmd)
-          return send_file(f"{name}.pdf")
+          os.system(f"pdflatex {name}.tex")
   expected:
     - file: report.py
-      line: 6
+      line: 4
       title_contains: command injection
       severity: critical
 
 - name: hardcoded-secret
+  passes: [security]
   diff: |
     diff --git a/config.py b/config.py
+    index 0000000..0000000 100644
     --- a/config.py
     +++ b/config.py
-    @@ -1,4 +1,6 @@
+    @@ -1,4 +1,4 @@
      import os
+    -API_KEY = os.environ.get("API_KEY")
     +API_KEY = "sk-4f3a9c1e8b2d7f0a5c6e9d1b3a4f8c2e"
-    +
      def load():
-         return os.environ.get("API_KEY", API_KEY)
+         return API_KEY
   files:
     config.py: |
       import os
-
       API_KEY = "sk-4f3a9c1e8b2d7f0a5c6e9d1b3a4f8c2e"
-
       def load():
-          return os.environ.get("API_KEY", API_KEY)
+          return API_KEY
   expected:
     - file: config.py
-      line: 3
+      line: 2
       title_contains: hardcoded secret
       severity: critical
 
 - name: unsafe-deserialization
+  passes: [security]
   diff: |
     diff --git a/cache.py b/cache.py
+    index 0000000..0000000 100644
     --- a/cache.py
     +++ b/cache.py
-    @@ -6,6 +6,8 @@ def load_entry(key):
+    @@ -1,4 +1,4 @@
+    -import json
+    +import pickle
+     def load_entry(key):
          blob = store.get(key)
-    +    value = pickle.loads(blob)
-    +    return value
-         return json.loads(blob)
+    -    return json.loads(blob)
+    +    return pickle.loads(blob)
   files:
     cache.py: |
       import pickle
-      import json
-
       def load_entry(key):
           blob = store.get(key)
-          value = pickle.loads(blob)
-          return value
+          return pickle.loads(blob)
   expected:
     - file: cache.py
-      line: 6
+      line: 4
       title_contains: deserialization
       severity: critical
 
 - name: path-traversal
+  passes: [security]
   diff: |
     diff --git a/file_server.py b/file_server.py
+    index 0000000..0000000 100644
     --- a/file_server.py
     +++ b/file_server.py
-    @@ -3,6 +3,8 @@ def serve(path):
+    @@ -1,4 +1,4 @@
+     import os
+     def serve(path):
          base = "/srv/www"
-    +    full = os.path.join(base, path)
-    +    return open(full).read()
-         return open(os.path.join(base, os.path.basename(path))).read()
+    -    return open(os.path.join(base, os.path.basename(path))).read()
+    +    return open(os.path.join(base, path)).read()
   files:
     file_server.py: |
       import os
-
       def serve(path):
           base = "/srv/www"
-          full = os.path.join(base, path)
-          return open(full).read()
+          return open(os.path.join(base, path)).read()
   expected:
     - file: file_server.py
-      line: 5
+      line: 4
       title_contains: path traversal
       severity: critical
 
 - name: off-by-one
+  passes: [correctness]
   diff: |
     diff --git a/batch.py b/batch.py
+    index 0000000..0000000 100644
     --- a/batch.py
     +++ b/batch.py
-    @@ -8,6 +8,7 @@ def process_all(items):
+    @@ -1,6 +1,6 @@
+     def process_all(items):
          results = []
     -    for i in range(len(items)):
     +    for i in range(len(items) + 1):
@@ -149,21 +155,24 @@
       severity: important
 
 - name: null-dereference
+  passes: [correctness]
   diff: |
     diff --git a/account.py b/account.py
+    index 0000000..0000000 100644
     --- a/account.py
     +++ b/account.py
-    @@ -12,6 +12,8 @@ def display_name(user_id):
+    @@ -1,4 +1,4 @@
+     def display_name(user_id):
          user = repository.find(user_id)
-    +    return user.name.upper()
-    -    if user is None:
-    -        return "Anonymous"
-    -    return user.name.upper()
+    -    name = user.name if user else "Anonymous"
+    +    name = user.name
+         return name
   files:
     account.py: |
       def display_name(user_id):
           user = repository.find(user_id)
-          return user.name.upper()
+          name = user.name
+          return name
   expected:
     - file: account.py
       line: 3
@@ -171,22 +180,26 @@
       severity: important
 
 - name: swallowed-exception
+  passes: [correctness]
   diff: |
     diff --git a/worker.py b/worker.py
+    index 0000000..0000000 100644
     --- a/worker.py
     +++ b/worker.py
-    @@ -5,6 +5,9 @@ def run_job(job):
+    @@ -1,7 +1,7 @@
+     import logging
+     logger = logging.getLogger(__name__)
+     def run_job(job):
          try:
              job.execute()
-    +    except Exception:
-    +        pass
     -    except JobError:
     -        logger.error("job failed", exc_info=True)
+    +    except Exception:
+    +        pass
   files:
     worker.py: |
       import logging
       logger = logging.getLogger(__name__)
-
       def run_job(job):
           try:
               job.execute()
@@ -194,21 +207,23 @@
               pass
   expected:
     - file: worker.py
-      line: 7
+      line: 6
       title_contains: swallowed exception
       severity: important
 
 - name: wrong-comparison
+  passes: [correctness]
   diff: |
     diff --git a/payments.py b/payments.py
+    index 0000000..0000000 100644
     --- a/payments.py
     +++ b/payments.py
-    @@ -14,6 +14,8 @@ def is_authorized(response):
+    @@ -1,6 +1,6 @@
+     def is_authorized(response):
          status = response.get("status")
-    +    if status == 200:
-    +        return True
     -    if status == "200":
-    -        return True
+    +    if status == 200:
+             return True
          return False
   files:
     payments.py: |
@@ -224,35 +239,41 @@
       severity: important
 
 - name: race-condition
+  passes: [correctness]
   diff: |
     diff --git a/session.py b/session.py
+    index 0000000..0000000 100644
     --- a/session.py
     +++ b/session.py
-    @@ -6,6 +6,8 @@ def ensure_dir(path):
+    @@ -1,3 +1,4 @@
+     import os
+     def ensure_dir(path):
+    -    os.makedirs(path, exist_ok=True)
     +    if not os.path.exists(path):
     +        os.makedirs(path)
-    -    os.makedirs(path, exist_ok=True)
   files:
     session.py: |
       import os
-
       def ensure_dir(path):
           if not os.path.exists(path):
               os.makedirs(path)
   expected:
     - file: session.py
-      line: 4
+      line: 3
       title_contains: race condition
       severity: important
 
 - name: n-plus-one-query
+  passes: [performance]
   diff: |
     diff --git a/orders.py b/orders.py
+    index 0000000..0000000 100644
     --- a/orders.py
     +++ b/orders.py
-    @@ -8,6 +8,8 @@ def list_orders():
+    @@ -1,3 +1,6 @@
+     def list_orders():
          orders = db.query("SELECT * FROM orders")
-         for order in orders:
+    +    for order in orders:
     +        customer = db.query(f"SELECT * FROM customers WHERE id = {order['customer_id']}")
     +        order["customer_name"] = customer[0]["name"]
          return orders
@@ -271,17 +292,21 @@
       severity: suggestion
 
 - name: quadratic-loop
+  passes: [performance]
   diff: |
     diff --git a/dedupe.py b/dedupe.py
+    index 0000000..0000000 100644
     --- a/dedupe.py
     +++ b/dedupe.py
-    @@ -4,6 +4,8 @@ def find_duplicates(items):
-         dups = []
+    @@ -1,2 +1,7 @@
+     def find_duplicates(items):
+    -    return list(set(items))
+    +    dups = []
     +    for i in range(len(items)):
     +        for j in range(len(items)):
     +            if i != j and items[i] == items[j]:
     +                dups.append(items[i])
-         return dups
+    +    return dups
   files:
     dedupe.py: |
       def find_duplicates(items):
@@ -293,43 +318,48 @@
           return dups
   expected:
     - file: dedupe.py
-      line: 4
+      line: 3
       title_contains: quadratic
       severity: suggestion
 
 - name: blocking-io-in-async
+  passes: [performance]
   diff: |
     diff --git a/handler.py b/handler.py
+    index 0000000..0000000 100644
     --- a/handler.py
     +++ b/handler.py
-    @@ -5,6 +5,8 @@ async def refresh():
+    @@ -1,4 +1,5 @@
+     import time
+     async def refresh():
          data = await client.fetch(url)
     +    time.sleep(3)
-    +    return data
          return data
   files:
     handler.py: |
       import time
-
       async def refresh():
           data = await client.fetch(url)
           time.sleep(3)
           return data
   expected:
     - file: handler.py
-      line: 5
+      line: 4
       title_contains: blocking
       severity: suggestion
 
 - name: unnecessary-copy
+  passes: [performance]
   diff: |
     diff --git a/normalize.py b/normalize.py
+    index 0000000..0000000 100644
     --- a/normalize.py
     +++ b/normalize.py
-    @@ -3,6 +3,8 @@ def normalize(values):
+    @@ -1,2 +1,3 @@
+     def normalize(values):
+    -    return [v.strip() for v in values]
     +    copied = list(values)
     +    return [v.strip() for v in copied]
-    -    return [v.strip() for v in values]
   files:
     normalize.py: |
       def normalize(values):
@@ -337,68 +367,71 @@
           return [v.strip() for v in copied]
   expected:
     - file: normalize.py
-      line: 3
+      line: 2
       title_contains: unnecessary copy
       severity: nit
 
 - name: missing-index
+  passes: [performance]
   diff: |
     diff --git a/users.py b/users.py
+    index 0000000..0000000 100644
     --- a/users.py
     +++ b/users.py
-    @@ -5,6 +5,8 @@ def find_by_email(email):
-    +    return db.query(f"SELECT * FROM users WHERE email = '{email}'")
+    @@ -1,2 +1,2 @@
+     def find_by_email(email):
     -    return db.query("SELECT * FROM users LIMIT 1")
+    +    return db.query(f"SELECT * FROM users WHERE email = '{email}'")
   files:
     users.py: |
       def find_by_email(email):
           return db.query(f"SELECT * FROM users WHERE email = '{email}'")
   expected:
     - file: users.py
-      line: 3
-      title_contains: index
+      line: 2
+      title_contains: missing index
       severity: suggestion
 
 - name: dead-code
+  passes: [style]
   diff: |
     diff --git a/legacy.py b/legacy.py
+    index 0000000..0000000 100644
     --- a/legacy.py
     +++ b/legacy.py
-    @@ -6,6 +6,8 @@ def compute():
+    @@ -1,2 +1,3 @@
+     def compute():
          return 42
-    +    if True:
-    +        print("unreachable")
-    -    return 41
+    +    print("unreachable")
   files:
     legacy.py: |
       def compute():
           return 42
-          if True:
-              print("unreachable")
+          print("unreachable")
   expected:
     - file: legacy.py
-      line: 4
+      line: 3
       title_contains: dead code
       severity: nit
 
 - name: circular-dependency
+  passes: [architecture]
   diff: |
     diff --git a/module_a.py b/module_a.py
+    index 0000000..0000000 100644
     --- a/module_a.py
     +++ b/module_a.py
-    @@ -1,3 +1,4 @@
+    @@ -1,1 +1,2 @@
     +from module_b import helper
      def alpha():
          return "a"
   files:
     module_a.py: |
       from module_b import helper
-
       def alpha():
           return "a"
     module_b.py: |
       from module_a import alpha
-
       def helper():
           return alpha()
   expected:
@@ -408,14 +441,17 @@
       severity: important
 
 - name: api-contract-break
+  passes: [architecture]
   diff: |
     diff --git a/service.py b/service.py
+    index 0000000..0000000 100644
     --- a/service.py
     +++ b/service.py
-    @@ -10,6 +10,8 @@ def get_profile(user_id):
+    @@ -1,3 +1,3 @@
+     def get_profile(user_id):
          row = db.find(user_id)
-    +    return [row]
     -    return row
+    +    return [row]
   files:
     service.py: |
       def get_profile(user_id):
@@ -428,11 +464,14 @@
       severity: important
 
 - name: clean-refactor
+  passes: [security]
   diff: |
     diff --git a/parse.py b/parse.py
+    index 0000000..0000000 100644
     --- a/parse.py
     +++ b/parse.py
-    @@ -4,6 +4,8 @@ def parse(payload):
+    @@ -1,3 +1,3 @@
+     def parse(payload):
     -    data = payload
     -    return [int(x) for x in data.split(",")]
     +    items = payload.split(",")
@@ -445,16 +484,19 @@
   expected: []
   forbidden:
     - file: parse.py
-      line: 3
+      line: 2
       title_contains: SQL injection
       severity: critical
 
 - name: clean-formatting
+  passes: [performance]
   diff: |
     diff --git a/format.py b/format.py
+    index 0000000..0000000 100644
     --- a/format.py
     +++ b/format.py
-    @@ -2,4 +2,5 @@ def render():
+    @@ -1,2 +1,4 @@
+     def render():
     -    return {"name": name, "age": age, "active": True}
     +    return {
     +        "name": name, "age": age, "active": True,
@@ -468,6 +510,6 @@
   expected: []
   forbidden:
     - file: format.py
-      line: 3
+      line: 2
       title_contains: unnecessary copy
       severity: nit

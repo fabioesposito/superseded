@@ -14,6 +14,7 @@ from superseded.eval.runner import (
     evaluate_case,
     load_cases,
     run_cases,
+    validate_case_lines,
 )
 from superseded.models import Finding, ReviewResult
 from superseded.providers import ProviderResponse
@@ -66,6 +67,16 @@ def test_corpus_has_20_unique_cases_and_all_categories():
     for c in clean.values():
         assert c.expected == []
         assert c.forbidden
+
+
+def test_corpus_expected_lines_fall_inside_diff_hunks():
+    """Every expected/forbidden (file, line) must sit inside the diff's new-side
+    hunks, since a live provider only sees the diff when reporting line numbers."""
+    cases = load_cases(CORPUS)
+    problems: list[str] = []
+    for case in cases:
+        problems.extend(validate_case_lines(case))
+    assert not problems, "\n".join(problems)
 
 
 def test_evaluate_exact_match():
@@ -163,6 +174,15 @@ def test_eval_dry_run_loads_and_prints_20():
     result = runner.invoke(cli, ["eval", str(CORPUS), "--dry-run"])
     assert result.exit_code == 0, result.output
     assert "20 eval cases loaded" in result.output
+
+
+def test_eval_bad_yaml_reports_clean_error(tmp_path):
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("- name: broken\n  diff: [unclosed\n")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["eval", str(bad), "--dry-run"])
+    assert result.exit_code == 2, result.output
+    assert "Error:" in result.output
 
 
 def test_run_cases_with_fake_provider():

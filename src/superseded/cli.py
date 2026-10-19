@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, get_args
 
 import click
+import yaml
 
 from superseded.audit.guidelines import assemble_learned_context, format_memory_context
 from superseded.audit.reflector import PatternReflector
@@ -1405,7 +1406,7 @@ def eval_cases(
 
     try:
         loaded = load_cases(cases)
-    except (OSError, ValueError) as err:
+    except (OSError, ValueError, yaml.YAMLError) as err:
         click.echo(f"Error: {err}", err=True)
         sys.exit(2)
 

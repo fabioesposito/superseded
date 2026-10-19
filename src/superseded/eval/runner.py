@@ -90,6 +90,33 @@ def load_cases(path: Path) -> list[EvalCase]:
     return cases
 
 
+def validate_case_lines(case: EvalCase) -> list[str]:
+    """Validate that expected/forbidden line numbers fall inside the diff hunks.
+
+    A live provider's only line-numbered reference is the diff, so an expected
+    (or forbidden) finding must point at a line the diff's new-side hunks cover.
+    Returns a list of human-readable problems (empty when the case is valid).
+    """
+    from superseded.diff import file_hunk_windows, parse_diff_files
+
+    problems: list[str] = []
+    diff_files = {entry["file"] for entry in parse_diff_files(case.diff)}
+    windows = file_hunk_windows(case.diff)
+
+    entries = [("expected", e) for e in case.expected] + [("forbidden", f) for f in case.forbidden]
+    for kind, finding in entries:
+        if finding.file not in diff_files:
+            problems.append(f"{case.name}: {kind} file {finding.file!r} not present in diff")
+            continue
+        wins = windows.get(finding.file, [])
+        if not any(start <= finding.line <= end for start, end in wins):
+            problems.append(
+                f"{case.name}: {kind} {finding.file}:{finding.line} outside new-side "
+                f"hunk windows {wins}"
+            )
+    return problems
+
+
 def _matches(finding: Finding, expected: ExpectedFinding) -> bool:
     if finding.file != expected.file:
         return False
