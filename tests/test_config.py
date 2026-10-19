@@ -260,3 +260,15 @@ def test_config_roundtrips_server_fields():
     cfg = Config(server="https://rev.example.com", server_key="sk-abc")
     assert cfg.server == "https://rev.example.com"
     assert cfg.server_key == "sk-abc"
+
+
+def test_config_max_review_rounds_default():
+    from superseded.config import Config
+
+    assert Config().max_review_rounds == 3
+
+
+def test_config_max_review_rounds_override():
+    from superseded.config import Config
+
+    assert Config(max_review_rounds=5).max_review_rounds == 5

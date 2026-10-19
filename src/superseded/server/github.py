@@ -182,6 +182,64 @@ class GitHubApp:
             diff_response.raise_for_status()
             return diff_response.text, "ahead"
 
+    async def fetch_review_threads(
+        self, token: str, owner: str, repo: str, pr_number: int
+    ) -> list[dict]:
+        """Fetch a PR's review threads via the GraphQL API.
+
+        Returns one ``{"comment_id": int | None, "is_resolved": bool}`` dict per
+        thread. ``comment_id`` is the ``databaseId`` of the thread's first
+        comment (or ``None`` when absent), used to map the thread back to a
+        persisted finding. Threads are paginated with ``reviewThreads(first:100)``.
+        """
+        query = """
+        query($owner: String!, $repo: String!, $pr: Int!, $cursor: String) {
+          repository(owner: $owner, name: $repo) {
+            pullRequest(number: $pr) {
+              reviewThreads(first: 100, after: $cursor) {
+                nodes {
+                  isResolved
+                  comments(first: 1) {
+                    nodes { databaseId }
+                  }
+                }
+                pageInfo { hasNextPage endCursor }
+              }
+            }
+          }
+        }
+        """
+        threads: list[dict] = []
+        cursor: str | None = None
+        async with httpx.AsyncClient() as client:
+            while True:
+                response = await client.post(
+                    "https://api.github.com/graphql",
+                    headers=self._api_headers(token),
+                    json={
+                        "query": query,
+                        "variables": {
+                            "owner": owner,
+                            "repo": repo,
+                            "pr": pr_number,
+                            "cursor": cursor,
+                        },
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+                pull_request = data["data"]["repository"]["pullRequest"]
+                review_threads = pull_request["reviewThreads"]
+                for node in review_threads["nodes"]:
+                    comment_nodes = node["comments"]["nodes"]
+                    comment_id = comment_nodes[0].get("databaseId") if comment_nodes else None
+                    threads.append({"comment_id": comment_id, "is_resolved": node["isResolved"]})
+                page_info = review_threads["pageInfo"]
+                if not page_info.get("hasNextPage"):
+                    break
+                cursor = page_info.get("endCursor")
+        return threads
+
     async def post_review(
         self,
         token: str,

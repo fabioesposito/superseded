@@ -18,6 +18,7 @@ class PriorFinding:
     title: str
     comment_id: int | None
     status: str
+    pass_name: str = "correctness"
 
 
 @dataclass
@@ -47,6 +48,7 @@ def prior_from_rows(rows: list[dict]) -> list[PriorFinding]:
                 title=row["title"],
                 comment_id=row.get("comment_id"),
                 status=row["status"],
+                pass_name=row.get("pass") or "correctness",
             )
         )
     return prior

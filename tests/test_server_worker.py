@@ -44,6 +44,7 @@ class FakeGitHubApp:
     post_review: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=[1, 2]))
     create_check_run: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=42))
     update_check_run: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=42))
+    fetch_review_threads: AsyncMock = field(default_factory=lambda: AsyncMock(return_value=[]))
 
 
 @dataclass
@@ -1566,3 +1567,179 @@ async def test_run_task_cancel_after_completed_preserves_completed():
     assert status.status == "completed"
     assert status.result is fake_result
     assert status.error is None
+
+
+# --- server convergence integration -----------------------------------------
+
+
+def _cf(severity, title, *, pass_name="security", file="a.py", line=1):
+    return Finding(
+        pass_name=pass_name,
+        severity=severity,
+        file=file,
+        line=line,
+        title=title,
+        description="desc",
+        suggestion="fix",
+    )
+
+
+def _prior_row(finding, *, status="open", comment_id=None, finding_id="old-id"):
+    return {
+        "fingerprint": finding.fingerprint,
+        "finding_id": finding_id,
+        "pass_name": finding.pass_name,
+        "severity": finding.severity,
+        "file": finding.file,
+        "line": finding.line,
+        "title": finding.title,
+        "comment_id": comment_id,
+        "status": status,
+    }
+
+
+async def _run_convergence_review(
+    tmp_path,
+    findings,
+    *,
+    prior_rows=None,
+    threads=None,
+    round_number=0,
+    post=True,
+):
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    await store.init()
+    if prior_rows:
+        await store.record_pr_findings_batch("owner/repo", 7, prior_rows)
+    if round_number:
+        await store.set_review_round("owner/repo", 7, round_number)
+
+    fake_engine = MagicMock()
+    fake_engine.review.return_value = ReviewResult(findings=findings)
+
+    github = FakeGitHubApp()
+    github.post_review = AsyncMock(
+        side_effect=lambda **kw: [1000 + i for i in range(len(kw["comments"]))]
+    )
+    github.fetch_review_threads = AsyncMock(return_value=threads or [])
+    github.fetch_repo_file = AsyncMock(return_value="learned_review: false\n")
+
+    repo_manager = FakeRepoManager()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
+
+    job = ReviewJob(1, "owner", "repo", 7, "abc", "def", post=post)
+
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo",
+            new_callable=AsyncMock,
+            return_value=tmp_path,
+        ),
+        patch("superseded.server.worker.ReviewEngine", return_value=fake_engine),
+        patch(
+            "superseded.server.worker.gather_context",
+            return_value={
+                "file_context": None,
+                "static_signals": None,
+                "usage_signals": None,
+                "conventions_signals": None,
+                "spec_signals": None,
+            },
+        ),
+    ):
+        outcome, result = await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="t",
+            job=job,
+            correlation_id="c",
+            store=store,
+            provider=_make_provider(),
+        )
+
+    return outcome, result, store, github
+
+
+@pytest.mark.asyncio
+async def test_convergence_duplicate_open_finding_not_posted(tmp_path):
+    finding = _cf("critical", "SQL injection")
+    _outcome, result, _store, github = await _run_convergence_review(
+        tmp_path, [finding], prior_rows=[_prior_row(finding, comment_id=123)]
+    )
+
+    assert result.findings == []
+    assert result.suppressed_count == 1
+    assert len(result.carried_findings) == 1
+    assert result.carried_findings[0].severity == "critical"
+    github.post_review.assert_awaited_once()
+    assert github.post_review.await_args.kwargs["comments"] == []
+
+
+@pytest.mark.asyncio
+async def test_convergence_carried_critical_fails_with_no_new_findings(tmp_path):
+    prior = _cf("critical", "Old critical", pass_name="correctness", file="b.py", line=5)
+    outcome, result, _store, _github = await _run_convergence_review(
+        tmp_path, [], prior_rows=[_prior_row(prior, comment_id=99)]
+    )
+
+    assert result.findings == []
+    assert len(result.carried_findings) == 1
+    assert result.carried_findings[0].severity == "critical"
+    assert result.carried_findings[0].pass_name == "correctness"
+    assert outcome.conclusion == "failure"
+
+
+@pytest.mark.asyncio
+async def test_convergence_round_increments(tmp_path):
+    _outcome, result, store, _github = await _run_convergence_review(tmp_path, [], round_number=1)
+
+    assert result.round_number == 2
+    assert await store.get_review_round("owner/repo", 7) == 2
+
+
+@pytest.mark.asyncio
+async def test_convergence_resolved_thread_reposts(tmp_path):
+    finding = _cf("important", "Use after free")
+    _outcome, result, store, github = await _run_convergence_review(
+        tmp_path,
+        [finding],
+        prior_rows=[_prior_row(finding, comment_id=123, status="open")],
+        threads=[{"comment_id": 123, "is_resolved": True}],
+    )
+
+    assert result.findings == [finding]
+    assert result.suppressed_count == 0
+    assert result.carried_findings == []
+    github.fetch_review_threads.assert_awaited_once()
+    rows = await store.get_pr_findings("owner/repo", 7)
+    assert rows[0]["status"] == "open"  # re-posted, so open again
+    assert rows[0]["comment_id"] == 1000  # new comment linked by fingerprint
+
+
+@pytest.mark.asyncio
+async def test_convergence_round_cap_suppresses_advisory(tmp_path):
+    crit = _cf("critical", "crit")
+    sugg = _cf("suggestion", "sugg", pass_name="style", file="b.py")
+    _outcome, result, _store, _github = await _run_convergence_review(
+        tmp_path, [crit, sugg], round_number=4
+    )
+
+    assert result.at_round_cap is True
+    assert result.findings == [crit]
+    assert result.suppressed_count == 1
+
+
+@pytest.mark.asyncio
+async def test_convergence_skipped_when_post_false(tmp_path):
+    finding = _cf("critical", "t")
+    _outcome, result, store, github = await _run_convergence_review(tmp_path, [finding], post=False)
+
+    assert result.round_number == 0
+    assert result.carried_findings == []
+    assert result.findings == [finding]
+    github.fetch_review_threads.assert_not_awaited()
+    assert await store.get_pr_findings("owner/repo", 7) == []
+    assert await store.get_review_round("owner/repo", 7) == 0

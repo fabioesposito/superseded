@@ -32,6 +32,7 @@ def make_prior(finding=None, **overrides):
         title="issue",
         comment_id=None,
         status="open",
+        pass_name="correctness",
     )
     if finding is not None:
         kwargs["fingerprint"] = finding.fingerprint
@@ -39,6 +40,7 @@ def make_prior(finding=None, **overrides):
         kwargs["line"] = finding.line
         kwargs["title"] = finding.title
         kwargs["severity"] = finding.severity
+        kwargs["pass_name"] = finding.pass_name
     kwargs.update(overrides)
     return PriorFinding(**kwargs)
 
@@ -104,6 +106,41 @@ def test_prior_from_rows_tolerates_none_comment_id_and_line():
     )
     assert prior[0].comment_id is None
     assert prior[0].line == 0
+
+
+def test_prior_from_rows_reads_pass_name():
+    prior = prior_from_rows(
+        [
+            {
+                "fingerprint": "fp1",
+                "severity": "critical",
+                "file": "a.py",
+                "line": 10,
+                "title": "SQL injection",
+                "comment_id": 42,
+                "status": "open",
+                "pass": "security",
+            }
+        ]
+    )
+    assert prior[0].pass_name == "security"
+
+
+def test_prior_from_rows_defaults_pass_name():
+    prior = prior_from_rows(
+        [
+            {
+                "fingerprint": "fp1",
+                "severity": "critical",
+                "file": "a.py",
+                "line": 10,
+                "title": "SQL injection",
+                "comment_id": 42,
+                "status": "open",
+            }
+        ]
+    )
+    assert prior[0].pass_name == "correctness"
 
 
 # --- prior-status dedupe rules --------------------------------------------

@@ -36,6 +36,7 @@ class Config(BaseModel):
     learned_review: bool = True
     reflection_threshold: int = 5
     max_learned_rules: int = 5
+    max_review_rounds: int = 3
     verify: bool = True
     server: str | None = None
     server_key: str | None = None

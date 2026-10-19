@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 from unittest.mock import patch
 
 import httpx
@@ -348,3 +349,135 @@ async def test_resolve_installation_returns_none_when_not_installed(app, monkeyp
 
     monkeypatch.setattr("superseded.server.github.httpx.AsyncClient", FakeClient)
     assert await app.resolve_installation("octocat", "hello-world") is None
+
+
+def _graphql_threads_page(nodes, has_next_page, end_cursor):
+    return {
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "nodes": nodes,
+                        "pageInfo": {"hasNextPage": has_next_page, "endCursor": end_cursor},
+                    }
+                }
+            }
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_fetch_review_threads_single_page(app):
+    routes = [
+        (
+            lambda req: req.url.path == "/graphql" and req.method == "POST",
+            httpx.Response(
+                200,
+                json=_graphql_threads_page(
+                    nodes=[
+                        {
+                            "isResolved": True,
+                            "comments": {"nodes": [{"databaseId": 111}]},
+                        },
+                        {
+                            "isResolved": False,
+                            "comments": {"nodes": [{"databaseId": 222}]},
+                        },
+                    ],
+                    has_next_page=False,
+                    end_cursor=None,
+                ),
+            ),
+        )
+    ]
+    original = httpx.AsyncClient
+
+    def _client(*a, **kw):
+        kw["transport"] = _transport(routes)
+        return original(*a, **kw)
+
+    with patch("superseded.server.github.httpx.AsyncClient", side_effect=_client):
+        threads = await app.fetch_review_threads("tok", "octocat", "hello-world", 7)
+
+    assert threads == [
+        {"comment_id": 111, "is_resolved": True},
+        {"comment_id": 222, "is_resolved": False},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_fetch_review_threads_paginates(app):
+    seen: list[dict] = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append(body["variables"])
+        cursor = body["variables"]["cursor"]
+        if cursor is None:
+            return httpx.Response(
+                200,
+                json=_graphql_threads_page(
+                    nodes=[{"isResolved": False, "comments": {"nodes": [{"databaseId": 1}]}}],
+                    has_next_page=True,
+                    end_cursor="cur1",
+                ),
+            )
+        return httpx.Response(
+            200,
+            json=_graphql_threads_page(
+                nodes=[{"isResolved": True, "comments": {"nodes": [{"databaseId": 2}]}}],
+                has_next_page=False,
+                end_cursor=None,
+            ),
+        )
+
+    original = httpx.AsyncClient
+
+    def _client(*a, **kw):
+        kw["transport"] = httpx.MockTransport(handler)
+        return original(*a, **kw)
+
+    with patch("superseded.server.github.httpx.AsyncClient", side_effect=_client):
+        threads = await app.fetch_review_threads("tok", "octocat", "hello-world", 7)
+
+    assert threads == [
+        {"comment_id": 1, "is_resolved": False},
+        {"comment_id": 2, "is_resolved": True},
+    ]
+    assert [v["cursor"] for v in seen] == [None, "cur1"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_review_threads_tolerates_null_database_id(app):
+    routes = [
+        (
+            lambda req: req.url.path == "/graphql" and req.method == "POST",
+            httpx.Response(
+                200,
+                json=_graphql_threads_page(
+                    nodes=[
+                        {
+                            "isResolved": False,
+                            "comments": {"nodes": [{"databaseId": None}]},
+                        },
+                        {"isResolved": True, "comments": {"nodes": []}},
+                    ],
+                    has_next_page=False,
+                    end_cursor=None,
+                ),
+            ),
+        )
+    ]
+    original = httpx.AsyncClient
+
+    def _client(*a, **kw):
+        kw["transport"] = _transport(routes)
+        return original(*a, **kw)
+
+    with patch("superseded.server.github.httpx.AsyncClient", side_effect=_client):
+        threads = await app.fetch_review_threads("tok", "octocat", "hello-world", 7)
+
+    assert threads == [
+        {"comment_id": None, "is_resolved": False},
+        {"comment_id": None, "is_resolved": True},
+    ]

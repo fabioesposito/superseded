@@ -13,9 +13,10 @@ from superseded.audit.guidelines import assemble_learned_context, format_memory_
 from superseded.audit.stats import StatsAggregator
 from superseded.config import Config
 from superseded.context.gathering import gather_context
-from superseded.models import ReviewResult
+from superseded.models import Finding, ReviewResult
 from superseded.output.github_pr import build_review_payload
 from superseded.providers import Provider
+from superseded.review.convergence import PriorFinding, plan_convergence, prior_from_rows
 from superseded.review.engine import ReviewEngine
 from superseded.server.checkout import checkout_repo
 
@@ -74,6 +75,24 @@ def build_check_run_title(result: ReviewResult) -> str:
     if carried:
         title += f", {carried} still open"
     return title
+
+
+def _finding_from_prior(prior: PriorFinding) -> Finding:
+    """Convert a carried :class:`PriorFinding` back into a :class:`Finding`.
+
+    Description/suggestion are fixed placeholders since the persisted row does
+    not retain the original text. The id is left unset so it is auto-derived
+    from pass/file/line/title rather than reusing a stale id from a prior round.
+    """
+    return Finding(
+        pass_name=prior.pass_name,
+        severity=prior.severity,
+        file=prior.file,
+        line=prior.line,
+        title=prior.title,
+        description="Carried from a previous review round.",
+        suggestion="Address the remaining issue.",
+    )
 
 
 class ReviewWorker:
@@ -435,7 +454,7 @@ async def _run_review_for_job(
         incremental: str | None = None
         if config.progressive and store is not None:
             watermark = await store.get_watermark(repo_key, job.pr_number)
-            if watermark is not None:
+            if watermark:
                 if watermark == job.head_sha:
                     logger.info(
                         "review_skipped_noop",
@@ -478,6 +497,31 @@ async def _run_review_for_job(
                             "head_sha": job.head_sha,
                         },
                     )
+
+        convergence_active = job.post and store is not None
+        review_round = 0
+        prior: list[PriorFinding] = []
+        if convergence_active:
+            assert store is not None
+            review_round = await store.get_review_round(repo_key, job.pr_number) + 1
+            try:
+                threads = await github.fetch_review_threads(
+                    token, job.owner, job.repo, job.pr_number
+                )
+            except Exception:
+                logger.warning(
+                    "review_threads_fetch_failed",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "repo": repo_key,
+                        "pr": job.pr_number,
+                    },
+                )
+            else:
+                for thread in threads:
+                    if thread["is_resolved"] and thread["comment_id"] is not None:
+                        await store.update_pr_finding_status(thread["comment_id"], "resolved")
+            prior = prior_from_rows(await store.get_pr_findings(repo_key, job.pr_number))
 
         if incremental is not None:
             diff = incremental
@@ -543,11 +587,18 @@ async def _run_review_for_job(
             progress=None,
         )
 
+        if convergence_active:
+            plan = plan_convergence(result.findings, prior, review_round, config.max_review_rounds)
+            result.findings = plan.findings_to_post
+            result.carried_findings = [_finding_from_prior(p) for p in plan.carried_findings]
+            result.round_number = plan.round_number
+            result.at_round_cap = plan.at_round_cap
+            result.suppressed_count = plan.suppressed_count
+            result.convergence_note = plan.note
+
         comment_ids: list[int | None] = []
-        event = "COMMENT"
         if job.post:
             payload = build_review_payload(result)
-            event = payload["event"]
             comment_ids = await github.post_review(
                 token=token,
                 owner=job.owner,
@@ -578,6 +629,23 @@ async def _run_review_for_job(
                         ],
                         repo_key,
                     )
+                if convergence_active:
+                    await store.record_pr_findings_batch(
+                        repo_key,
+                        job.pr_number,
+                        [
+                            {
+                                "fingerprint": f.fingerprint,
+                                "finding_id": f.id,
+                                "pass_name": f.pass_name,
+                                "severity": f.severity,
+                                "file": f.file,
+                                "line": f.line,
+                                "title": f.title,
+                            }
+                            for f in result.findings
+                        ],
+                    )
                 if job.post:
                     pairs = [
                         (f.id, cid)
@@ -586,7 +654,17 @@ async def _run_review_for_job(
                     ]
                     if pairs:
                         await store.set_comment_ids_batch(pairs)
+                    if convergence_active:
+                        pr_pairs = [
+                            (f.fingerprint, cid)
+                            for f, cid in zip(result.findings, comment_ids, strict=True)
+                            if cid is not None
+                        ]
+                        if pr_pairs:
+                            await store.set_pr_comment_ids(repo_key, job.pr_number, pr_pairs)
                 await store.set_watermark(repo_key, job.pr_number, job.head_sha)
+                if convergence_active:
+                    await store.set_review_round(repo_key, job.pr_number, review_round)
 
             if config.learned_review:
                 from superseded.audit.reflector import PatternReflector
@@ -606,12 +684,19 @@ async def _run_review_for_job(
                     stats_text, all_rules, config.max_learned_rules
                 )
 
-        conclusion = "success" if event != "REQUEST_CHANGES" else "failure"
+        blocking = any(f.is_blocking for f in result.findings) or any(
+            f.is_blocking for f in result.carried_findings
+        )
+        conclusion = "failure" if blocking else "success"
         title = build_check_run_title(result)
         passes_used = sorted({f.pass_name for f in result.findings})
         summary = (
             f"Review completed. {len(result.findings)} findings across {len(passes_used)} pass(es)."
         )
+        if result.carried_findings:
+            summary += f" {len(result.carried_findings)} carried."
+        if result.round_number:
+            summary += f" Round {result.round_number}."
 
         logger.info(
             "review_completed",
