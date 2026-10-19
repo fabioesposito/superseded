@@ -1047,6 +1047,114 @@ def test_convergence_post_false_does_not_record_pr_state(monkeypatch, tmp_path):
     assert asyncio.run(store.get_watermark("owner/repo", 7)) == "head"
 
 
+def test_no_post_skips_convergence_and_does_not_carry(monkeypatch, tmp_path):
+    """A ``--no-post`` local run must not mutate ``pr_findings`` or carry/suppress.
+
+    Even with a still-open critical prior finding, convergence is gated on
+    ``post``, so ``check_resolved_threads`` is never called and the result has no
+    carried findings.
+    """
+    import asyncio
+
+    from superseded.cli import ReviewEngine, _run_review
+    from superseded.config import Config
+    from superseded.memory.store import MemoryStore
+    from superseded.models import Finding, ReviewResult
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+
+    crit = Finding(
+        pass_name="security",
+        severity="critical",
+        file="b.py",
+        line=1,
+        title="SQL injection",
+        description="d",
+        suggestion="s",
+    )
+    asyncio.run(
+        store.record_pr_findings_batch(
+            "owner/repo",
+            7,
+            [
+                {
+                    "fingerprint": crit.fingerprint,
+                    "finding_id": crit.id,
+                    "pass_name": "security",
+                    "severity": "critical",
+                    "file": "b.py",
+                    "line": 1,
+                    "title": "SQL injection",
+                    "status": "open",
+                }
+            ],
+        )
+    )
+
+    monkeypatch.setattr(
+        "superseded.cli.load_config",
+        lambda path=None: Config(memory=True, progressive=True, learned_review=False),
+    )
+    monkeypatch.setattr("superseded.cli.MemoryStore", lambda: store)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: "owner/repo")
+    monkeypatch.setattr("superseded.cli.fetch_pr_head_sha", lambda pr: "head")
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff", lambda pr=None, **kw: "diff --git a/a.py b/a.py\n"
+    )
+    monkeypatch.setattr(
+        "superseded.cli.fetch_incremental_diff", lambda *a, **k: (None, "identical")
+    )
+    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr(
+        "superseded.cli.gather_context",
+        lambda diff, root, **kw: {
+            "file_context": None,
+            "static_signals": None,
+            "usage_signals": None,
+            "conventions_signals": None,
+            "spec_signals": None,
+        },
+    )
+
+    resolved_calls: list[int] = []
+    monkeypatch.setattr(
+        "superseded.cli.check_resolved_threads",
+        lambda pr, owner, repo: resolved_calls.append(1) or set(),
+    )
+
+    fake_engine = MagicMock()
+    fake_engine.review = lambda **kw: ReviewResult(findings=[])
+    monkeypatch.setattr(ReviewEngine, "select", classmethod(lambda cls, *a, **kw: fake_engine))
+
+    captured: dict = {}
+
+    async def fake_post_store(store, result, repo, head_sha, pr, post, diff, review_round):
+        captured["result"] = result
+
+    monkeypatch.setattr("superseded.cli._post_review_store", fake_post_store)
+
+    _run_review(
+        pr=7,
+        diff_range=None,
+        provider=None,
+        model=None,
+        output_format="json",
+        post=False,
+        passes=None,
+    )
+
+    result = captured["result"]
+    assert result.findings == []
+    assert result.carried_findings == []  # no carry on a dry run
+    assert result.round_number == 0
+    assert resolved_calls == []  # check_resolved_threads never invoked
+    # The seeded prior finding is untouched (still "open"), not mutated to resolved.
+    rows = asyncio.run(store.get_pr_findings("owner/repo", 7))
+    assert rows[0]["status"] == "open"
+
+
 def test_resolve_empty_watermark_uses_full_diff(monkeypatch):
     from superseded.cli import _resolve_pr_review_diff
 
@@ -1120,6 +1228,12 @@ def test_process_feedback_marks_resolved_and_dismissed(monkeypatch, tmp_path):
     assert by_fp["fp1"]["status"] == "resolved"
     assert by_fp["fp2"]["status"] == "dismissed"
     assert by_fp["fp3"]["status"] == "open"
+
+    # A resolved thread is a real fix, not a dismissal: only the thumbs-down
+    # finding (id2) should be marked dismissed; the resolved finding (id1) and
+    # the helpful one (id3) must stay out of prompt memory.
+    dismissed_ids = {r["id"] for r in asyncio.run(store.get_dismissed_findings("owner/repo"))}
+    assert dismissed_ids == {"id2"}
 
 
 def test_feedback_manual_dismiss_marks_pr_status(monkeypatch, tmp_path):

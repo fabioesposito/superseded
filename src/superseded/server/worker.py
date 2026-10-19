@@ -697,11 +697,20 @@ async def _run_review_for_job(
         conclusion = "failure" if blocking else "success"
         title = build_check_run_title(result)
         passes_used = sorted({f.pass_name for f in result.findings})
-        summary = (
-            f"Review completed. {len(result.findings)} findings across {len(passes_used)} pass(es)."
-        )
-        if result.carried_findings:
-            summary += f" {len(result.carried_findings)} carried."
+        if result.findings:
+            summary = (
+                f"Review completed. {len(result.findings)} findings across "
+                f"{len(passes_used)} pass(es)."
+            )
+            if result.carried_findings:
+                summary += f" {len(result.carried_findings)} carried."
+        elif result.carried_findings:
+            summary = (
+                f"Review completed. {len(result.carried_findings)} finding(s) "
+                "still open from earlier rounds."
+            )
+        else:
+            summary = "Review completed. 0 findings across 0 pass(es)."
         if result.round_number:
             summary += f" Round {result.round_number}."
 

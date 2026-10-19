@@ -1690,6 +1690,9 @@ async def test_convergence_carried_critical_fails_with_no_new_findings(tmp_path)
     assert result.carried_findings[0].severity == "critical"
     assert result.carried_findings[0].pass_name == "correctness"
     assert outcome.conclusion == "failure"
+    # No new findings + a carried finding: the summary names the carried
+    # findings instead of the misleading "0 findings across 0 pass(es)".
+    assert "1 finding(s) still open from earlier rounds" in outcome.summary
 
 
 @pytest.mark.asyncio

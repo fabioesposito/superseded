@@ -415,7 +415,7 @@ def test_feedback_check_records_reactions_as_dismiss(mock_check):
 
 
 @patch("superseded.cli.check_pr_feedback")
-def test_feedback_check_records_resolved_as_dismiss(mock_check):
+def test_feedback_check_records_resolved_as_resolved(mock_check):
     store = FakeStore()
     finding = _make_finding()
     asyncio.run(
@@ -432,7 +432,11 @@ def test_feedback_check_records_resolved_as_dismiss(mock_check):
         result = runner.invoke(cli, ["feedback", "--check", "--pr", "1"])
 
     assert result.exit_code == 0, result.output
-    assert (finding.id, "dismiss") in store.feedback
+    # A resolved thread is a real fix, not a dismissal: the feedback action is
+    # "resolved" and the finding is never marked dismissed.
+    assert (finding.id, "resolved") in store.feedback
+    assert (finding.id, "dismiss") not in store.feedback
+    assert finding.id not in store._dismissed
 
 
 def test_feedback_manual_dismiss_resolves_comment_id():

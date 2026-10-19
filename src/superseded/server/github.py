@@ -8,6 +8,10 @@ from pathlib import Path
 import httpx
 import jwt
 
+# Defensive bound on GraphQL pagination: a non-advancing (or null) cursor must
+# never turn ``fetch_review_threads`` into an infinite loop.
+MAX_PAGES = 100
+
 
 class GitHubApp:
     def __init__(self, app_id: int, private_key_path: Path, webhook_secret: str) -> None:
@@ -211,8 +215,12 @@ class GitHubApp:
         """
         threads: list[dict] = []
         cursor: str | None = None
+        pages = 0
         async with httpx.AsyncClient() as client:
             while True:
+                pages += 1
+                if pages > MAX_PAGES:
+                    break
                 response = await client.post(
                     "https://api.github.com/graphql",
                     headers=self._api_headers(token),
@@ -238,6 +246,8 @@ class GitHubApp:
                 if not page_info.get("hasNextPage"):
                     break
                 cursor = page_info.get("endCursor")
+                if not cursor:
+                    break
         return threads
 
     async def post_review(

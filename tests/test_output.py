@@ -781,3 +781,39 @@ def test_review_payload_carried_round_suppressed_counts():
     assert "**Round:** 2" in body
     assert "**Suppressed:** 3" in body
     assert "suppressed duplicates from prior rounds" in body
+
+
+def test_review_payload_lists_carried_findings_with_location():
+    from superseded.output.github_pr import build_review_payload
+
+    carried = _finding(
+        severity="critical",
+        title="SQL injection",
+        file="app.py",
+        line=42,
+        end_line=42,
+    )
+    result = ReviewResult(findings=[], carried_findings=[carried])
+
+    body = build_review_payload(result)["body"]
+    assert "**Still open from earlier rounds:**" in body
+    assert "**[CRITICAL] SQL injection**" in body
+    assert "(`app.py:42`)" in body
+    assert "carried from an earlier review" in body
+
+
+def test_review_payload_carried_title_is_redacted():
+    from superseded.output.github_pr import build_review_payload
+
+    carried = _finding(
+        severity="important",
+        title="Leaked ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789 token",
+        file="x.py",
+        line=7,
+        end_line=7,
+    )
+    result = ReviewResult(findings=[], carried_findings=[carried])
+
+    body = build_review_payload(result)["body"]
+    assert "[REDACTED]" in body
+    assert "ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789" not in body

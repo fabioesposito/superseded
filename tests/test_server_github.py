@@ -481,3 +481,68 @@ async def test_fetch_review_threads_tolerates_null_database_id(app):
         {"comment_id": None, "is_resolved": False},
         {"comment_id": None, "is_resolved": True},
     ]
+
+
+@pytest.mark.asyncio
+async def test_fetch_review_threads_null_cursor_does_not_loop(app):
+    """hasNextPage=True with endCursor=None must terminate after one page.
+
+    A non-advancing cursor previously caused an infinite loop; the null-cursor
+    guard breaks out immediately.
+    """
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json=_graphql_threads_page(
+                nodes=[{"isResolved": True, "comments": {"nodes": [{"databaseId": 7}]}}],
+                has_next_page=True,
+                end_cursor=None,
+            ),
+        )
+
+    original = httpx.AsyncClient
+
+    def _client(*a, **kw):
+        kw["transport"] = httpx.MockTransport(handler)
+        return original(*a, **kw)
+
+    with patch("superseded.server.github.httpx.AsyncClient", side_effect=_client):
+        threads = await app.fetch_review_threads("tok", "octocat", "hello-world", 7)
+
+    assert threads == [{"comment_id": 7, "is_resolved": True}]
+    assert len(calls) == 1  # exactly one GraphQL request, no hang
+
+
+@pytest.mark.asyncio
+async def test_fetch_review_threads_page_bound(app):
+    """A non-advancing non-null cursor is capped by MAX_PAGES."""
+    from superseded.server.github import MAX_PAGES
+
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json=_graphql_threads_page(
+                nodes=[],
+                has_next_page=True,
+                end_cursor="same-cursor",
+            ),
+        )
+
+    original = httpx.AsyncClient
+
+    def _client(*a, **kw):
+        kw["transport"] = httpx.MockTransport(handler)
+        return original(*a, **kw)
+
+    with patch("superseded.server.github.httpx.AsyncClient", side_effect=_client):
+        threads = await app.fetch_review_threads("tok", "octocat", "hello-world", 7)
+
+    assert threads == []
+    # The page bound prevents an unbounded loop: exactly MAX_PAGES requests.
+    assert len(calls) == MAX_PAGES

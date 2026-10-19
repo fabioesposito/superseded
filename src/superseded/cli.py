@@ -624,9 +624,12 @@ def _run_review(
         if config.learned_review and store is not None and repo:
             learned_context = asyncio.run(_build_learned_context(store, engine, repo, config, root))
 
-        # Convergence: on a PR review with memory enabled, mark resolved threads,
-        # load prior-round findings, and plan which new findings to post.
-        convergence_active = store is not None and repo is not None and pr is not None
+        # Convergence: on a posted PR review with memory enabled, mark resolved
+        # threads, load prior-round findings, and plan which new findings to post.
+        # Gated on ``post`` so a ``--no-post`` dry run never mutates ``pr_findings``
+        # or suppresses/carries findings (matching the server path's
+        # ``job.post and store is not None`` gate).
+        convergence_active = post and store is not None and repo is not None and pr is not None
         prior = []
         review_round = 0
         if convergence_active:
@@ -1147,7 +1150,7 @@ async def _process_feedback(store: MemoryStore, comments: list[dict]) -> None:
         ok = await store.record_feedback_by_comment_id(int(cid), action)
         if ok:
             recorded += 1
-            if c.get("resolved"):
+            if action == "resolved":
                 await store.update_pr_finding_status(int(cid), "resolved")
             elif action == "dismiss":
                 await store.update_pr_finding_status(int(cid), "dismissed")
@@ -1274,8 +1277,13 @@ async def _apply_feedback(store: MemoryStore, comment_id: int, action: str) -> b
 
 
 def _classify_feedback(comment: dict) -> str | None:
+    # A resolved thread means the bug was real and fixed, not that the finding
+    # was wrong. Treat it as its own "resolved" action so it never flips
+    # ``findings.dismissed`` (which would corrupt prompt memory, review_stats,
+    # and learned rules). Check it before reactions so a resolved thread is not
+    # misclassified as a thumbs-down dismissal.
     if comment.get("resolved"):
-        return "dismiss"
+        return "resolved"
     reactions = comment.get("reactions") or {}
     if reactions.get("-1", 0) > 0:
         return "dismiss"

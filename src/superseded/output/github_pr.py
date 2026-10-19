@@ -112,7 +112,13 @@ def build_review_payload(result: ReviewResult) -> dict:
 
     carried = result.carried_findings
     if carried:
-        body += f"**Still open:** {len(carried)}\n\n"
+        body += f"**Still open from earlier rounds:** {len(carried)}\n\n"
+        for f in carried:
+            body += (
+                f"- **[{f.severity.upper()}] {_redact(f.title)}** "
+                f"(`{f.file}:{f.line}`) — carried from an earlier review\n"
+            )
+        body += "\n"
     if result.round_number:
         body += f"**Round:** {result.round_number}\n\n"
     if result.suppressed_count:
