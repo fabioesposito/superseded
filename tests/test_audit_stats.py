@@ -429,3 +429,50 @@ async def test_get_report_full():
         sec = by_key[("security", "critical")]
         assert sec["total"] == 2 and sec["dismissed"] == 2 and sec["accepted"] == 0
         assert sec["dismiss_rate"] == 1.0
+
+
+async def test_refresh_excludes_verifier_drops_from_dismissed():
+    """Verifier drops must not inflate the human ``dismissed`` count in review_stats."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = _make_store(tmpdir)
+        await store.init()
+
+        # Kept finding with no feedback.
+        await store.record_finding(
+            "keep", "owner/repo", "security", "critical", "a.py", 1, "kept", "d"
+        )
+        # Human-dismissed finding.
+        await store.record_finding(
+            "human", "owner/repo", "security", "critical", "b.py", 2, "human", "d"
+        )
+        await store.record_feedback("human", "dismiss")
+        # Verifier-dropped finding.
+        await store.record_findings_batch(
+            [
+                {
+                    "id": "drop",
+                    "pass_name": "security",
+                    "severity": "critical",
+                    "file": "c.py",
+                    "line": 3,
+                    "title": "drop",
+                    "description": "d",
+                    "reasoning": "",
+                    "verification": "dropped",
+                    "verification_reason": "fp",
+                }
+            ],
+            "owner/repo",
+        )
+        await store.record_verification_feedback("drop")
+
+        agg = StatsAggregator(store)
+        report = await agg.get_report("owner/repo")
+
+        rows = await store.get_review_stats("owner/repo", 1)
+        assert len(rows) == 1
+        assert rows[0]["dismissed"] == 1  # verifier drop excluded, human only
+
+        assert report["total"] == 3
+        assert report["dismissed"] == 1
+        assert report["verifier_dropped"] == 1
