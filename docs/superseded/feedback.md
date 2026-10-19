@@ -8,9 +8,10 @@ Superseded gets smarter the more you use it. Every finding it produces is tracke
 |---|---|---|
 | 👍 reaction on a review comment | Finding was helpful | Reinforces similar findings |
 | 👎 reaction on a review comment | Finding was dismissed | Suppresses similar findings |
-| Resolved thread on a review comment | Issue addressed | Counts as dismissal |
+| Resolved thread on a review comment | Issue addressed / thread resolved | Marks the finding `resolved`; it does **not** count as a dismissal, and the issue can be re-raised if it reappears |
 | `--helpful <comment_id>` | Manual approval | Same as 👍 reaction |
 | `--dismiss <comment_id>` | Manual dismissal | Same as 👎 reaction |
+| Verifier drop | Machine rejected a finding before posting | Tracked separately; never trains learned rules or the human-dismissal stats |
 
 ## Checking Feedback
 
@@ -28,7 +29,25 @@ This scans the PR's review comments via the GitHub API, looking for:
 - Reactions (`+1` / `-1`)
 - Resolved threads
 
-Each matching comment is recorded in the memory store and linked back to the original finding.
+Each matching comment is recorded in the memory store and linked back to the original finding. Resolved threads update `pr_findings.status` to `resolved`; thumbs-down and manual dismissals set it to `dismissed`. Those statuses drive review convergence across pushes.
+
+## Outcome Stats
+
+See how the reviewer is doing without reading the database:
+
+```bash
+superseded feedback --stats
+```
+
+The report includes:
+
+- total findings and human dismissal rate
+- verifier-drop count and rate (machine false positives caught before posting)
+- open PR findings (unresolved convergence state)
+- max review round seen for the repo
+- per-pass/severity breakdown with dismissal rates
+
+Verifier drops are deliberately excluded from the human dismissal rate and from learned-rule inputs. If the numbers diverge, the reviewer is either getting noisier or the verifier is doing more filtering — both are useful signals when tuning prompts or `REVIEW.md`.
 
 ## Manual Feedback
 
@@ -68,7 +87,7 @@ Superseded has a three-stage learning pipeline:
 
 ### 1. Stats Aggregation
 
-After every review, stats are compiled from all past findings and feedback:
+After every review, stats are compiled from all past findings and **human** feedback. Verifier drops are counted separately and never enter this table:
 
 ```
 - security/critical findings on test files: 85% dismissal rate → suppress
@@ -80,7 +99,7 @@ This statistical context is injected into every review prompt so the AI agent kn
 
 ### 2. Pattern Reflection
 
-When you've accumulated enough feedback events (default: 5 new events since last reflection), superseded sends a batch of accepted and dismissed findings to an AI agent with a reflection prompt:
+When you've accumulated enough **human** feedback events (default: 5 new events since last reflection), superseded sends a batch of accepted and dismissed findings to an AI agent with a reflection prompt. Verifier drops are excluded — the reflector learns from people, not from the reviewer's own filter:
 
 > "Here are findings the team accepted and findings they dismissed. Infer 3-5 concrete, actionable rules that describe the team's code-review preferences."
 
@@ -116,11 +135,12 @@ All feedback and findings live in `.superseded/memory.db` (SQLite, gitignored). 
 
 | Table | Contents |
 |---|---|
-| `findings` | Every finding produced, with severity, file, line, title, description, and dismissal status |
-| `feedback` | User actions (helpful/dismiss) linked to findings |
-| `review_watermarks` | Per-PR head SHAs for progressive review |
-| `review_stats` | Aggregated acceptance/dismissal rates per pass/severity/file-pattern |
+| `findings` | Every finding produced, with severity, file, line, title, description, verification/grounding status, and dismissal status |
+| `feedback` | Human actions (helpful/dismiss/resolved) and verifier drops, with a `source` column |
+| `pr_findings` | Per-PR convergence state: fingerprint, status (`open`/`resolved`/`dismissed`), comment id |
+| `review_watermarks` | Per-PR head SHAs and `review_round` counters |
+| `review_stats` | Aggregated human acceptance/dismissal rates per pass/severity/file-pattern |
 | `learned_rules` | AI-inferred rules with confidence scores |
-| `reflection_state` | Tracks which feedback has been processed by the reflector |
+| `reflection_state` | Tracks which human feedback has been processed by the reflector |
 
 The database is auto-created and kept at the latest schema by Alembic migrations, which run automatically every time the store opens (and on server startup). Pre-existing databases from older superseded versions are adopted transparently on first run — no manual step, no data loss. You can delete the file at any time to reset all learning; a fresh one is created on next run. To run or inspect migrations deliberately, use `superseded migrate`.

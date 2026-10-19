@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Superseded — AI Code Review That Learns</title>
+    <meta name="description" content="Five parallel AI review passes, evidence-grounded findings, and reviews that converge across PR rounds.">
+    <title>Superseded — AI Code Review That Learns and Converges</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500;1,9..144,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -23,7 +24,7 @@
             --border-hover: #c8cce0;
             --text: #1a1f35;
             --text-secondary: #5a6178;
-            --text-tertiary: #8b91a5;
+            --text-tertiary: #6b7280;
             --text-inv: #ffffff;
             --white: #ffffff;
             --green: #1db954;
@@ -184,11 +185,6 @@
             width: 7px; height: 7px; background: var(--green);
             border-radius: 50%;
             box-shadow: 0 0 6px rgba(29,185,84,0.4);
-            animation: pulse 2s ease-in-out infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
         }
         h1 {
             font-family: var(--font-display);
@@ -374,7 +370,7 @@
         }
         .pass-badge {
             display: inline-block; padding: 5px 12px;
-            border-radius: 8px; font-size: 10px; font-weight: 700;
+            border-radius: 8px; font-size: 11px; font-weight: 700;
             letter-spacing: 0.8px; margin-bottom: 16px;
         }
         .pass-badge.red { background: var(--red-soft); color: var(--red); }
@@ -564,7 +560,7 @@
         <div class="container">
             <div class="hero-badge reveal"><span class="dot"></span> Open source &middot; MIT licensed</div>
             <h1 class="reveal">Code review that<br>learns from <em>your team</em></h1>
-            <p class="hero-sub reveal">5 parallel AI review passes. Every dismissed finding makes the next review sharper. Code quality compounds over time.</p>
+            <p class="hero-sub reveal">5 parallel AI review passes, grounded in your diff and converged across rounds. Every dismissal makes the next review sharper.</p>
             <div class="hero-actions reveal">
                 <a href="#cta" class="btn btn-primary">Get Started</a>
                 <a href="https://github.com/fabioesposito/superseded" class="btn btn-ghost">View on GitHub</a>
@@ -574,9 +570,9 @@
                 <code>uv tool install git+https://github.com/fabioesposito/superseded</code>
                 <button class="copy" onclick="navigator.clipboard.writeText('uv tool install git+https://github.com/fabioesposito/superseded')">Copy</button>
             </div>
-            <p class="reveal" style="opacity:.6;font-size:.85rem;margin-top:.5rem">Requires Python 3.14+ and one provider API key.</p>
+            <p class="reveal" style="color:var(--text-secondary);font-size:.85rem;margin-top:.5rem">Requires Python 3.14+ and one provider API key.</p>
             <div class="reveal" style="max-width:640px;margin:26px auto 0;text-align:left">
-                <p style="opacity:.6;font-size:.85rem;margin-bottom:10px">Then set one provider key &mdash; <code style="font-family:var(--font-mono);font-size:.85em">superseded review --provider openai</code> (or <code style="font-family:var(--font-mono);font-size:.85em">anthropic</code>, <code style="font-family:var(--font-mono);font-size:.85em">qwen</code>) switches provider:</p>
+                <p style="color:var(--text-secondary);font-size:.85rem;margin-bottom:10px">Then set one provider key &mdash; <code style="font-family:var(--font-mono);font-size:.85em">superseded review --provider openai</code> (or <code style="font-family:var(--font-mono);font-size:.85em">anthropic</code>, <code style="font-family:var(--font-mono);font-size:.85em">qwen</code>) switches provider:</p>
                 <div style="display:flex;flex-direction:column;gap:8px;font-family:var(--font-mono);font-size:13px;color:var(--text-secondary)">
                     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px"><span><span style="color:var(--green)">$</span> export SUPERSEDED_DEEPSEEK_API_KEY=sk-...</span><span style="color:var(--text-tertiary);font-size:12px">deepseek</span></div>
                     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px"><span><span style="color:var(--green)">$</span> export SUPERSEDED_OPENAI_API_KEY=sk-...</span><span style="color:var(--text-tertiary);font-size:12px">openai</span></div>
@@ -625,13 +621,13 @@
             <div class="problem-grid reveal">
                 <div class="problem-card">
                     <div class="problem-icon green">&#x2713;</div>
-                    <h3>No more repetitive findings</h3>
-                    <p>Dismiss a finding once and it's gone. Superseded remembers so the same noise never resurfaces.</p>
+                    <h3>Converges, not repeats</h3>
+                    <p>Unresolved critical findings carry forward. Fixed ones clear. Duplicate comments never get re-posted.</p>
                 </div>
                 <div class="problem-card">
                     <div class="problem-icon blue">&#x25c9;</div>
-                    <h3>Feedback memory</h3>
-                    <p>Every dismissal sharpens the next review. Your team's judgment compounds into a higher-quality signal.</p>
+                    <h3>Evidence, not guesses</h3>
+                    <p>Every finding quotes the changed code. Pre-existing issues are tagged, not blamed on the PR.</p>
                 </div>
                 <div class="problem-card">
                     <div class="problem-icon violet">&#x25cf;</div>
@@ -646,34 +642,34 @@
         <div class="container">
             <div class="section-label reveal">The feedback loop</div>
             <h2 class="reveal">Every review raises the bar</h2>
-            <p class="loop-sub reveal">Dismiss a finding once. Superseded remembers. The next review avoids that noise. Code quality compounds with every PR.</p>
+            <p class="loop-sub reveal">Review, verify, and converge. Dismissed noise fades; unresolved blockers stay visible until they are fixed.</p>
             <div class="loop-steps reveal">
                 <div class="loop-step">
                     <div class="loop-step-num">1</div>
                     <h3>Review</h3>
-                    <p>5 AI passes analyze your diff in parallel with domain-specific prompts.</p>
+                    <p>5 AI passes plus a verify pass analyze your diff with domain-specific prompts.</p>
                 </div>
                 <div class="loop-step">
                     <div class="loop-step-num">2</div>
-                    <h3>Dismiss</h3>
-                    <p>Mark a finding as noise with one click. Add context if you want.</p>
+                    <h3>Decide</h3>
+                    <p>Dismiss noise or resolve a fixed thread. Both are tracked, separately.</p>
                 </div>
                 <div class="loop-step">
                     <div class="loop-step-num">3</div>
                     <h3>Learn</h3>
-                    <p>SQLite memory stores the decision and reasoning, scoped to your repo.</p>
+                    <p>SQLite stores human decisions. Verifier drops never train the rules.</p>
                 </div>
                 <div class="loop-step">
                     <div class="loop-step-num">4</div>
-                    <h3>Improve</h3>
-                    <p>Next review injects dismissed findings as negative context. Noise drops.</p>
+                    <h3>Converge</h3>
+                    <p>Next round carries unresolved findings, suppresses repeats, and caps the loop.</p>
                 </div>
             </div>
             <div class="loop-stat reveal">
                 <div class="loop-stat-icon">&#x2193;</div>
                 <div class="loop-stat-text">
-                    <strong>Fewer false positives over time</strong>
-                    <span>Dismissed findings stop resurfacing as memory accumulates</span>
+                    <strong>Fewer false positives, fewer repeat rounds</strong>
+                    <span>Human feedback sharpens the prompt; convergence keeps the PR moving</span>
                 </div>
             </div>
         </div>
@@ -683,7 +679,7 @@
         <div class="container">
             <div class="section-label reveal">Review passes</div>
             <h2 class="reveal">5 specialized passes.<br>One parallel run.</h2>
-            <p class="section-sub reveal">Each pass gets a targeted prompt and runs concurrently. Findings merge and deduplicate automatically.</p>
+            <p class="section-sub reveal">Each pass gets a targeted prompt and runs concurrently. A verify pass and deterministic grounding filter the merged output.</p>
             <div class="passes-grid reveal">
                 <div class="pass-card"><span class="pass-badge red">SECURITY</span><h3>Security</h3><p>Injection, auth, secrets, crypto, supply chain</p></div>
                 <div class="pass-card"><span class="pass-badge amber">CORRECTNESS</span><h3>Correctness</h3><p>Logic errors, edge cases, error handling</p></div>
@@ -698,14 +694,17 @@
         <div class="container">
             <div class="section-label reveal">Features</div>
             <h2 class="reveal">Built for real workflows</h2>
-            <p class="section-sub reveal">CLI for local dev. GitHub Actions for CI. Server mode for multi-repo. Memory that improves over time.</p>
+            <p class="section-sub reveal">CLI for local dev. GitHub Actions for CI. Server mode for multi-repo. Grounded findings and converging rounds everywhere.</p>
             <div class="features-grid reveal">
-                <div class="feature-card"><div class="feature-icon">&#x2666;</div><h3>GitHub integration</h3><p>Post findings as inline PR review comments. Critical or important issues request changes. Uses gh CLI.</p></div>
+                <div class="feature-card"><div class="feature-icon">&#x2666;</div><h3>GitHub integration</h3><p>Inline comments with PRE-EXISTING, UNVERIFIED, and STATIC tags. Carried blockers stay visible by title and location.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x2663;</div><h3>Provider choice</h3><p>DeepSeek, OpenAI, Anthropic, or Qwen — one API key, one <code>--provider</code> flag. No CLI agents or sandboxes.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x2665;</div><h3>GitHub Action</h3><p>Composite Action POSTs to your review server. No agents or secrets in CI &mdash; the server does the work.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x2660;</div><h3>Server mode</h3><p>Self-hosted GitHub App. Multiple repos, webhook-driven, configurable concurrency.</p></div>
                 <div class="feature-card"><div class="feature-icon">&#x25cb;</div><h3>Structured output</h3><p>JSON for piping, markdown for docs, terminal table for quick scanning.</p></div>
-                <div class="feature-card"><div class="feature-icon">&#x25a3;</div><h3>Static analysis</h3><p>Auto-detects your linters (ruff, mypy, eslint, tsc, gitleaks, and more) and injects signals before AI review.</p></div>
+                <div class="feature-card"><div class="feature-icon">&#x25a3;</div><h3>Static analysis</h3><p>Auto-detects your linters (ruff, mypy, eslint, tsc, gitleaks, and more) and suppresses advisory duplicates.</p></div>
+                <div class="feature-card"><div class="feature-icon">&#x25c8;</div><h3>Evidence-grounded</h3><p>Every finding must quote the changed code. Unverified advisory findings are dropped; pre-existing issues never block.</p></div>
+                <div class="feature-card"><div class="feature-icon">&#x25b2;</div><h3>Converging rounds</h3><p>Unresolved critical findings carry forward. Duplicates are suppressed. <code>max_review_rounds</code> stops endless loops.</p></div>
+                <div class="feature-card"><div class="feature-icon">&#x25cf;</div><h3>Measurable quality</h3><p><code>feedback --stats</code> shows human dismissals vs verifier drops. <code>superseded eval</code> scores a 20-case corpus.</p></div>
             </div>
         </div>
     </section>
@@ -717,6 +716,8 @@
             <div class="cta-commands reveal">
                 <div class="cta-cmd"><span class="prompt">$</span> uv tool install git+https://github.com/fabioesposito/superseded</div>
                 <div class="cta-cmd"><span class="prompt">$</span> superseded review --diff HEAD~1..HEAD</div>
+                <div class="cta-cmd"><span class="prompt">$</span> superseded feedback --stats</div>
+                <div class="cta-cmd"><span class="prompt">$</span> superseded eval tests/evals/cases.yaml --dry-run</div>
                 <div class="cta-cmd"><span class="prompt">$</span> SUPERSEDED_SERVER_URL=... SUPERSEDED_SERVER_KEY=... superseded review --pr 123</div>
             </div>
             <div class="cta-actions reveal">

@@ -23,12 +23,13 @@ max_concurrent_reviews: 3
 temp_dir: "/tmp/superseded"
 log_level: "info"
 database_url: null                    # null = SQLite, or postgresql://...
-provider: deepseek                    # deepseek | openai | anthropic — provider is fixed server-side
+provider: deepseek                    # deepseek | openai | anthropic | qwen — provider is fixed server-side
 model: null                           # null = use repo's .superseded.yaml
 reasoning_effort: max                 # server-side pin; null/unset = repo's choice
 deepseek_api_key: "sk-..."            # or set SUPERSEDED_DEEPSEEK_API_KEY
 # openai_api_key: "sk-..."            # for provider: openai (or SUPERSEDED_OPENAI_API_KEY)
 # anthropic_api_key: "sk-ant-..."     # for provider: anthropic (or SUPERSEDED_ANTHROPIC_API_KEY)
+# qwen_api_key: "sk-..."              # for provider: qwen (or SUPERSEDED_QWEN_API_KEY)
 ```
 
 Environment variables (prefixed with `SUPERSEDED_`):
@@ -41,6 +42,7 @@ Environment variables (prefixed with `SUPERSEDED_`):
 | `SUPERSEDED_DEEPSEEK_API_KEY` | `deepseek_api_key` | No (unless `provider: deepseek`) | — |
 | `SUPERSEDED_OPENAI_API_KEY` | `openai_api_key` | No (unless `provider: openai`) | — |
 | `SUPERSEDED_ANTHROPIC_API_KEY` | `anthropic_api_key` | No (unless `provider: anthropic`) | — |
+| `SUPERSEDED_QWEN_API_KEY` | `qwen_api_key` | No (unless `provider: qwen`) | — |
 | `SUPERSEDED_PORT` | `port` | No | `8000` |
 | `SUPERSEDED_HOST` | `host` | No | `127.0.0.1` |
 | `SUPERSEDED_BEHIND_PROXY` | `behind_proxy` | No | `false` |
@@ -59,8 +61,9 @@ review, overriding the repo's `.superseded.yaml`. Leave it unset (default
 `max`) to let each repo choose via `reasoning_effort:`.
 
 The server requires the API key matching its `provider:` — one of
-`SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, or
-`SUPERSEDED_ANTHROPIC_API_KEY` — and refuses to start without it.
+`SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`,
+`SUPERSEDED_ANTHROPIC_API_KEY`, or `SUPERSEDED_QWEN_API_KEY` — and refuses to
+start without it.
 `SUPERSEDED_API_KEY` (optional) is the bearer key
 for the `/review/pr` endpoint that the GitHub Action calls (the Action's
 `server-key` input). Upgrading from v0.5.x? See [MIGRATION.md](../../MIGRATION.md).
@@ -69,8 +72,9 @@ Launch:
 
 ```bash
 export SUPERSEDED_DEEPSEEK_API_KEY=sk-...   # the key matching your provider: — required
-export SUPERSEDED_OPENAI_API_KEY=sk-...     # ...or these, for provider: openai / anthropic
+export SUPERSEDED_OPENAI_API_KEY=sk-...     # ...or these, for provider: openai / anthropic / qwen
 export SUPERSEDED_ANTHROPIC_API_KEY=sk-ant-...
+export SUPERSEDED_QWEN_API_KEY=sk-...
 superseded serve --config superseded-server.yaml
 # or with overrides
 superseded serve --port 9000 --host 0.0.0.0
@@ -88,6 +92,18 @@ SUPERSEDED_TLS_CERT=/etc/ssl/cert.pem SUPERSEDED_TLS_KEY=/etc/ssl/key.pem supers
 | `push` | Logged only |
 
 The server clones the repo into `/tmp/superseded/` (or your configured `temp_dir`), checks out the PR head, and runs the review. Results appear as a GitHub Check Run on the PR with findings listed. The server never invokes `gh` — it talks to the GitHub REST API directly and clones via `git`.
+
+### Convergence Across Pushes
+
+The server is convergence-aware. It stores PR-scoped findings in `pr_findings` and a `review_round` counter:
+
+- the first review covers the full PR; later pushes only review new commits
+- unresolved critical/important findings carry forward and keep the check run failing
+- findings matching an already-open or dismissed fingerprint are not posted again
+- resolved GitHub threads mark the finding `resolved`, so the same issue can be re-raised if it genuinely reappears
+- `max_review_rounds` from the repo's `.superseded.yaml` (default 3) caps the loop; past the cap only critical findings are posted
+
+The check-run summary separates new findings from “still open from earlier rounds,” and lists carried findings by title and `file:line`. A `post: false` request stays single-shot and does not mutate convergence state.
 
 ### Security
 
@@ -110,6 +126,8 @@ The server clones the repo into `/tmp/superseded/` (or your configured `temp_dir
 | Path | Purpose |
 |---|---|
 | `POST /webhook` | GitHub webhook receiver |
+| `POST /review/pr` | On-demand review submission (bearer `api_key`; body `{owner, repo, pr_number, passes?, post?}`) |
+| `GET /review/jobs/{job_id}` | Poll an on-demand review job for status and findings |
 | `GET /health` | Health check (optional token auth) |
 
 ### PostgreSQL Backend
@@ -132,8 +150,9 @@ that POSTs `{owner, repo, pr_number, passes?}` to your running review server's
 review via its GitHub App. No Docker image is built in CI and no credentials
 live on the runner — the server owns provider/model/credentials, and the
 provider API key (one of `SUPERSEDED_DEEPSEEK_API_KEY`,
-`SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`) lives in the
-server's environment only; the Action never receives it.
+`SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`,
+`SUPERSEDED_QWEN_API_KEY`) lives in the server's environment only; the Action
+never receives it.
 
 ### Usage
 

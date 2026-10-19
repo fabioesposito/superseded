@@ -9,8 +9,9 @@ Superseded looks for `.superseded.yaml` in the repository root. If the file does
 | `deepseek` (default) | `SUPERSEDED_DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
 | `openai` | `SUPERSEDED_OPENAI_API_KEY` | `gpt-5.6-terra` |
 | `anthropic` | `SUPERSEDED_ANTHROPIC_API_KEY` | `claude-sonnet-5` |
+| `qwen` | `SUPERSEDED_QWEN_API_KEY` | `qwen3.8-max` |
 
-Set the env var for the provider you want, then either pass `--provider openai` (or `anthropic`) on the CLI or set `provider:` in `.superseded.yaml`.
+Set the env var for the provider you want, then either pass `--provider openai` (or `anthropic`, `qwen`) on the CLI or set `provider:` in `.superseded.yaml`.
 
 ## Generating a Config
 
@@ -22,7 +23,7 @@ superseded init
 superseded init --force
 ```
 
-`init` is non-interactive. It probes PATH for `gh`, checks for an installed `code-review-graph`, checks for the provider API keys (`SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`), and writes `.superseded.yaml` with `provider: deepseek`.
+`init` is non-interactive. It probes PATH for `gh`, checks for an installed `code-review-graph`, checks for the provider API keys (`SUPERSEDED_DEEPSEEK_API_KEY`, `SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`, `SUPERSEDED_QWEN_API_KEY`), and writes `.superseded.yaml` with `provider: deepseek`.
 
 ## Full Reference
 
@@ -30,8 +31,8 @@ superseded init --force
 # .superseded.yaml — all fields with their defaults
 
 # --- Provider ---
-provider: deepseek                       # deepseek | openai | anthropic
-model: null                              # null = provider default (deepseek-v4-flash / gpt-5.6-terra / claude-sonnet-5)
+provider: deepseek                       # deepseek | openai | anthropic | qwen
+model: null                              # null = provider default (deepseek-v4-flash / gpt-5.6-terra / claude-sonnet-5 / qwen3.8-max)
 reasoning_effort: max                    # low | medium | high | max — mapped per provider (anthropic max → xhigh)
 
 # --- Output ---
@@ -51,6 +52,7 @@ passes:
 # --- Memory & Learning ---
 memory: true                            # Enable memory/feedback store
 progressive: true                       # Incremental review (only new commits)
+max_review_rounds: 3                    # Past this round, only critical findings are posted
 learned_review: true                    # Adaptive learning from feedback
 reflection_threshold: 5                 # Min feedback events before AI reflection
 max_learned_rules: 5                    # Max learned rules to inject into prompts
@@ -58,7 +60,7 @@ max_learned_rules: 5                    # Max learned rules to inject into promp
 # --- Context Grounding ---
 static_analysis: true                   # Run ruff, mypy, eslint, etc.
 usage_retrieval: true                   # Cross-file caller search via rg
-conventions: true                       # Inject AGENTS.md, CLAUDE.md, etc.
+conventions: true                       # Inject REVIEW.md, AGENTS.md, CLAUDE.md, etc.
 spec_retrieval: true                    # Inject relevant specs & plans
 graph: true                             # Use code-review-graph for usage retrieval
 verify: true                            # Post-review verification pass (extra API call)
@@ -72,16 +74,18 @@ verify: true                            # Post-review verification pass (extra A
 
 | Env var | Purpose |
 |---|---|
-| `SUPERSEDED_PROVIDER` | `deepseek` (default) \| `openai` \| `anthropic` |
+| `SUPERSEDED_PROVIDER` | `deepseek` (default) \| `openai` \| `anthropic` \| `qwen` |
 | `SUPERSEDED_MODEL` | Override the provider's default model |
 | `SUPERSEDED_REASONING_EFFORT` | `low` \| `medium` \| `high` \| `max` (default `max`) |
 | `SUPERSEDED_DEEPSEEK_API_KEY` | Key for the `deepseek` provider |
 | `SUPERSEDED_OPENAI_API_KEY` | Key for the `openai` provider |
 | `SUPERSEDED_ANTHROPIC_API_KEY` | Key for the `anthropic` provider |
+| `SUPERSEDED_QWEN_API_KEY` | Key for the `qwen` provider |
 
 The provider requires the matching API key: `SUPERSEDED_DEEPSEEK_API_KEY`,
-`SUPERSEDED_OPENAI_API_KEY`, or `SUPERSEDED_ANTHROPIC_API_KEY` — without the
-key for the selected provider, `superseded review` fails.
+`SUPERSEDED_OPENAI_API_KEY`, `SUPERSEDED_ANTHROPIC_API_KEY`, or
+`SUPERSEDED_QWEN_API_KEY` — without the key for the selected provider,
+`superseded review` fails.
 
 ```
 environment variable > --provider/--model flag > config file
@@ -114,10 +118,11 @@ Which model provider to use. The provider is called directly over its API — no
 | `deepseek` (default) | `SUPERSEDED_DEEPSEEK_API_KEY` (required) | `deepseek-v4-flash` |
 | `openai` | `SUPERSEDED_OPENAI_API_KEY` (required) | `gpt-5.6-terra` |
 | `anthropic` | `SUPERSEDED_ANTHROPIC_API_KEY` (required) | `claude-sonnet-5` |
+| `qwen` | `SUPERSEDED_QWEN_API_KEY` (required) | `qwen3.8-max` |
 
 ### `model`
 
-The model ID sent with each review prompt. Set to `null` to use the provider's default (`deepseek-v4-flash` for `deepseek`, `gpt-5.6-terra` for `openai`, `claude-sonnet-5` for `anthropic`).
+The model ID sent with each review prompt. Set to `null` to use the provider's default (`deepseek-v4-flash` for `deepseek`, `gpt-5.6-terra` for `openai`, `claude-sonnet-5` for `anthropic`, `qwen3.8-max` for `qwen`).
 
 ### `reasoning_effort`
 
@@ -142,9 +147,10 @@ When `true`, every `superseded review --pr N` also posts inline comments. Equiva
 ### `memory`
 
 When enabled, findings are persisted to `.superseded/memory.db` (SQLite). This database stores:
-- All findings ever produced
-- User feedback (helpful/dismiss)
-- Review watermarks (for progressive review)
+- All findings ever produced, including verifier drops and grounding flags
+- Human feedback (helpful/dismiss/resolved) and verifier drops
+- PR-scoped convergence state (`pr_findings`: fingerprint, status, comment id)
+- Review watermarks and round counters (for progressive/converging review)
 - Learned rules from AI reflection
 
 The database is gitignored and should not be committed. Its schema is managed by Alembic migrations, applied automatically on startup; use `superseded migrate` to run or inspect them deliberately.
@@ -155,12 +161,20 @@ Disable with `memory: false` or `--no-memory` to run stateless reviews.
 
 When `true` and memory is enabled, superseded only reviews new commits since the last review. This avoids re-reviewing the entire PR on every push. Requires `memory: true`.
 
+Convergence runs alongside progressive review: unresolved critical/important findings from earlier rounds are carried forward, repeated open/dismissed fingerprints are suppressed, resolved findings can be re-raised, and `max_review_rounds` caps the loop. `--no-post` stays single-shot and does not read or mutate convergence state.
+
+### `max_review_rounds`
+
+Maximum number of posted review rounds for a PR before the reviewer changes behavior. Default `3`. Past the cap, only `critical` findings are posted and the review summary asks the author to step back and reconsider the approach. Carried unresolved critical/important findings still block. Set higher for high-risk repos, lower for high-volume repos.
+
 ### `learned_review`
 
 When `true` and memory is enabled, superseded builds a learned context from past feedback:
-1. Gathers stats on which finding types are accepted or dismissed
-2. When feedback events exceed `reflection_threshold`, sends them to the provider to infer team-preference rules
+1. Gathers stats on which finding types are accepted or dismissed by humans
+2. When human feedback events exceed `reflection_threshold`, sends them to the provider to infer team-preference rules
 3. Injects the top `max_learned_rules` into future review prompts
+
+Verifier drops are machine decisions and are excluded from stats, reflection prompts, and learned rules. Use `superseded feedback --stats` to see human dismissals and verifier drops separately.
 
 Example learned rules:
 - "Prefer early returns over nested conditionals"
@@ -191,7 +205,7 @@ When enabled, superseded detects available static analysis tools in your project
 | staticcheck | `go.mod` + `staticcheck` on PATH | Go |
 | gitleaks | `.git` directory exists | All |
 
-Results are capped at 4000 characters total.
+Results are capped at 4000 characters total. Advisory findings that duplicate a static-analysis signal are dropped before output; blocking duplicates are kept and tagged `STATIC`.
 
 ### `usage_retrieval`
 
@@ -199,14 +213,15 @@ When enabled, superseded extracts changed symbol names from the diff (functions,
 
 ### `conventions`
 
-When enabled, superseded reads project convention files from the repo root and injects them into prompts. Files checked:
+When enabled, superseded reads project convention files from the repo root and injects them into prompts. `REVIEW.md` is read first so repo-specific review policy survives the budget even if other docs are long. Files checked:
+- `REVIEW.md`
 - `AGENTS.md`
 - `CLAUDE.md`
 - `GEMINI.md`
 - `CONTRIBUTING.md`
 - `.editorconfig`
 
-Sections describing toolchains, environments, commands, and packaging are stripped to keep prompts concise. Capped at 4000 characters.
+Use `REVIEW.md` for review policy: what failure looks like in the repo, paths to skip, nit caps, and evidence expectations. Sections describing toolchains, environments, commands, and packaging are stripped to keep prompts concise. Capped at 4000 characters.
 
 ### `spec_retrieval`
 
@@ -233,3 +248,15 @@ code-review-graph build
 ### `verify`
 
 When enabled (default) and the run produced findings, superseded makes one extra provider call that double-checks each finding against the diff and drops false positives. Disable with `verify: false`, `--no-verify`, or `SUPERSEDED_VERIFY=0` to save tokens.
+
+### Grounding
+
+Independent of `verify`, a deterministic grounding layer runs around the pass:
+
+1. advisory findings duplicating static-analysis output are dropped
+2. findings outside the changed hunks are tagged `PRE-EXISTING` and never block
+3. evidence is checked against the diff/file context
+4. unverified advisory findings are dropped; unverified blocking findings are kept but tagged `UNVERIFIED`
+5. findings are re-ranked by severity
+
+Every finding should include an `evidence` quote from the changed code. This is enforced by the output pipeline, not just the prompt.

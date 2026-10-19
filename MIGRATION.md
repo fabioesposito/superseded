@@ -1,4 +1,4 @@
-# Migrating to superseded v0.6.0
+# Migrating to superseded v0.6.0 and later
 
 v0.6.0 replaces the external-AI-CLI harness (claude-code, codex, opencode) with
 a direct DeepSeek API call. The review engine, prompts, dedup, verification,
@@ -83,3 +83,14 @@ providers alongside DeepSeek. Set `SUPERSEDED_OPENAI_API_KEY` or
 anthropic` (or set `provider:` in `.superseded.yaml`). Reasoning effort gained
 a `medium` level: `low | medium | high | max` (default `max`; Anthropic maps
 `max` to `xhigh`). No existing configs break.
+
+## New provider (v0.8)
+
+v0.8 adds Qwen through the DashScope OpenAI-compatible endpoint. Set
+`SUPERSEDED_QWEN_API_KEY` and pass `--provider qwen` (or set `provider: qwen`
+in `.superseded.yaml`). The default model is `qwen3.8-max`. Existing configs
+continue to work unchanged.
+
+The memory schema also gained PR-scoped convergence state (`pr_findings` and
+`review_round`). Alembic applies it automatically on the next store open or
+server startup; no manual migration step is needed.

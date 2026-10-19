@@ -1,17 +1,19 @@
 # Superseded — Reviews That Supersede Themselves
 
-Superseded is a CLI tool that runs **five parallel AI code review passes** over your changes, then merges and deduplicates the findings. It calls your choice of DeepSeek, OpenAI, or Anthropic API directly — no external AI CLIs to install or configure. Over time, it **learns** from your feedback — dismissed false positives stop reappearing, and helpful findings get reinforced.
+Superseded is a CLI tool that runs **five parallel AI code review passes** over your changes, then merges, verifies, and grounds the findings in the changed code. It calls your choice of DeepSeek, OpenAI, Anthropic, or Qwen API directly — no external AI CLIs to install or configure. PR reviews **converge across rounds**, and over time the tool **learns** from your feedback — dismissed false positives stop reappearing, and helpful findings get reinforced.
 
 ## Why use it?
 
 | Capability | What it does |
 |---|---|
 | **Five specialised passes** | Security, correctness, performance, style, architecture — each with a focused prompt |
-| **Grounded context** | Injects your project conventions, relevant design specs, static analysis results, and cross-file usage into every prompt |
-| **Direct API provider** | Reviews run over DeepSeek, OpenAI, or Anthropic — no CLI agents or sandboxes to manage |
-| **Progressive review** | On PRs, only reviews new commits since the last pass. No wasted tokens |
-| **Adaptive learning** | Tracks which findings you accept or dismiss. Infers team preferences and adjusts future reviews |
-| **GitHub integration** | Post inline comments, check reactions for feedback, run as a GitHub Action |
+| **Evidence-grounded findings** | Requires a quote from the changed code, drops unverified advisory findings, and tags pre-existing/static issues instead of letting them block |
+| **Grounded context** | Injects `REVIEW.md`, project conventions, relevant design specs, static analysis results, and cross-file usage into every prompt |
+| **Direct API provider** | Reviews run over DeepSeek, OpenAI, Anthropic, or Qwen — no CLI agents or sandboxes to manage |
+| **Progressive + converging review** | Reviews only new commits, carries unresolved critical/important findings forward, suppresses duplicate comments, and caps review rounds |
+| **Adaptive learning** | Tracks human dismissals and resolutions separately from verifier drops. Infers team preferences and adjusts future reviews |
+| **Outcome stats & eval** | `feedback --stats` reports precision signals; `superseded eval` scores the reviewer against a 20-case corpus |
+| **GitHub integration** | Post inline comments, check reactions/resolutions for feedback, run as a GitHub Action |
 | **Server mode** | Run as a GitHub App that auto-reviews every PR on push |
 
 ## Quick Start
@@ -26,9 +28,10 @@ uv tool install git+https://github.com/fabioesposito/superseded
 # 2. Set your DeepSeek API key (get one at https://platform.deepseek.com)
 export SUPERSEDED_DEEPSEEK_API_KEY=sk-...
 
-# ...or use OpenAI or Anthropic instead
+# ...or use OpenAI, Anthropic, or Qwen instead
 export SUPERSEDED_OPENAI_API_KEY=sk-...    # https://platform.openai.com
 export SUPERSEDED_ANTHROPIC_API_KEY=sk-ant-...  # https://console.anthropic.com
+export SUPERSEDED_QWEN_API_KEY=sk-...      # Alibaba Cloud Model Studio / DashScope
 
 # 3. (Optional) Write a config file
 superseded init
@@ -53,7 +56,7 @@ superseded review --pr 123
 │
 ├─ Fetch diff (gh pr diff, or git diff for local)
 ├─ Gather grounded context in parallel:
-│   ├─ Project conventions (AGENTS.md, CLAUDE.md, etc.)
+│   ├─ Review policy (REVIEW.md) and project conventions (AGENTS.md, CLAUDE.md, etc.)
 │   ├─ Design specs & plans relevant to the diff
 │   ├─ Static analysis (ruff, mypy, eslint, etc.)
 │   ├─ Cross-file usage search (who calls the changed symbols?)
@@ -66,8 +69,11 @@ superseded review --pr 123
 │   ├─ style: naming, dead code, complexity, type hints
 │   └─ architecture: coupling, contracts, separation of concerns
 ├─ Merge & deduplicate findings by (file, line, title)
+├─ Verify false positives and validate evidence quotes
+├─ Tag pre-existing/static findings; suppress static duplicates
+├─ Apply convergence: carry unresolved findings, suppress repeats, cap rounds
 ├─ Rank by severity: critical > important > suggestion > nit
-├─ Output as table (default), JSON, or markdown
+├─ Output as table (default), JSON, markdown, or PR comments
 └─ Persist to memory store for future learning
 ```
 
@@ -78,11 +84,13 @@ superseded review --pr 123
   - `SUPERSEDED_DEEPSEEK_API_KEY` — platform.deepseek.com
   - `SUPERSEDED_OPENAI_API_KEY` — platform.openai.com
   - `SUPERSEDED_ANTHROPIC_API_KEY` — console.anthropic.com
+  - `SUPERSEDED_QWEN_API_KEY` — Alibaba Cloud Model Studio / DashScope
 - `gh` CLI (optional — required for local PR reviews and feedback; the server uses the GitHub REST API directly)
 
 ## Next Steps
 
-- **[Review Guide](review.md)** — all review modes, output formats, passes explained
+- **[Review Guide](review.md)** — all review modes, output formats, passes, grounding, and convergence explained
 - **[Configuration](configuration.md)** — every `.superseded.yaml` option
-- **[Feedback & Learning](feedback.md)** — how the tool learns from your team
+- **[Feedback & Learning](feedback.md)** — how the tool learns from your team and how to read outcome stats
+- **[Offline Eval](eval.md)** — validate reviewer changes against the case corpus
 - **[Server Mode](server.md)** — run as a GitHub App or CI Action

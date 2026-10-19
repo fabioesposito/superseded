@@ -1,6 +1,6 @@
 # Superseded
 
-Reviews that supersede themselves. Runs 5 parallel passes (security, correctness, performance, style, architecture) with the DeepSeek, OpenAI, Anthropic, or Qwen API. Posts findings as PR comments. Gets smarter every time you dismiss a finding.
+Reviews that supersede themselves. Runs 5 parallel passes (security, correctness, performance, style, architecture) with the DeepSeek, OpenAI, Anthropic, or Qwen API. Grounds every finding in the changed code, converges across PR review rounds, and gets sharper every time you dismiss a finding.
 
 ## Setup (30 seconds)
 
@@ -37,12 +37,14 @@ See `MIGRATION.md` if you're upgrading from v0.5.x.
 ## How It Works
 
 ```
-PR or diff → 5 parallel passes → merge/deduplicate → structured output → optional PR comments
+PR or diff → grounded context → 5 parallel passes → merge/deduplicate → verify
+          → evidence/pre-existing filtering → convergence → structured output
+          → optional PR comments
 ```
 
-Each pass sends a targeted prompt to the provider. Findings come back as structured JSON (severity, file, line, description, fix suggestion), merged and deduplicated.
+Each pass sends a targeted prompt to the provider. Findings come back as structured JSON (severity, file, line, description, fix suggestion), merged and deduplicated. A deterministic grounding layer then drops unverified advisory findings, tags pre-existing issues, and suppresses findings that duplicate static-analysis output.
 
-**Feedback loop:** Dismiss a finding once and it won't appear in future reviews. Superseded tracks dismissed comments per-repo via SQLite and injects them as negative context.
+**Feedback loop:** Dismiss a finding once and it won't be reposted on that PR; future reviews also learn to avoid similar noise. Superseded tracks dismissed comments per-repo via SQLite and injects them as negative context. Resolved threads are treated as fixed, not dismissed; unresolved critical/important findings carry forward across review rounds.
 
 ## Usage
 
@@ -83,6 +85,12 @@ superseded review --pr 123 --post
 
 # Selective passes
 superseded review --pr 123 --passes security,correctness
+
+# Review outcome stats (human dismissals, verifier drops, open findings, rounds)
+superseded feedback --stats
+
+# Score the reviewer against the offline eval corpus
+superseded eval tests/evals/cases.yaml --dry-run
 
 # Run/inspect database migrations explicitly (the tool also auto-migrates on startup)
 superseded migrate
@@ -227,18 +235,25 @@ superseded review --pr 123 --post
 # Pull reactions/resolutions on past comments and update memory
 superseded feedback --check --pr 123
 
+# Review outcome stats: human dismissals, verifier drops, open findings, rounds
+superseded feedback --stats
+
 # Manually mark a finding (by its GitHub comment id)
 superseded feedback <comment-id> --dismiss
 superseded feedback <comment-id> --helpful
 ```
 
-Dismissed findings are injected into future review prompts so the tool avoids repeating rejected comments.
+Dismissed findings are injected into future review prompts so the tool avoids repeating rejected comments. Resolved threads are marked resolved rather than dismissed; if the same issue reappears later, it can be raised again. Verifier drops are tracked separately and never train learned rules.
 
 ## Features
 
 - **Multi-pass review** — 5 specialized passes with focused prompts (security, correctness, performance, style, architecture)
-- **Feedback memory** — SQLite store tracks dismissed findings and their reasoning. Future reviews learn from your team's decisions
-- **GitHub integration** — Post findings as inline PR review comments. Critical issues request changes, suggestions post as comments
+- **Evidence-grounded findings** — Every finding must quote the changed code. Unverified advisory findings are dropped; pre-existing issues are tagged and never block the PR
+- **Converging PR reviews** — Unresolved critical/important findings carry forward across pushes, duplicate comments are suppressed, and `max_review_rounds` stops endless review loops
+- **Repo review policy** — `REVIEW.md` is read ahead of `AGENTS.md`/`CLAUDE.md`, so owners can set review rules, skip paths, and evidence requirements
+- **Feedback memory** — SQLite store tracks human dismissals, resolved threads, verifier drops, and learned rules. Future reviews learn from your team's decisions
+- **Outcome stats & offline eval** — `feedback --stats` reports human dismissals vs verifier drops; `superseded eval` scores the reviewer against a 20-case corpus
+- **GitHub integration** — Post findings as inline PR review comments. Blocking issues request changes; suggestions post as comments. Carried findings are listed by title and location
 - **Pluggable providers** — Direct DeepSeek, OpenAI, Anthropic, or Qwen API calls. Choose per-review or configure as default
 - **Structured output** — JSON for piping, markdown for docs, terminal table for quick scanning
 - **CI-native** — Composite GitHub Action hands each PR to your review server; no agents or secrets in CI
@@ -272,7 +287,12 @@ passes:
 post_to_pr: false
 format: table
 memory: true
+max_review_rounds: 3     # past this round, only critical findings are posted
+verify: true             # extra false-positive check before output
+conventions: true        # inject REVIEW.md / AGENTS.md / CLAUDE.md
 ```
+
+`REVIEW.md` at the repo root is read first as review policy. `max_review_rounds` caps repeated PR review rounds (default 3); unresolved critical/important findings still carry forward and block.
 
 Selection precedence for `provider`/`model`: **env vars > CLI flags > config**:
 
@@ -296,6 +316,7 @@ Selection precedence for `provider`/`model`: **env vars > CLI flags > config**:
 uv run pytest tests/ -v
 uv run ruff check src/ tests/
 uv run ruff format src/ tests/
+uv run superseded eval tests/evals/cases.yaml --dry-run
 ```
 
 ## License
