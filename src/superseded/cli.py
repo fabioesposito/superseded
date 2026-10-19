@@ -47,6 +47,7 @@ from superseded.review.engine import ReviewEngine
 from superseded.server.client import ServerReviewError, review_via_server
 
 if TYPE_CHECKING:
+    from superseded.eval.runner import EvalReport
     from superseded.server.config import ServerConfig
 
 MODEL_ENV = "SUPERSEDED_MODEL"
@@ -1365,3 +1366,90 @@ def _run_rule_action(action: str, rule_id: int) -> None:
         click.echo(f"Error: no learned rule found with id {rule_id}.", err=True)
         sys.exit(1)
     click.echo(f"Recorded {action} for rule {rule_id}.")
+
+
+@cli.command("eval")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Load and validate cases without running a provider.",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["table", "json"]),
+    default="table",
+    help="Output format (default: table).",
+)
+@click.option(
+    "--provider", default=None, help="Model provider (deepseek, openai, anthropic, qwen)."
+)
+@click.option("--model", default=None, help="Model to use.")
+@click.argument("cases", type=click.Path(exists=True, path_type=Path))
+@click.pass_context
+def eval_cases(
+    ctx: click.Context,
+    dry_run: bool,
+    output_format: str,
+    provider: str | None,
+    model: str | None,
+    cases: Path,
+) -> None:
+    """Run the offline eval corpus and score recall/precision."""
+    from superseded.eval.runner import load_cases, run_cases
+
+    setup_logging(
+        resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
+        resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
+    )
+
+    try:
+        loaded = load_cases(cases)
+    except (OSError, ValueError) as err:
+        click.echo(f"Error: {err}", err=True)
+        sys.exit(2)
+
+    if dry_run:
+        click.echo(f"{len(loaded)} eval cases loaded")
+        return
+
+    config = load_config()
+    provider_name = resolve_provider(provider, config)
+    model_name = resolve_model(model, config)
+
+    try:
+        engine = ReviewEngine.select(provider_name, model=model_name, config=config)
+    except (ValueError, ProviderConfigError) as err:
+        click.echo(f"Error: {err}", err=True)
+        sys.exit(2)
+
+    report = run_cases(loaded, engine.provider, config, model=engine.model)
+
+    if output_format == "json":
+        click.echo(report.model_dump_json(indent=2))
+    else:
+        click.echo(_format_eval_report(report))
+
+    if report.passed < report.total:
+        sys.exit(1)
+
+
+def _format_eval_report(report: EvalReport) -> str:
+    lines = [
+        f"{'Case':<28} {'Status':<6} {'Recall':<8} {'Precision':<10}",
+        "-" * 52,
+    ]
+    for c in report.cases:
+        lines.append(
+            f"{c.name:<28} {'PASS' if c.passed else 'FAIL':<6} "
+            f"{c.recall:<8.2f} {c.precision:<10.2f}"
+        )
+    lines.extend(
+        [
+            "",
+            f"Passed: {report.passed}/{report.total}",
+            f"Macro recall: {report.recall:.2f}",
+            f"Macro precision: {report.precision:.2f}",
+        ]
+    )
+    return "\n".join(lines)
