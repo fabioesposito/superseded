@@ -493,8 +493,15 @@ async def _test_refresh_excludes_verifier_only():
         agg = StatsAggregator(store)
         await agg._refresh("owner/repo")
 
-        rows = await store.get_review_stats("owner/repo", 1)
-        assert rows == []
+        # Query review_stats directly: get_review_stats() filters on total >= 1,
+        # so it would hide a lingering zero-total row if the HAVING clause were
+        # removed. A verifier-only group must not insert any row at all.
+        async with store._db() as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM review_stats WHERE repo = ?", ("owner/repo",)
+            )
+            row = await cursor.fetchone()
+        assert row[0] == 0
 
         # A human-dismissed finding produces exactly one row with total=1.
         await store.record_finding(
