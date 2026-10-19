@@ -1743,3 +1743,91 @@ async def test_convergence_skipped_when_post_false(tmp_path):
     github.fetch_review_threads.assert_not_awaited()
     assert await store.get_pr_findings("owner/repo", 7) == []
     assert await store.get_review_round("owner/repo", 7) == 0
+
+
+@pytest.mark.asyncio
+async def test_worker_records_dropped_findings_and_verifier_feedback(tmp_path):
+    """Dropped (verifier-rejected) findings must be persisted and linked to verifier feedback.
+
+    Previously dropped findings were never written to ``findings``, so the
+    ``record_verification_feedback`` row was an orphan. This test proves both
+    the finding row and a ``source='verifier'`` feedback row are recorded.
+    """
+    import aiosqlite
+
+    from superseded.memory.store import MemoryStore
+    from superseded.server.worker import _run_review_for_job
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    await store.init()
+
+    kept = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        title="kept",
+        description="d",
+        suggestion="s",
+    )
+    dropped = Finding(
+        pass_name="style",
+        severity="nit",
+        file="b.py",
+        line=2,
+        title="dropped",
+        description="d",
+        suggestion="s",
+        verification="dropped",
+        verification_reason="false positive",
+    )
+    fake_engine = MagicMock()
+    fake_engine.review.return_value = ReviewResult(findings=[kept], dropped_findings=[dropped])
+
+    github = FakeGitHubApp()
+    github.post_review = AsyncMock(return_value=[4242])
+    github.fetch_repo_file = AsyncMock(return_value="learned_review: false\n")
+    repo_manager = FakeRepoManager()
+    repo_manager.job_dir = MagicMock(return_value=tmp_path / "checkout")
+    job = ReviewJob(1, "owner", "repo", 7, "abc", "def")
+
+    with (
+        patch(
+            "superseded.server.worker.checkout_repo",
+            new_callable=AsyncMock,
+            return_value=tmp_path,
+        ),
+        patch("superseded.config.load_config", return_value=Config()),
+        patch("superseded.server.worker.ReviewEngine", return_value=fake_engine),
+        patch("superseded.context.gathering.compute_file_context", return_value=None),
+        patch("superseded.context.gathering.run_static_analysis", return_value=None),
+        patch("superseded.context.gathering.retrieve_usages", return_value=None),
+    ):
+        await _run_review_for_job(
+            github=github,
+            repo_manager=repo_manager,
+            token="t",
+            job=job,
+            correlation_id="c",
+            store=store,
+            provider=_make_provider(),
+        )
+
+    counts = await store.get_finding_outcome_counts("owner/repo")
+    assert counts["total"] == 2
+    assert counts["verifier_dropped"] == 1
+    assert counts["dismissed"] == 0  # verifier drops are not human dismissals
+
+    # The verifier feedback row is linked to the dropped finding (not orphaned).
+    async with store._db() as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT action, source FROM feedback WHERE finding_id = ?", (dropped.id,)
+        )
+        row = await cursor.fetchone()
+    assert row is not None
+    assert row["action"] == "dismiss"
+    assert row["source"] == "verifier"
+
+    # Dropped findings are excluded from human-dismissed prompt memory.
+    assert await store.get_dismissed_findings("owner/repo") == []

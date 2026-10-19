@@ -597,3 +597,97 @@ async def test_pr_findings_review_round_are_independent(tmp_path):
     await store.set_review_round("octo/r", 7, 1)
     assert await store.get_review_round("octo/r", 8) == 0
     assert await store.get_review_round("other/r", 7) == 0
+
+
+# --- outcome statistics (Task 7) ---
+
+
+def _batch_finding(
+    finding_id: str,
+    *,
+    pass_name: str = "security",
+    severity: str = "critical",
+    file: str = "a.py",
+    line: int = 1,
+    title: str = "t",
+    verification: str | None = None,
+    verification_reason: str | None = None,
+) -> dict:
+    return {
+        "id": finding_id,
+        "pass_name": pass_name,
+        "severity": severity,
+        "file": file,
+        "line": line,
+        "title": title,
+        "description": "d",
+        "reasoning": "",
+        "verification": verification,
+        "verification_reason": verification_reason,
+    }
+
+
+async def test_get_finding_outcome_counts_separates_human_and_verifier(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "oc.db")
+    await store.init()
+    await store.record_findings_batch(
+        [
+            _batch_finding("f1"),
+            _batch_finding("f2"),
+            _batch_finding("f3", verification="dropped", verification_reason="fp"),
+        ],
+        "octo/r",
+    )
+    await store.record_feedback("f1", "dismiss")  # human dismissal
+    await store.record_verification_feedback("f3")  # verifier drop
+
+    counts = await store.get_finding_outcome_counts("octo/r")
+    assert counts == {"total": 3, "dismissed": 1, "verifier_dropped": 1}
+
+
+async def test_get_finding_outcome_counts_empty_repo(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "oc.db")
+    await store.init()
+    assert await store.get_finding_outcome_counts("octo/r") == {
+        "total": 0,
+        "dismissed": 0,
+        "verifier_dropped": 0,
+    }
+
+
+async def test_get_dismissed_findings_excludes_verifier_drops(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "oc.db")
+    await store.init()
+    await store.record_findings_batch(
+        [
+            _batch_finding("f1", title="human"),
+            _batch_finding("f2", title="verifier", verification="dropped"),
+        ],
+        "octo/r",
+    )
+    await store.record_feedback("f1", "dismiss")
+    await store.record_verification_feedback("f2")
+
+    dismissed = await store.get_dismissed_findings("octo/r")
+    assert [r["id"] for r in dismissed] == ["f1"]
+
+
+async def test_get_open_pr_finding_count(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "oc.db")
+    await store.init()
+    await store.record_pr_findings_batch(
+        "octo/r",
+        7,
+        [_finding("fp1", status="open"), _finding("fp2", status="resolved")],
+    )
+    await store.record_pr_findings_batch("octo/r", 8, [_finding("fp3", status="open")])
+    assert await store.get_open_pr_finding_count("octo/r") == 2
+
+
+async def test_get_max_review_round(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "oc.db")
+    await store.init()
+    assert await store.get_max_review_round("octo/r") == 0
+    await store.set_review_round("octo/r", 7, 2)
+    await store.set_review_round("octo/r", 8, 5)
+    assert await store.get_max_review_round("octo/r") == 5

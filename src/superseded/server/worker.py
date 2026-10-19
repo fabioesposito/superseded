@@ -599,23 +599,43 @@ async def _run_review_for_job(
         if store is not None:
             repo_key = f"{job.owner}/{job.repo}"
             async with store:
-                if result.findings:
-                    await store.record_findings_batch(
-                        [
-                            {
-                                "id": f.id,
-                                "pass_name": f.pass_name,
-                                "severity": f.severity,
-                                "file": f.file,
-                                "line": f.line,
-                                "title": f.title,
-                                "description": f.description,
-                                "reasoning": f.reasoning,
-                            }
-                            for f in result.findings
-                        ],
-                        repo_key,
-                    )
+                all_findings = result.findings + result.dropped_findings
+                if all_findings:
+                    batch = [
+                        {
+                            "id": f.id,
+                            "pass_name": f.pass_name,
+                            "severity": f.severity,
+                            "file": f.file,
+                            "line": f.line,
+                            "title": f.title,
+                            "description": f.description,
+                            "reasoning": f.reasoning,
+                            "verification": f.verification,
+                            "verification_reason": f.verification_reason,
+                        }
+                        for f in result.findings
+                    ]
+                    batch += [
+                        {
+                            "id": f.id,
+                            "pass_name": f.pass_name,
+                            "severity": f.severity,
+                            "file": f.file,
+                            "line": f.line,
+                            "title": f.title,
+                            "description": f.description,
+                            "reasoning": f.reasoning,
+                            "verification": "dropped",
+                            "verification_reason": f.verification_reason,
+                        }
+                        for f in result.dropped_findings
+                    ]
+                    await store.record_findings_batch(batch, repo_key)
+
+                    for f in result.dropped_findings:
+                        await store.record_verification_feedback(f.id)
+
                 if convergence_active:
                     await store.record_pr_findings_batch(
                         repo_key,

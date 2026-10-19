@@ -315,3 +315,117 @@ async def test_memory_store_get_review_stats_respects_min_sample(tmp_path):
         assert len(await store.get_review_stats("octo/r", min_sample=1)) == 1
     finally:
         await store.close()
+
+
+# --- StatsAggregator.get_report (Task 7) ---
+
+
+async def test_get_report_zero_data():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = _make_store(tmpdir)
+        await store.init()
+        agg = StatsAggregator(store)
+        report = await agg.get_report("owner/repo")
+        assert report["total"] == 0
+        assert report["dismissed"] == 0
+        assert report["dismiss_rate"] == 0.0
+        assert report["verifier_dropped"] == 0
+        assert report["verifier_drop_rate"] == 0.0
+        assert report["open_pr_findings"] == 0
+        assert report["max_review_round"] == 0
+        assert report["by_pass"] == []
+
+
+async def test_get_report_full():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = _make_store(tmpdir)
+        await store.init()
+
+        # 4 findings: 2 human dismissals, 1 verifier drop, 1 accepted.
+        await store.record_findings_batch(
+            [
+                {
+                    "id": "f1",
+                    "pass_name": "security",
+                    "severity": "critical",
+                    "file": "a.py",
+                    "line": 1,
+                    "title": "t1",
+                    "description": "d",
+                    "reasoning": "",
+                },
+                {
+                    "id": "f2",
+                    "pass_name": "security",
+                    "severity": "critical",
+                    "file": "b.py",
+                    "line": 2,
+                    "title": "t2",
+                    "description": "d",
+                    "reasoning": "",
+                },
+                {
+                    "id": "f3",
+                    "pass_name": "style",
+                    "severity": "nit",
+                    "file": "c.py",
+                    "line": 3,
+                    "title": "t3",
+                    "description": "d",
+                    "reasoning": "",
+                    "verification": "dropped",
+                    "verification_reason": "fp",
+                },
+                {
+                    "id": "f4",
+                    "pass_name": "style",
+                    "severity": "nit",
+                    "file": "d.py",
+                    "line": 4,
+                    "title": "t4",
+                    "description": "d",
+                    "reasoning": "",
+                },
+            ],
+            "owner/repo",
+        )
+        await store.record_feedback("f1", "dismiss")
+        await store.record_feedback("f2", "dismiss")
+        await store.record_verification_feedback("f3")
+        await store.record_feedback("f4", "helpful")
+
+        await store.record_pr_findings_batch(
+            "owner/repo",
+            7,
+            [
+                {
+                    "fingerprint": "fp1",
+                    "finding_id": "f1",
+                    "pass_name": "security",
+                    "severity": "critical",
+                    "file": "a.py",
+                    "line": 1,
+                    "title": "t1",
+                    "status": "open",
+                }
+            ],
+        )
+        await store.set_review_round("owner/repo", 7, 3)
+
+        agg = StatsAggregator(store)
+        report = await agg.get_report("owner/repo")
+
+        assert report["total"] == 4
+        assert report["dismissed"] == 2
+        assert report["dismiss_rate"] == 0.5
+        assert report["verifier_dropped"] == 1
+        assert report["verifier_drop_rate"] == 0.25
+        assert report["open_pr_findings"] == 1
+        assert report["max_review_round"] == 3
+
+        by_key = {(r["pass"], r["severity"]): r for r in report["by_pass"]}
+        assert ("security", "critical") in by_key
+        assert ("style", "nit") in by_key
+        sec = by_key[("security", "critical")]
+        assert sec["total"] == 2 and sec["dismissed"] == 2 and sec["accepted"] == 0
+        assert sec["dismiss_rate"] == 1.0

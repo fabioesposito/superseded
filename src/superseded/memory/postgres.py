@@ -114,15 +114,19 @@ class PostgresStore:
         async with self._conn() as conn:
             await conn.executemany(
                 "INSERT INTO findings "
-                "(id, repo, pass, severity, file, line, title, description, reasoning) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
+                "(id, repo, pass, severity, file, line, title, description, reasoning, verification, verification_reason) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) "
                 "ON CONFLICT(id) DO UPDATE SET "
                 "severity = EXCLUDED.severity, "
                 "description = EXCLUDED.description, "
-                "reasoning = EXCLUDED.reasoning "
+                "reasoning = EXCLUDED.reasoning, "
+                "verification = EXCLUDED.verification, "
+                "verification_reason = EXCLUDED.verification_reason "
                 "WHERE EXCLUDED.severity IS DISTINCT FROM findings.severity "
                 "OR EXCLUDED.description IS DISTINCT FROM findings.description "
-                "OR EXCLUDED.reasoning IS DISTINCT FROM findings.reasoning",
+                "OR EXCLUDED.reasoning IS DISTINCT FROM findings.reasoning "
+                "OR EXCLUDED.verification IS DISTINCT FROM findings.verification "
+                "OR EXCLUDED.verification_reason IS DISTINCT FROM findings.verification_reason",
                 [
                     (
                         f["id"],
@@ -134,6 +138,8 @@ class PostgresStore:
                         f["title"],
                         f["description"],
                         f.get("reasoning", ""),
+                        f.get("verification"),
+                        f.get("verification_reason"),
                     )
                     for f in findings
                 ],
@@ -178,10 +184,27 @@ class PostgresStore:
         await self.record_feedback(finding["id"], action)
         return True
 
+    async def record_verification_feedback(self, finding_id: str) -> None:
+        """Record that the AI verification pass dismissed a finding.
+
+        Uses ``source = 'verifier'`` to distinguish from human ``dismiss`` actions.
+        """
+        async with self._conn() as conn, conn.transaction():
+            await conn.execute(
+                "INSERT INTO feedback (finding_id, action, source) VALUES ($1, $2, $3)",
+                finding_id,
+                "dismiss",
+                "verifier",
+            )
+            await conn.execute("UPDATE findings SET dismissed = TRUE WHERE id = $1", finding_id)
+
     async def get_dismissed_findings(self, repo: str) -> list[dict]:
         async with self._conn() as conn:
             rows = await conn.fetch(
-                "SELECT * FROM findings WHERE repo = $1 AND dismissed = TRUE", repo
+                "SELECT * FROM findings "
+                "WHERE repo = $1 AND dismissed = TRUE "
+                "AND (verification IS NULL OR verification != 'dropped')",
+                repo,
             )
             return [dict(r) for r in rows]
 
@@ -397,6 +420,41 @@ class PostgresStore:
                 min_sample,
             )
             return [dict(r) for r in rows]
+
+    async def get_finding_outcome_counts(self, repo: str) -> dict:
+        """Return outcome counts for a repo's findings (human dismissals vs verifier drops)."""
+        async with self._conn() as conn:
+            row = await conn.fetchrow(
+                "SELECT "
+                "COUNT(*) AS total, "
+                "COUNT(*) FILTER (WHERE dismissed = TRUE "
+                "AND (verification IS NULL OR verification != 'dropped')) AS dismissed, "
+                "COUNT(*) FILTER (WHERE verification = 'dropped') AS verifier_dropped "
+                "FROM findings WHERE repo = $1",
+                repo,
+            )
+            return {
+                "total": row["total"],
+                "dismissed": row["dismissed"],
+                "verifier_dropped": row["verifier_dropped"],
+            }
+
+    async def get_open_pr_finding_count(self, repo: str) -> int:
+        """Return the number of open (unresolved) pr_findings for a repo."""
+        async with self._conn() as conn:
+            return await conn.fetchval(
+                "SELECT COUNT(*) FROM pr_findings WHERE repo = $1 AND status = 'open'",
+                repo,
+            )
+
+    async def get_max_review_round(self, repo: str) -> int:
+        """Return the highest review_round recorded for a repo, or 0."""
+        async with self._conn() as conn:
+            value = await conn.fetchval(
+                "SELECT MAX(review_round) FROM review_watermarks WHERE repo = $1",
+                repo,
+            )
+            return value or 0
 
     async def get_installation_config(self, installation_id: int) -> dict[str, str]:
         async with self._conn() as conn:

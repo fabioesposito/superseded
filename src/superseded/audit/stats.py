@@ -50,3 +50,46 @@ class StatsAggregator:
     async def _refresh(self, repo: str) -> None:
         """Recompute review_stats from findings+feedback for this repo."""
         await self._store.refresh_review_stats(repo)
+
+    async def get_report(self, repo: str) -> dict:
+        """Assemble an outcome report for a repo, refreshing stats first.
+
+        Returns overall counts/rates (human dismissals and verifier drops),
+        open PR findings, the max review round, and per pass/severity rows.
+        """
+        await self._refresh(repo)
+
+        counts = await self._store.get_finding_outcome_counts(repo)
+        open_pr_findings = await self._store.get_open_pr_finding_count(repo)
+        max_review_round = await self._store.get_max_review_round(repo)
+        rows = await self._store.get_review_stats(repo, 1)
+
+        total = counts["total"]
+        dismissed = counts["dismissed"]
+        verifier_dropped = counts["verifier_dropped"]
+
+        by_pass: list[dict] = []
+        for r in rows:
+            r_total = r["total"]
+            by_pass.append(
+                {
+                    "pass": r["pass"],
+                    "severity": r["severity"],
+                    "file_pattern": r["file_pattern"],
+                    "total": r_total,
+                    "accepted": r["accepted"],
+                    "dismissed": r["dismissed"],
+                    "dismiss_rate": (r["dismissed"] / r_total) if r_total else 0.0,
+                }
+            )
+
+        return {
+            "total": total,
+            "dismissed": dismissed,
+            "dismiss_rate": (dismissed / total) if total else 0.0,
+            "verifier_dropped": verifier_dropped,
+            "verifier_drop_rate": (verifier_dropped / total) if total else 0.0,
+            "open_pr_findings": open_pr_findings,
+            "max_review_round": max_review_round,
+            "by_pass": by_pass,
+        }

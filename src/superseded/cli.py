@@ -709,29 +709,42 @@ async def _post_review_store(
 ) -> None:
     """Persist findings, watermark, and comment links in one event loop."""
     async with store:
-        if result.findings:
-            await store.record_findings_batch(
-                [
-                    {
-                        "id": f.id,
-                        "pass_name": f.pass_name,
-                        "severity": f.severity,
-                        "file": f.file,
-                        "line": f.line,
-                        "title": f.title,
-                        "description": f.description,
-                        "reasoning": f.reasoning,
-                        "verification": f.verification,
-                        "verification_reason": f.verification_reason,
-                    }
-                    for f in result.findings
-                ],
-                repo,
-            )
+        all_findings = result.findings + result.dropped_findings
+        if all_findings:
+            batch = [
+                {
+                    "id": f.id,
+                    "pass_name": f.pass_name,
+                    "severity": f.severity,
+                    "file": f.file,
+                    "line": f.line,
+                    "title": f.title,
+                    "description": f.description,
+                    "reasoning": f.reasoning,
+                    "verification": f.verification,
+                    "verification_reason": f.verification_reason,
+                }
+                for f in result.findings
+            ]
+            batch += [
+                {
+                    "id": f.id,
+                    "pass_name": f.pass_name,
+                    "severity": f.severity,
+                    "file": f.file,
+                    "line": f.line,
+                    "title": f.title,
+                    "description": f.description,
+                    "reasoning": f.reasoning,
+                    "verification": "dropped",
+                    "verification_reason": f.verification_reason,
+                }
+                for f in result.dropped_findings
+            ]
+            await store.record_findings_batch(batch, repo)
 
-            if result.dropped_findings:
-                for f in result.dropped_findings:
-                    await store.record_verification_feedback(f.id)
+            for f in result.dropped_findings:
+                await store.record_verification_feedback(f.id)
 
         if head_sha is not None and pr is not None:
             await store.set_watermark(repo, pr, head_sha)
@@ -1033,6 +1046,7 @@ def migrate(ctx: click.Context, database_url: str | None) -> None:
 
 @cli.command()
 @click.option("--check", is_flag=True, help="Check for feedback on past reviews")
+@click.option("--stats", is_flag=True, help="Show review outcome statistics for this repository")
 @click.option(
     "--pr",
     type=int,
@@ -1049,6 +1063,7 @@ def migrate(ctx: click.Context, database_url: str | None) -> None:
 def feedback(
     ctx: click.Context,
     check: bool,
+    stats: bool,
     pr: int | None,
     rules: bool,
     dismiss_rule: int | None,
@@ -1062,6 +1077,10 @@ def feedback(
         resolve_log_format(ctx.obj.get("log_format") if ctx.obj else None),
         resolve_log_level(ctx.obj.get("log_level") if ctx.obj else None),
     )
+
+    if stats:
+        _run_feedback_stats()
+        return
 
     if rules:
         _run_feedback_rules()
@@ -1281,6 +1300,37 @@ def _run_feedback_manual(comment_id: str, action: str) -> None:
     if action == "dismiss":
         asyncio.run(store.update_pr_finding_status(cid, "dismissed"))
     click.echo(f"Recorded {action} for comment {cid}.")
+
+
+def _run_feedback_stats() -> None:
+    repo = current_repo()
+    if repo is None:
+        click.echo("Error: could not resolve current repository (is gh authenticated?).", err=True)
+        sys.exit(1)
+    store = MemoryStore()
+    asyncio.run(store.init())
+    report = asyncio.run(StatsAggregator(store).get_report(repo))
+    click.echo(_format_stats_report(report))
+
+
+def _format_stats_report(report: dict) -> str:
+    lines = [
+        f"Total findings: {report['total']}",
+        f"Human dismissals: {report['dismissed']} ({report['dismiss_rate']:.1%})",
+        f"Verifier drops: {report['verifier_dropped']} ({report['verifier_drop_rate']:.1%})",
+        f"Open PR findings: {report['open_pr_findings']}",
+        f"Max review round: {report['max_review_round']}",
+    ]
+    if report["by_pass"]:
+        lines.append("")
+        lines.append("Pass / severity:")
+        for row in report["by_pass"]:
+            lines.append(
+                f"  {row['pass']} {row['severity']}: "
+                f"total={row['total']} accepted={row['accepted']} "
+                f"dismissed={row['dismissed']} dismiss_rate={row['dismiss_rate']:.1%}"
+            )
+    return "\n".join(lines)
 
 
 def _run_feedback_rules() -> None:

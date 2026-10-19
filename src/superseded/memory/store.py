@@ -351,7 +351,9 @@ class MemoryStore:
         async with self._db() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
-                "SELECT * FROM findings WHERE repo = ? AND dismissed = TRUE",
+                "SELECT * FROM findings "
+                "WHERE repo = ? AND dismissed = TRUE "
+                "AND (verification IS NULL OR verification != 'dropped')",
                 (repo,),
             )
             rows = await cursor.fetchall()
@@ -614,6 +616,46 @@ class MemoryStore:
             )
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
+
+    async def get_finding_outcome_counts(self, repo: str) -> dict:
+        """Return outcome counts for a repo's findings.
+
+        ``dismissed`` counts human dismissals only (verifier drops are excluded
+        by their ``verification = 'dropped'`` marker); ``verifier_dropped``
+        counts findings the AI verification pass discarded.
+        """
+        async with self._db() as db:
+            cursor = await db.execute(
+                "SELECT "
+                "COUNT(*) AS total, "
+                "COUNT(*) FILTER (WHERE dismissed = TRUE "
+                "AND (verification IS NULL OR verification != 'dropped')) AS dismissed, "
+                "COUNT(*) FILTER (WHERE verification = 'dropped') AS verifier_dropped "
+                "FROM findings WHERE repo = ?",
+                (repo,),
+            )
+            row = await cursor.fetchone()
+            return {"total": row[0], "dismissed": row[1], "verifier_dropped": row[2]}
+
+    async def get_open_pr_finding_count(self, repo: str) -> int:
+        """Return the number of open (unresolved) pr_findings for a repo."""
+        async with self._db() as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM pr_findings WHERE repo = ? AND status = 'open'",
+                (repo,),
+            )
+            row = await cursor.fetchone()
+            return row[0]
+
+    async def get_max_review_round(self, repo: str) -> int:
+        """Return the highest review_round recorded for a repo, or 0."""
+        async with self._db() as db:
+            cursor = await db.execute(
+                "SELECT MAX(review_round) FROM review_watermarks WHERE repo = ?",
+                (repo,),
+            )
+            row = await cursor.fetchone()
+            return row[0] or 0
 
     async def get_installation_config(self, installation_id: int) -> dict[str, str]:
         async with self._db() as db:

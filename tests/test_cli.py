@@ -1168,3 +1168,134 @@ def test_feedback_manual_dismiss_marks_pr_status(monkeypatch, tmp_path):
 
     rows = asyncio.run(store.get_pr_findings("owner/repo", 7))
     assert rows[0]["status"] == "dismissed"
+
+
+# --- feedback --stats (Task 7) ---
+
+
+def test_feedback_stats_prints_report(monkeypatch, tmp_path):
+    import asyncio
+
+    from superseded.memory.store import MemoryStore
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+    asyncio.run(
+        store.record_findings_batch(
+            [
+                {
+                    "id": "f1",
+                    "pass_name": "security",
+                    "severity": "critical",
+                    "file": "a.py",
+                    "line": 1,
+                    "title": "t1",
+                    "description": "d",
+                    "reasoning": "",
+                },
+                {
+                    "id": "f2",
+                    "pass_name": "style",
+                    "severity": "nit",
+                    "file": "b.py",
+                    "line": 2,
+                    "title": "t2",
+                    "description": "d",
+                    "reasoning": "",
+                },
+                {
+                    "id": "f3",
+                    "pass_name": "style",
+                    "severity": "nit",
+                    "file": "c.py",
+                    "line": 3,
+                    "title": "t3",
+                    "description": "d",
+                    "reasoning": "",
+                    "verification": "dropped",
+                    "verification_reason": "fp",
+                },
+            ],
+            "owner/repo",
+        )
+    )
+    asyncio.run(store.record_feedback("f1", "dismiss"))
+    asyncio.run(store.record_verification_feedback("f3"))
+
+    monkeypatch.setattr("superseded.cli.MemoryStore", lambda: store)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: "owner/repo")
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["feedback", "--stats"])
+    assert result.exit_code == 0, result.output
+    assert "Total findings: 3" in result.output
+    assert "Human dismissals: 1" in result.output
+    assert "33.3%" in result.output
+    assert "Verifier drops: 1" in result.output
+    assert "Open PR findings: 0" in result.output
+    assert "Max review round: 0" in result.output
+    assert "Pass / severity:" in result.output
+
+
+def test_feedback_stats_exits_when_repo_unresolvable(monkeypatch):
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: None)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["feedback", "--stats"])
+    assert result.exit_code == 1
+    assert "could not resolve" in result.output.lower()
+
+
+def test_post_review_store_records_dropped_findings(monkeypatch, tmp_path):
+    import asyncio
+
+    from superseded.cli import _post_review_store
+    from superseded.memory.store import MemoryStore
+    from superseded.models import Finding, ReviewResult
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+
+    kept = Finding(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        title="kept",
+        description="d",
+        suggestion="s",
+    )
+    dropped = Finding(
+        pass_name="style",
+        severity="nit",
+        file="b.py",
+        line=2,
+        title="dropped",
+        description="d",
+        suggestion="s",
+        verification="dropped",
+        verification_reason="false positive",
+    )
+    result = ReviewResult(findings=[kept], dropped_findings=[dropped])
+
+    asyncio.run(_post_review_store(store, result, "owner/repo", None, None, False, "", 0))
+
+    counts = asyncio.run(store.get_finding_outcome_counts("owner/repo"))
+    assert counts["total"] == 2
+    assert counts["verifier_dropped"] == 1
+    assert counts["dismissed"] == 0
+
+    async def _feedback_source():
+        import aiosqlite
+
+        async with store._db() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT action, source FROM feedback WHERE finding_id = ?", (dropped.id,)
+            )
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+    fb = asyncio.run(_feedback_source())
+    assert fb is not None
+    assert fb["action"] == "dismiss"
+    assert fb["source"] == "verifier"
