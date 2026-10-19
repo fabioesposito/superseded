@@ -322,3 +322,44 @@ def test_build_verify_prompt_handles_none_file_context():
     ]
     prompt = build_verify_prompt(findings, "diff", None)
     assert "No additional file context" in prompt
+
+
+def test_evidence_in_json_format():
+    assert '"evidence"' in JSON_FORMAT_INSTRUCTIONS
+
+
+def test_evidence_rule_in_prompt():
+    prompt = build_prompt(
+        pass_name="security",
+        diff="diff --git a/x.py b/x.py\n+bad",
+        pr_description=None,
+        file_context=None,
+        memory_context=None,
+    )
+    assert "1-3 exact lines" in prompt
+    assert "evidence" in prompt
+
+
+def test_retry_prompt_requires_evidence():
+    retry = build_retry_prompt("ORIGINAL PROMPT", ["missing title"])
+    assert "evidence" in retry
+
+
+def test_verify_prompt_includes_evidence_and_pre_existing():
+    findings = [
+        Finding(
+            pass_name="security",
+            severity="critical",
+            file="a.py",
+            line=1,
+            title="SQLI",
+            description="Raw query",
+            suggestion="Parameterize",
+            evidence="+    return 2",
+            pre_existing=True,
+        )
+    ]
+    prompt = build_verify_prompt(findings, "diff", "ctx")
+    assert '"evidence"' in prompt
+    assert "return 2" in prompt
+    assert '"pre_existing"' in prompt

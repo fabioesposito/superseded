@@ -189,6 +189,27 @@ def _read_file_lines(path: str) -> list[str]:
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 
 
+def file_hunk_windows(diff: str) -> dict[str, list[tuple[int, int]]]:
+    """Map each changed file to its inclusive new-side line windows.
+
+    Each window is ``(start, end)`` covering the hunk's counted new lines. A
+    hunk ``@@ -a,b +c,d @@`` covers new lines ``[c, c+d-1]`` (d defaults to 1
+    when omitted). Hunks with ``d == 0`` produce an empty window and are skipped.
+    """
+    windows: dict[str, list[tuple[int, int]]] = {}
+    for entry in parse_diff_files(diff):
+        file_path = entry["file"]
+        wins: list[tuple[int, int]] = []
+        for m in _HUNK_RE.finditer(entry["diff"]):
+            start = int(m.group(2))
+            count = int(m.group(3)) if m.group(3) is not None else 1
+            if count <= 0:
+                continue
+            wins.append((start, start + count - 1))
+        windows[file_path] = wins
+    return windows
+
+
 def compute_file_context(
     diff: str, context_padding: int = DEFAULT_CONTEXT_PADDING, root: Path | None = None
 ) -> str:

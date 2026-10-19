@@ -43,6 +43,7 @@ Return ONLY a JSON array. No explanation text before or after.
     "title": "Short description",
     "description": "Detailed explanation of the issue",
     "suggestion": "Code fix or suggestion",
+    "evidence": "1-3 exact lines of changed code, quoted verbatim",
     "reasoning": "1-3 sentences explaining what evidence led to this finding."
   }
 ]
@@ -105,6 +106,7 @@ def build_prompt(
 - Do NOT report issues in unchanged code unless directly related to the change
 - If there are no issues in this category, return an empty array
 - For each finding, briefly (1-3 sentences) explain what evidence led you to flag it
+- Quote 1-3 exact lines of changed code in the `evidence` field of every finding. If you cannot quote the exact changed lines, do not report the finding.
 - Enforce the Project Conventions listed below: flag deviations as findings. Use severity `nit`/`suggestion` by default; use `important` only when the deviation breaks correctness or security. Do not flag code that conforms to the conventions.
 - Use the Relevant Design Specs & Plans as authoritative intent. If changed code contradicts a spec, flag it at severity `important` or higher, citing the spec path.
 
@@ -165,6 +167,8 @@ def build_verify_prompt(
                 "line": f.line,
                 "title": f.title,
                 "description": f.description,
+                "evidence": f.evidence,
+                "pre_existing": f.pre_existing,
             }
             for f in findings
         ],
@@ -232,7 +236,7 @@ def build_retry_prompt(original_prompt: str, errors: list[str]) -> str:
         f"that failed validation:\n\n{bullets}{extra}\n\n"
         "Re-emit your findings as a valid JSON array. Each finding must use a "
         "`severity` of exactly `critical`, `important`, `suggestion`, or `nit`, "
-        "and include `title`, `description`, `suggestion`, `file`, and `line`. "
+        "and include `title`, `description`, `suggestion`, `evidence`, `file`, and `line`. "
         "Fix every rejected finding and re-include the findings that were already "
         "valid. Return ONLY the JSON array — no prose."
     )

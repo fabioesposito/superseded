@@ -246,3 +246,67 @@ def test_review_result_has_usage_field():
     r = ReviewResult()
     assert isinstance(r.usage, ReviewUsage)
     assert r.usage.prompt_tokens == 0
+
+
+def _grounding_finding(**overrides):
+    kwargs = dict(
+        pass_name="security",
+        severity="critical",
+        file="a.py",
+        line=1,
+        title="issue",
+        description="d",
+        suggestion="s",
+    )
+    kwargs.update(overrides)
+    return Finding(**kwargs)
+
+
+def test_finding_grounding_fields_default():
+    f = _grounding_finding()
+    assert f.evidence == ""
+    assert f.evidence_verified is False
+    assert f.pre_existing is False
+    assert f.duplicate_of_static is False
+
+
+def test_finding_evidence_roundtrip():
+    f = _grounding_finding(evidence="+    return 2")
+    data = f.model_dump()
+    assert Finding(**data).evidence == "+    return 2"
+
+
+def test_is_blocking_for_blocking_severities():
+    assert _grounding_finding(severity="critical").is_blocking is True
+    assert _grounding_finding(severity="important").is_blocking is True
+
+
+def test_is_blocking_false_for_advisory_severities():
+    assert _grounding_finding(severity="suggestion").is_blocking is False
+    assert _grounding_finding(severity="nit").is_blocking is False
+
+
+def test_is_blocking_ignores_pre_existing():
+    # A finding outside the changed hunks must never block a PR.
+    assert _grounding_finding(severity="critical", pre_existing=True).is_blocking is False
+
+
+def test_fingerprint_ignores_line_number():
+    f1 = _grounding_finding(file="a.py", line=10, title="SQL injection")
+    f2 = _grounding_finding(file="a.py", line=99, title="SQL injection")
+    assert f1.fingerprint == f2.fingerprint
+
+
+def test_fingerprint_distinguishes_title():
+    f1 = _grounding_finding(file="a.py", line=10, title="SQL injection")
+    f2 = _grounding_finding(file="a.py", line=10, title="XSS")
+    assert f1.fingerprint != f2.fingerprint
+
+
+def test_review_result_convergence_defaults():
+    r = ReviewResult()
+    assert r.carried_findings == []
+    assert r.round_number == 0
+    assert r.at_round_cap is False
+    assert r.suppressed_count == 0
+    assert r.convergence_note == ""

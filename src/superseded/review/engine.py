@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Literal
 from superseded.models import Finding, ReviewResult, ReviewUsage
 from superseded.providers import PROVIDER_MAP, Provider
 from superseded.providers.parsing import parse_findings_json
-from superseded.review.merger import merge_findings
+from superseded.review.grounding import (
+    filter_static_duplicates,
+    mark_pre_existing,
+    validate_evidence,
+)
+from superseded.review.merger import merge_findings, rank_by_severity
 from superseded.review.prompts import build_prompt, build_retry_prompt
 from superseded.review.verifier import _parse_verdicts
 
@@ -227,8 +232,16 @@ class ReviewEngine:
             result.warnings = warnings
             result.usage = total_usage
 
-            if self.config.verify and result.findings:
-                result = self._run_verification(result, diff, file_context, timeout)
+            if result.findings:
+                # Deterministic grounding layer: drop static-analysis dupes, mark
+                # findings outside the diff hunks, verify quoted evidence, then
+                # re-rank by severity.
+                result.findings = filter_static_duplicates(result.findings, static_signals)
+                result.findings = mark_pre_existing(result.findings, diff)
+                if self.config.verify:
+                    result = self._run_verification(result, diff, file_context, timeout)
+                result.findings = validate_evidence(result.findings, diff, file_context)
+                result.findings = rank_by_severity(result.findings)
 
         return result
 

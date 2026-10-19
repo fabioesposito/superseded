@@ -363,3 +363,32 @@ def test_run_verification_skips_when_no_findings():
     new_result = engine._run_verification(result, "diff", "ctx", 600)
     assert engine.provider.complete.call_count == 0
     assert new_result is result
+
+
+def test_review_grounds_findings_and_drops_ungrounded_suggestion():
+    from superseded.config import Config
+
+    grounded = (
+        '{"severity": "suggestion", "file": "a.py", "line": 3, "title": "grounded", '
+        '"description": "d", "suggestion": "s", "evidence": "    return 2"}'
+    )
+    ungrounded = (
+        '{"severity": "suggestion", "file": "a.py", "line": 3, "title": "ungrounded", '
+        '"description": "d", "suggestion": "s", "evidence": "totally absent line"}'
+    )
+    diff = """diff --git a/a.py b/a.py
+--- a/a.py
++++ b/a.py
+@@ -1,3 +1,3 @@
+ def foo():
+-    return 1
++    return 2
+"""
+    engine = ReviewEngine(
+        provider=FakeProvider(default="[" + grounded + ", " + ungrounded + "]"),
+        config=Config(verify=False),
+    )
+    result = engine.review(diff=diff, passes=["security"])
+    assert len(result.findings) == 1
+    assert result.findings[0].title == "grounded"
+    assert result.findings[0].evidence_verified is True

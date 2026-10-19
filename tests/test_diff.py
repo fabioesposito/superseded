@@ -10,6 +10,7 @@ from superseded.diff import (
     _fetch_git_diff,
     _fetch_pr_diff,
     compute_file_context,
+    file_hunk_windows,
     parse_diff_files,
 )
 
@@ -116,6 +117,48 @@ Binary files a/data.bin and b/data.bin differ
     files = parse_diff_files(diff)
     assert len(files) == 1
     assert files[0]["file"] == "data.bin"
+
+
+def test_file_hunk_windows_maps_inclusive_new_line_ranges():
+    diff = """diff --git a/ok.py b/ok.py
+--- a/ok.py
++++ b/ok.py
+@@ -1,5 +1,5 @@
+ context
+-old
++new
+ context
+diff --git a/other.py b/other.py
+--- a/other.py
++++ b/other.py
+@@ -10,3 +10,3 @@
+ ctx
+-old
++new
+"""
+    assert file_hunk_windows(diff) == {"ok.py": [(1, 5)], "other.py": [(10, 12)]}
+
+
+def test_file_hunk_windows_omitted_count_defaults_to_one():
+    diff = """diff --git a/a.py b/a.py
+--- a/a.py
++++ b/a.py
+@@ -5 +5 @@
+-old
++new
+"""
+    assert file_hunk_windows(diff) == {"a.py": [(5, 5)]}
+
+
+def test_file_hunk_windows_skips_zero_count_hunks():
+    diff = """diff --git a/a.py b/a.py
+--- a/a.py
++++ b/a.py
+@@ -5,2 +5,0 @@
+-old1
+-old2
+"""
+    assert file_hunk_windows(diff) == {"a.py": []}
 
 
 def _file_tree():

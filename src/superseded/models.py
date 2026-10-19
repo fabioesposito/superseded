@@ -25,6 +25,10 @@ class Finding(BaseModel):
     verification: Literal["kept", "dropped"] | None = None
     verified_severity: Severity | None = None
     verification_reason: str | None = None
+    evidence: str = ""
+    evidence_verified: bool = False
+    pre_existing: bool = False
+    duplicate_of_static: bool = False
 
     @model_validator(mode="after")
     def _default_end_line(self) -> Finding:
@@ -51,6 +55,27 @@ class Finding(BaseModel):
         med = hashlib.sha256(f"{self.file}-{self.line}-{self.title}".encode()).hexdigest()[:16]
         return med
 
+    @property
+    def fingerprint(self) -> str:
+        """Stable identity for cross-round convergence.
+
+        Deliberately excludes the line number (and ``pass_name``/``severity``)
+        so the same issue re-flagged on a shifted line still matches across
+        review rounds.
+        """
+        raw = f"{self.file}-{self.title}"
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+    @property
+    def is_blocking(self) -> bool:
+        """True when this finding should block a PR merge.
+
+        Only ``critical``/``important`` severities block, and a finding outside
+        the changed diff hunks (``pre_existing``) never blocks regardless of
+        severity.
+        """
+        return self.severity in ("critical", "important") and not self.pre_existing
+
 
 class ReviewUsage(BaseModel):
     prompt_tokens: int = 0
@@ -63,6 +88,11 @@ class ReviewResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     dropped_findings: list[Finding] = Field(default_factory=list)
     usage: ReviewUsage = Field(default_factory=ReviewUsage)
+    carried_findings: list[Finding] = Field(default_factory=list)
+    round_number: int = 0
+    at_round_cap: bool = False
+    suppressed_count: int = 0
+    convergence_note: str = ""
 
     @property
     def summary(self) -> dict[str, int]:

@@ -4,7 +4,7 @@ import json
 import re
 import subprocess
 
-from superseded.diff import _HUNK_RE, DEFAULT_GH_TIMEOUT, parse_diff_files
+from superseded.diff import DEFAULT_GH_TIMEOUT, file_hunk_windows
 from superseded.models import Finding, ReviewResult
 
 # Cap per-comment bodies so a runaway agent can't dump an unbounded amount of
@@ -88,27 +88,6 @@ def _post_review_payload(payload: dict, target_repo: str, pr: int) -> list[int]:
     return _extract_comment_ids(response.stdout)
 
 
-def _file_hunk_windows(diff: str) -> dict[str, list[tuple[int, int]]]:
-    """Map each changed file to its inclusive new-side line windows.
-
-    Each window is ``(start, end)`` covering the hunk's counted new lines. A
-    hunk ``@@ -a,b +c,d @@`` covers new lines ``[c, c+d-1]`` (d defaults to 1
-    when omitted). Hunks with ``d == 0`` produce an empty window and are skipped.
-    """
-    windows: dict[str, list[tuple[int, int]]] = {}
-    for entry in parse_diff_files(diff):
-        file_path = entry["file"]
-        wins: list[tuple[int, int]] = []
-        for m in _HUNK_RE.finditer(entry["diff"]):
-            start = int(m.group(2))
-            count = int(m.group(3)) if m.group(3) is not None else 1
-            if count <= 0:
-                continue
-            wins.append((start, start + count - 1))
-        windows[file_path] = wins
-    return windows
-
-
 def _line_in_any_window(line: int, windows: list[tuple[int, int]]) -> bool:
     return any(start <= line <= end for start, end in windows)
 
@@ -123,7 +102,7 @@ def _out_of_range_indices(comments: list[dict], diff: str) -> set[int]:
     """
     if not diff or not diff.strip() or not comments:
         return set()
-    windows = _file_hunk_windows(diff)
+    windows = file_hunk_windows(diff)
     bad: set[int] = set()
     for i, c in enumerate(comments):
         path = c.get("path", "")
