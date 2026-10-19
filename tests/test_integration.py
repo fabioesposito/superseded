@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS feedback (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     finding_id TEXT    NOT NULL REFERENCES findings(id),
     action     TEXT    NOT NULL,
+    source     TEXT    NOT NULL DEFAULT 'human',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """

@@ -110,6 +110,7 @@ class PatternReflector:
                 "FROM feedback fb "
                 "JOIN findings f ON f.id = fb.finding_id "
                 "WHERE f.repo = ? AND fb.id > ? "
+                "AND COALESCE(fb.source, 'human') != 'verifier' "
                 "ORDER BY fb.id",
                 (repo, last_id),
             )

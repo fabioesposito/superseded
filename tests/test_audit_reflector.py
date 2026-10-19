@@ -11,6 +11,7 @@ from superseded.audit.reflector import (
     PatternReflector,
     _build_reflection_prompt,
 )
+from superseded.memory.store import MemoryStore
 from superseded.providers import ProviderResponse
 
 
@@ -226,6 +227,32 @@ async def test_prompt_includes_both(mock_store):
     assert "[security] Title1" in captured_prompt
     assert "[correctness] Title2" in captured_prompt
     assert "[performance] Title3" in captured_prompt
+
+
+@pytest.mark.asyncio
+async def test_reflector_excludes_verifier_feedback(tmp_path):
+    """Verifier-dropped findings must not reach the reflection prompt."""
+    store = MemoryStore(tmp_path / "mem.db")
+    await store.init()
+
+    await store.record_finding(
+        "human-f", "owner/repo", "security", "critical", "a.py", 1, "Human dismiss title", "d"
+    )
+    await store.record_feedback("human-f", "dismiss")
+
+    await store.record_finding(
+        "verifier-f", "owner/repo", "security", "critical", "b.py", 2, "Verifier drop title", "d"
+    )
+    await store.record_verification_feedback("verifier-f")
+
+    provider = FakeProvider()
+    reflector = PatternReflector(provider, store, threshold=1)
+    await reflector.maybe_reflect("owner/repo")
+
+    assert len(provider.calls) == 1
+    captured_prompt = provider.calls[0]
+    assert "Human dismiss title" in captured_prompt
+    assert "Verifier drop title" not in captured_prompt
 
 
 def test_build_reflection_prompt_empty():

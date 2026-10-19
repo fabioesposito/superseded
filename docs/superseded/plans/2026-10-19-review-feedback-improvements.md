@@ -230,6 +230,24 @@
 - [ ] **Step 4: Add a test asserting 20 unique cases load and `eval --dry-run` exits 0.**
 - [ ] **Step 5: Run targeted tests and ruff; commit** `feat(eval): add offline reviewer eval corpus and runner`.
 
+### Task 10: Keep verifier feedback out of learned-rule inputs
+
+**Files:**
+- Modify: `src/superseded/audit/reflector.py`
+- Modify: `src/superseded/memory/store.py`
+- Modify: `src/superseded/memory/postgres.py`
+- Test: `tests/test_audit_reflector.py`, `tests/test_audit_stats.py`
+
+**Interfaces:**
+- `PatternReflector._do_reflect` must exclude feedback rows with `source = 'verifier'` so verifier drops never become learned rules.
+- `refresh_review_stats` must count only human feedback rows in `total`, `accepted`, and `dismissed`; verifier-only findings must not create a stats row. Both SQLite and Postgres.
+
+- [x] **Step 1: Write a failing reflector test** seeding one human dismiss and one verifier drop, asserting the reflection prompt only contains the human-dismissed title.
+- [x] **Step 2: Add `AND COALESCE(fb.source, 'human') != 'verifier'` to the reflector query.**
+- [x] **Step 3: Write a failing stats test** asserting a verifier-only finding does not create a `review_stats` row and a human-dismissed finding still does.**
+- [x] **Step 4: Change `refresh_review_stats` in both backends to filter on `COALESCE(fb.source, 'human') != 'verifier'` and add a `HAVING` clause so zero-total groups are not inserted.**
+- [x] **Step 5: Run the targeted tests, full suite, and ruff; commit** `fix(audit): keep verifier feedback out of learned-rule inputs`.
+
 ### Task 9: Documentation and final integration
 
 **Files:**

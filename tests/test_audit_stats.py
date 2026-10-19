@@ -476,3 +476,39 @@ async def test_refresh_excludes_verifier_drops_from_dismissed():
         assert report["total"] == 3
         assert report["dismissed"] == 1
         assert report["verifier_dropped"] == 1
+
+
+async def _test_refresh_excludes_verifier_only():
+    """A verifier-only finding must not create a review_stats row."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = _make_store(tmpdir)
+        await store.init()
+
+        # Verifier-only finding: feedback row with source='verifier'.
+        await store.record_finding(
+            "drop", "owner/repo", "security", "critical", "c.py", 3, "drop", "d"
+        )
+        await store.record_verification_feedback("drop")
+
+        agg = StatsAggregator(store)
+        await agg._refresh("owner/repo")
+
+        rows = await store.get_review_stats("owner/repo", 1)
+        assert rows == []
+
+        # A human-dismissed finding produces exactly one row with total=1.
+        await store.record_finding(
+            "human", "owner/repo", "security", "critical", "b.py", 2, "human", "d"
+        )
+        await store.record_feedback("human", "dismiss")
+        await agg._refresh("owner/repo")
+
+        rows = await store.get_review_stats("owner/repo", 1)
+        assert len(rows) == 1
+        assert rows[0]["total"] == 1
+        assert rows[0]["dismissed"] == 1
+        assert rows[0]["accepted"] == 0
+
+
+def test_refresh_excludes_verifier_only():
+    asyncio.run(_test_refresh_excludes_verifier_only())
