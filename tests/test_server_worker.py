@@ -388,7 +388,7 @@ async def test_run_review_skips_clone_when_disk_full():
     mock_checkout.assert_not_called()
 
 
-def test_build_check_run_title_per_severity_breakdown():
+def test_build_check_run_title_new_and_blocking_counts():
     from superseded.models import Finding, ReviewResult
 
     result = ReviewResult(
@@ -425,13 +425,45 @@ def test_build_check_run_title_per_severity_breakdown():
             ),
         ]
     )
-    assert build_check_run_title(result) == "3 findings (1 critical, 1 important, 1 suggestion)"
+    assert build_check_run_title(result) == "3 new findings (2 blocking)"
 
 
 def test_build_check_run_title_no_findings():
     from superseded.models import ReviewResult
 
-    assert build_check_run_title(ReviewResult(findings=[])) == "0 findings"
+    assert build_check_run_title(ReviewResult(findings=[])) == "0 new findings"
+
+
+def test_build_check_run_title_with_carried_findings():
+    from superseded.models import Finding, ReviewResult
+
+    result = ReviewResult(
+        findings=[
+            Finding(
+                pass_name="security",
+                severity="critical",
+                file="a",
+                line=1,
+                end_line=1,
+                title="t",
+                description="d",
+                suggestion="s",
+            )
+        ],
+        carried_findings=[
+            Finding(
+                pass_name="correctness",
+                severity="important",
+                file="b",
+                line=1,
+                end_line=1,
+                title="prior",
+                description="d",
+                suggestion="s",
+            )
+        ],
+    )
+    assert build_check_run_title(result) == "1 new finding (1 blocking), 1 still open"
 
 
 @pytest.mark.asyncio
@@ -659,7 +691,8 @@ async def test_run_review_for_job_end_to_end(tmp_path):
 
     github.post_review.assert_awaited_once()
     assert outcome.conclusion == "failure"
-    assert "1 critical" in outcome.title
+    assert "1 new finding" in outcome.title
+    assert "(1 blocking)" in outcome.title
 
 
 @pytest.mark.asyncio

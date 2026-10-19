@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from superseded.context.conventions import (
     BLOCKLIST,
+    CONVENTION_FILES,
     CONVENTIONS_BUDGET,
     discover_conventions,
     strip_blocklisted_sections,
@@ -127,3 +128,35 @@ def test_discover_skips_unreadable_doc(tmp_path, caplog):
     finally:
         (tmp_path / "AGENTS.md").chmod(0o644)
     assert out is None
+
+
+def test_convention_files_starts_with_review_md():
+    assert CONVENTION_FILES[0] == "REVIEW.md"
+
+
+def test_discover_finds_review_md(tmp_path):
+    (tmp_path / "REVIEW.md").write_text("## Review Policy\n\nnever merge with failing tests\n")
+    out = discover_conventions(tmp_path)
+    assert out is not None
+    assert "## REVIEW.md" in out
+    assert "never merge with failing tests" in out
+
+
+def test_discover_review_md_appears_first(tmp_path):
+    (tmp_path / "REVIEW.md").write_text("review body\n")
+    (tmp_path / "AGENTS.md").write_text("agents body\n")
+    out = discover_conventions(tmp_path)
+    assert out is not None
+    assert out.index("## REVIEW.md") < out.index("## AGENTS.md")
+    assert out.index("review body") < out.index("agents body")
+
+
+def test_discover_review_md_survives_budget_ahead_of_agents(tmp_path):
+    review_content = "## Review Policy\n\nnever merge with failing tests\n"
+    (tmp_path / "REVIEW.md").write_text(review_content)
+    (tmp_path / "AGENTS.md").write_text("## Conventions\n\n" + "y" * (CONVENTIONS_BUDGET + 500))
+    out = discover_conventions(tmp_path)
+    assert out is not None
+    assert "never merge with failing tests" in out
+    assert out.index("## REVIEW.md") < out.index("## AGENTS.md")
+    assert "omitted by conventions budget" in out

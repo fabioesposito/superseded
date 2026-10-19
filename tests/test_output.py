@@ -685,3 +685,99 @@ def test_post_review_no_comments_raises():
         pytest.raises(subprocess.CalledProcessError),
     ):
         post_review_to_pr(pr=1, result=result, diff="")
+
+
+# --- review summary / tag tests (Task 2) ---
+
+
+def test_review_payload_empty_body_says_no_new_issues():
+    from superseded.output.github_pr import build_review_payload
+
+    payload = build_review_payload(ReviewResult(findings=[]))
+    assert "**No new issues found.**" in payload["body"]
+    assert payload["comments"] == []
+
+
+def test_review_payload_body_starts_with_count_and_blocking():
+    from superseded.output.github_pr import build_review_payload
+
+    result = ReviewResult(
+        findings=[
+            _finding(severity="critical", title="blocker"),
+            _finding(severity="suggestion", title="advisory"),
+        ]
+    )
+    body = build_review_payload(result)["body"]
+    assert "**2 new finding" in body
+    assert "(1 blocking)" in body
+
+
+def test_review_payload_pre_existing_critical_does_not_request_changes():
+    from superseded.output.github_pr import build_review_payload
+
+    result = ReviewResult(findings=[_finding(severity="critical", pre_existing=True)])
+    assert build_review_payload(result)["event"] == "COMMENT"
+
+
+def test_review_payload_carried_critical_requests_changes():
+    from superseded.output.github_pr import build_review_payload
+
+    carried = _finding(severity="critical", title="still-open blocker")
+    result = ReviewResult(findings=[], carried_findings=[carried])
+    assert build_review_payload(result)["event"] == "REQUEST_CHANGES"
+
+
+def test_review_payload_comment_has_fingerprint_and_tags():
+    from superseded.output.github_pr import build_review_payload
+
+    f = _finding(
+        severity="critical",
+        title="SQL injection",
+        pre_existing=True,
+        evidence='+ query = f"SELECT * FROM users WHERE id = {uid}"',
+        evidence_verified=False,
+        duplicate_of_static=True,
+    )
+    body = build_review_payload(ReviewResult(findings=[f]))["comments"][0]["body"]
+    assert "superseded:fingerprint=" in body
+    assert "PRE-EXISTING" in body
+    assert "UNVERIFIED" in body
+    assert "STATIC" in body
+
+
+def test_review_payload_evidence_in_details_block():
+    from superseded.output.github_pr import build_review_payload
+
+    f = _finding(
+        severity="important",
+        title="XSS",
+        evidence="+ query = f'SELECT * FROM users WHERE id = {uid}'",
+        evidence_verified=True,
+    )
+    body = build_review_payload(ReviewResult(findings=[f]))["comments"][0]["body"]
+    assert "<details><summary>Evidence</summary>" in body
+    assert "SELECT * FROM users" in body
+
+
+def test_review_payload_round_cap_note_appears():
+    from superseded.output.github_pr import build_review_payload
+
+    result = ReviewResult(findings=[_finding()], at_round_cap=True)
+    assert "round cap reached" in build_review_payload(result)["body"]
+
+
+def test_review_payload_carried_round_suppressed_counts():
+    from superseded.output.github_pr import build_review_payload
+
+    result = ReviewResult(
+        findings=[_finding()],
+        carried_findings=[_finding(severity="important", title="prior")],
+        round_number=2,
+        suppressed_count=3,
+        convergence_note="suppressed duplicates from prior rounds",
+    )
+    body = build_review_payload(result)["body"]
+    assert "**Still open" in body
+    assert "**Round:** 2" in body
+    assert "**Suppressed:** 3" in body
+    assert "suppressed duplicates from prior rounds" in body

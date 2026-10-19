@@ -41,10 +41,33 @@ def _escape_reasoning(reasoning: str) -> str:
     return reasoning.replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _finding_tags(f: Finding) -> list[str]:
+    """Return the extra review tags that apply to a finding."""
+    tags: list[str] = []
+    if f.pre_existing:
+        tags.append("PRE-EXISTING")
+    if f.evidence and not f.evidence_verified:
+        tags.append("UNVERIFIED")
+    if f.duplicate_of_static:
+        tags.append("STATIC")
+    return tags
+
+
 def build_review_payload(result: ReviewResult) -> dict:
     comments = []
     for f in result.findings:
-        body_text = f"**[{f.severity.upper()}] {f.title}** ({f.pass_name})\n\n{f.description}\n\n"
+        tags = _finding_tags(f)
+        tag_suffix = "".join(f" [{t}]" for t in tags)
+        body_text = (
+            f"<!-- superseded:fingerprint={f.fingerprint} -->\n"
+            f"**[{f.severity.upper()}] {f.title}** ({f.pass_name}){tag_suffix}\n\n"
+            f"{f.description}\n\n"
+        )
+        if f.evidence:
+            body_text += (
+                f"<details><summary>Evidence</summary>\n\n"
+                f"{_escape_reasoning(f.evidence)}\n\n</details>\n\n"
+            )
         if f.reasoning:
             body_text += (
                 f"<details><summary>Reasoning</summary>\n\n"
@@ -60,17 +83,44 @@ def build_review_payload(result: ReviewResult) -> dict:
             comment["start_line"] = f.line
         comments.append(comment)
 
-    blocking = result.summary.get("critical", 0) + result.summary.get("important", 0)
-    event = "REQUEST_CHANGES" if blocking > 0 else "COMMENT"
+    blocking = any(f.is_blocking for f in result.findings) or any(
+        f.is_blocking for f in result.carried_findings
+    )
+    event = "REQUEST_CHANGES" if blocking else "COMMENT"
 
     passes_used = sorted({f.pass_name for f in result.findings})
     pass_labels = ", ".join(p.replace("_", " ").title() + " Review" for p in passes_used)
 
+    new_count = len(result.findings)
+    new_blocking = sum(1 for f in result.findings if f.is_blocking)
+
     body = "## Superseded Code Review\n\n"
+    if new_count == 0:
+        body += "**No new issues found.**\n\n"
+    else:
+        noun = "finding" if new_count == 1 else "findings"
+        body += f"**{new_count} new {noun}**"
+        if new_blocking:
+            body += f" ({new_blocking} blocking)"
+        body += "\n\n"
     if pass_labels:
         body += f"**Passes:** {pass_labels}\n\n"
     for sev, count in result.summary.items():
         body += f"- **{sev}:** {count}\n"
+    if result.summary:
+        body += "\n"
+
+    carried = result.carried_findings
+    if carried:
+        body += f"**Still open:** {len(carried)}\n\n"
+    if result.round_number:
+        body += f"**Round:** {result.round_number}\n\n"
+    if result.suppressed_count:
+        body += f"**Suppressed:** {result.suppressed_count}\n\n"
+    if result.at_round_cap:
+        body += "**Note:** round cap reached\n\n"
+    if result.convergence_note:
+        body += f"{result.convergence_note}\n\n"
 
     return {"event": event, "body": body, "comments": comments}
 

@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_SEVERITY_ORDER = ("critical", "important", "suggestion", "nit")
 DISK_USAGE_LIMIT = 0.9
 MAX_DIFF_CHARS = 1_000_000
 
@@ -65,10 +64,16 @@ JOB_REGISTRY_CAP = 1000
 
 
 def build_check_run_title(result: ReviewResult) -> str:
-    total = len(result.findings)
-    summary = result.summary
-    parts = [f"{summary[sev]} {sev}" for sev in _SEVERITY_ORDER if summary.get(sev, 0)]
-    return f"{total} findings ({', '.join(parts)})" if parts else f"{total} findings"
+    new_count = len(result.findings)
+    blocking = sum(1 for f in result.findings if f.is_blocking)
+    carried = len(result.carried_findings)
+    noun = "finding" if new_count == 1 else "findings"
+    title = f"{new_count} new {noun}"
+    if blocking:
+        title += f" ({blocking} blocking)"
+    if carried:
+        title += f", {carried} still open"
+    return title
 
 
 class ReviewWorker:

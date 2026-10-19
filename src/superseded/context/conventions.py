@@ -21,6 +21,7 @@ BLOCKLIST: list[str] = [
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 
 CONVENTION_FILES: list[str] = [
+    "REVIEW.md",
     "AGENTS.md",
     "CLAUDE.md",
     "GEMINI.md",
