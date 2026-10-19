@@ -54,6 +54,24 @@ def prior_from_rows(rows: list[dict]) -> list[PriorFinding]:
     return prior
 
 
+def finding_from_prior(prior: PriorFinding) -> Finding:
+    """Convert a carried :class:`PriorFinding` back into a :class:`Finding`.
+
+    Description/suggestion are fixed placeholders since the persisted row does
+    not retain the original text. The id is left unset so it is auto-derived
+    from pass/file/line/title rather than reusing a stale id from a prior round.
+    """
+    return Finding(
+        pass_name=prior.pass_name,
+        severity=prior.severity,
+        file=prior.file,
+        line=prior.line,
+        title=prior.title,
+        description="Carried from a previous review round.",
+        suggestion="Address the remaining issue.",
+    )
+
+
 def _plural(count: int, word: str) -> str:
     return f"{count} {word}{'s' if count != 1 else ''}"
 

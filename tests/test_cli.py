@@ -225,7 +225,7 @@ def test_persist_findings_passes_reasoning(monkeypatch):
 
     import asyncio
 
-    asyncio.run(_post_review_store(mock_store, result, "owner/repo", None, None, False, ""))
+    asyncio.run(_post_review_store(mock_store, result, "owner/repo", None, None, False, "", 0))
     assert len(calls) == 1
     assert calls[0]["reasoning"] == "suspicious input"
 
@@ -450,7 +450,7 @@ def test_persist_and_link_batch_into_single_event_loop(monkeypatch):
     mock_store.record_findings_batch = async_record_batch
     mock_store.set_comment_ids_batch = AsyncMock()
 
-    asyncio.run(_post_review_store(mock_store, result, "owner/repo", None, None, False, ""))
+    asyncio.run(_post_review_store(mock_store, result, "owner/repo", None, None, False, "", 0))
 
     assert len(run_calls) == 1, f"Expected 1 asyncio.run(), got {len(run_calls)}"
     assert len(batch_calls) == 3
@@ -812,3 +812,359 @@ def test_cli_provider_choices_include_all_providers():
     assert result.exit_code == 0
     assert "deepseek, openai, anthropic, qwen" in " ".join(result.output.split())
     assert "medium" in result.output  # widened effort choice
+
+
+# --- local convergence integration (Task 6) ---
+
+
+def _converged_review(monkeypatch, tmp_path, store, *, pr=7, post=True, findings, resolved_ids=()):
+    """Monkeypatch CLI dependencies, run ``_run_review``, and return a capture dict.
+
+    Returns ``{"result": <ReviewResult passed to post_review_to_pr>}``; the key
+    is absent when nothing was posted (e.g. a noop review).
+    """
+    from superseded.cli import ReviewEngine, _run_review
+    from superseded.models import ReviewResult
+
+    monkeypatch.setattr(
+        "superseded.cli.load_config",
+        lambda path=None: Config(memory=True, progressive=True, learned_review=False),
+    )
+    monkeypatch.setattr("superseded.cli.MemoryStore", lambda: store)
+    monkeypatch.setattr("superseded.cli.current_repo", lambda: "owner/repo")
+    monkeypatch.setattr("superseded.cli.fetch_pr_head_sha", lambda pr: "head")
+    monkeypatch.setattr(
+        "superseded.cli.fetch_diff", lambda pr=None, **kw: "diff --git a/a.py b/a.py\n"
+    )
+    monkeypatch.setattr(
+        "superseded.cli.fetch_incremental_diff", lambda *a, **k: (None, "identical")
+    )
+    monkeypatch.setattr("superseded.cli.repo_root", lambda: tmp_path)
+    monkeypatch.setattr("superseded.cli.fetch_pr_description", lambda pr: None)
+    monkeypatch.setattr(
+        "superseded.cli.gather_context",
+        lambda diff, root, **kw: {
+            "file_context": None,
+            "static_signals": None,
+            "usage_signals": None,
+            "conventions_signals": None,
+            "spec_signals": None,
+        },
+    )
+    monkeypatch.setattr(
+        "superseded.cli.check_resolved_threads", lambda pr, owner, repo: set(resolved_ids)
+    )
+
+    fake_engine = MagicMock()
+    fake_engine.review = lambda **kw: ReviewResult(findings=findings)
+    monkeypatch.setattr(ReviewEngine, "select", classmethod(lambda cls, *a, **kw: fake_engine))
+
+    captured: dict = {}
+
+    def fake_post_review(pr, result, diff):
+        captured["result"] = result
+        return [1000 + i for i in range(len(result.findings))]
+
+    monkeypatch.setattr("superseded.cli.post_review_to_pr", fake_post_review)
+
+    _run_review(
+        pr=pr,
+        diff_range=None,
+        provider=None,
+        model=None,
+        output_format="json",
+        post=post,
+        passes=None,
+    )
+    return captured
+
+
+def test_convergence_suppresses_open_duplicate(monkeypatch, tmp_path):
+    import asyncio
+
+    from superseded.memory.store import MemoryStore
+    from superseded.models import Finding
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+
+    finding = Finding(
+        pass_name="security",
+        severity="suggestion",
+        file="a.py",
+        line=3,
+        title="n+1 query",
+        description="d",
+        suggestion="s",
+    )
+    asyncio.run(
+        store.record_pr_findings_batch(
+            "owner/repo",
+            7,
+            [
+                {
+                    "fingerprint": finding.fingerprint,
+                    "finding_id": finding.id,
+                    "pass_name": "security",
+                    "severity": "suggestion",
+                    "file": "a.py",
+                    "line": 3,
+                    "title": "n+1 query",
+                    "status": "open",
+                }
+            ],
+        )
+    )
+
+    captured = _converged_review(monkeypatch, tmp_path, store, findings=[finding], post=True)
+
+    result = captured["result"]
+    assert result.findings == []
+    assert result.suppressed_count == 1
+    assert result.carried_findings == []  # suggestion severity is not blocking
+    assert result.round_number == 1
+
+
+def test_convergence_carries_open_critical(monkeypatch, tmp_path):
+    import asyncio
+
+    from superseded.memory.store import MemoryStore
+    from superseded.models import Finding
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+
+    crit = Finding(
+        pass_name="security",
+        severity="critical",
+        file="b.py",
+        line=1,
+        title="SQL injection",
+        description="d",
+        suggestion="s",
+    )
+    asyncio.run(
+        store.record_pr_findings_batch(
+            "owner/repo",
+            7,
+            [
+                {
+                    "fingerprint": crit.fingerprint,
+                    "finding_id": crit.id,
+                    "pass_name": "security",
+                    "severity": "critical",
+                    "file": "b.py",
+                    "line": 1,
+                    "title": "SQL injection",
+                    "status": "open",
+                }
+            ],
+        )
+    )
+
+    # New review flags nothing new; the open critical must be carried.
+    captured = _converged_review(monkeypatch, tmp_path, store, findings=[], post=True)
+
+    result = captured["result"]
+    assert result.findings == []
+    assert len(result.carried_findings) == 1
+    carried = result.carried_findings[0]
+    assert carried.severity == "critical"
+    assert carried.is_blocking is True
+
+    from superseded.output.github_pr import build_review_payload
+
+    payload = build_review_payload(result)
+    assert payload["event"] == "REQUEST_CHANGES"
+    assert "Still open" in payload["body"]
+
+
+def test_convergence_round_increments_after_posted_review(monkeypatch, tmp_path):
+    import asyncio
+
+    from superseded.memory.store import MemoryStore
+    from superseded.models import Finding
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+    asyncio.run(store.set_review_round("owner/repo", 7, 1))
+
+    finding = Finding(
+        pass_name="style",
+        severity="nit",
+        file="c.py",
+        line=9,
+        title="naming",
+        description="d",
+        suggestion="s",
+    )
+    _converged_review(monkeypatch, tmp_path, store, findings=[finding], post=True)
+
+    assert asyncio.run(store.get_review_round("owner/repo", 7)) == 2
+    rows = asyncio.run(store.get_pr_findings("owner/repo", 7))
+    assert {r["fingerprint"] for r in rows} == {finding.fingerprint}
+
+
+def test_convergence_noop_does_not_increment_round(monkeypatch, tmp_path):
+    import asyncio
+
+    from superseded.memory.store import MemoryStore
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+    asyncio.run(store.set_watermark("owner/repo", 7, "head"))
+    asyncio.run(store.set_review_round("owner/repo", 7, 2))
+
+    captured = _converged_review(monkeypatch, tmp_path, store, findings=[], post=True)
+
+    assert captured.get("result") is None  # noop returns before posting
+    assert asyncio.run(store.get_review_round("owner/repo", 7)) == 2
+
+
+def test_convergence_post_false_does_not_record_pr_state(monkeypatch, tmp_path):
+    import asyncio
+
+    from superseded.memory.store import MemoryStore
+    from superseded.models import Finding
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+
+    finding = Finding(
+        pass_name="security",
+        severity="important",
+        file="d.py",
+        line=1,
+        title="xss",
+        description="d",
+        suggestion="s",
+    )
+    _converged_review(monkeypatch, tmp_path, store, findings=[finding], post=False)
+
+    assert asyncio.run(store.get_pr_findings("owner/repo", 7)) == []
+    assert asyncio.run(store.get_review_round("owner/repo", 7)) == 0
+    # The regular findings/watermark path still runs even without posting.
+    assert asyncio.run(store.get_watermark("owner/repo", 7)) == "head"
+
+
+def test_resolve_empty_watermark_uses_full_diff(monkeypatch):
+    from superseded.cli import _resolve_pr_review_diff
+
+    monkeypatch.setattr("superseded.cli.fetch_pr_head_sha", lambda pr: "head")
+    monkeypatch.setattr("superseded.cli.fetch_diff", lambda **kw: "FULLDIFF")
+    inc = MagicMock()
+    monkeypatch.setattr("superseded.cli.fetch_incremental_diff", inc)
+    store = _fake_store_with_watermark("")
+
+    diff, mode, head = _resolve_pr_review_diff(pr=1, repo="o/r", store=store, full=False)
+    assert diff == "FULLDIFF"
+    assert mode == "full"
+    assert head == "head"
+    inc.assert_not_called()
+
+
+def test_process_feedback_marks_resolved_and_dismissed(monkeypatch, tmp_path):
+    import asyncio
+
+    from superseded.cli import _process_feedback
+    from superseded.memory.store import MemoryStore
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+    for fid, title, cid in (("id1", "t1", 101), ("id2", "t2", 102), ("id3", "t3", 103)):
+        asyncio.run(
+            store.record_finding(
+                finding_id=fid,
+                repo="owner/repo",
+                pass_name="security",
+                severity="critical",
+                file=f"{fid}.py",
+                line=1,
+                title=title,
+                description="d",
+            )
+        )
+        asyncio.run(store.set_comment_id(fid, cid))
+    asyncio.run(
+        store.record_pr_findings_batch(
+            "owner/repo",
+            7,
+            [
+                {
+                    "fingerprint": f"fp{i}",
+                    "finding_id": f"id{i}",
+                    "pass_name": "security",
+                    "severity": "critical",
+                    "file": f"id{i}.py",
+                    "line": 1,
+                    "title": f"t{i}",
+                    "status": "open",
+                }
+                for i in (1, 2, 3)
+            ],
+        )
+    )
+    asyncio.run(
+        store.set_pr_comment_ids("owner/repo", 7, [("fp1", 101), ("fp2", 102), ("fp3", 103)])
+    )
+
+    comments = [
+        {"id": 101, "resolved": True},  # resolved thread -> resolved
+        {"id": 102, "reactions": {"-1": 1, "+1": 0}},  # thumbs-down -> dismissed
+        {"id": 103, "reactions": {"+1": 1, "-1": 0}},  # helpful -> unchanged
+    ]
+    asyncio.run(_process_feedback(store, comments))
+
+    rows = asyncio.run(store.get_pr_findings("owner/repo", 7))
+    by_fp = {r["fingerprint"]: r for r in rows}
+    assert by_fp["fp1"]["status"] == "resolved"
+    assert by_fp["fp2"]["status"] == "dismissed"
+    assert by_fp["fp3"]["status"] == "open"
+
+
+def test_feedback_manual_dismiss_marks_pr_status(monkeypatch, tmp_path):
+    import asyncio
+
+    from superseded.cli import _run_feedback_manual
+    from superseded.memory.store import MemoryStore
+
+    store = MemoryStore(db_path=tmp_path / "mem.db")
+    asyncio.run(store.init())
+    asyncio.run(
+        store.record_finding(
+            finding_id="id1",
+            repo="owner/repo",
+            pass_name="security",
+            severity="critical",
+            file="a.py",
+            line=1,
+            title="t",
+            description="d",
+        )
+    )
+    asyncio.run(store.set_comment_id("id1", 42))
+    asyncio.run(
+        store.record_pr_findings_batch(
+            "owner/repo",
+            7,
+            [
+                {
+                    "fingerprint": "fp1",
+                    "finding_id": "id1",
+                    "pass_name": "security",
+                    "severity": "critical",
+                    "file": "a.py",
+                    "line": 1,
+                    "title": "t",
+                    "status": "open",
+                }
+            ],
+        )
+    )
+    asyncio.run(store.set_pr_comment_ids("owner/repo", 7, [("fp1", 42)]))
+
+    monkeypatch.setattr("superseded.cli.MemoryStore", lambda: store)
+    _run_feedback_manual("42", "dismiss")
+
+    rows = asyncio.run(store.get_pr_findings("owner/repo", 7))
+    assert rows[0]["status"] == "dismissed"

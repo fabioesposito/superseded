@@ -70,6 +70,8 @@ class FakeStore:
         self._learned_rules: list[dict] = []
         self._reflection_state: dict[str, int] = {}
         self._db_conn: aiosqlite.Connection | None = None
+        self._pr_findings: dict[tuple, dict] = {}
+        self._review_rounds: dict[tuple, int] = {}
 
     @asynccontextmanager
     async def _db(self):
@@ -190,6 +192,32 @@ class FakeStore:
 
     async def set_installation_config(self, installation_id, key, value):
         pass
+
+    async def get_pr_findings(self, repo, pr_number):
+        return [
+            row for (r, p, _fp), row in self._pr_findings.items() if r == repo and p == pr_number
+        ]
+
+    async def get_review_round(self, repo, pr_number):
+        return self._review_rounds.get((repo, pr_number), 0)
+
+    async def update_pr_finding_status(self, comment_id, status):
+        for row in self._pr_findings.values():
+            if row.get("comment_id") == comment_id:
+                row["status"] = status
+
+    async def record_pr_findings_batch(self, repo, pr_number, findings):
+        for f in findings:
+            self._pr_findings[(repo, pr_number, f["fingerprint"])] = dict(f)
+
+    async def set_pr_comment_ids(self, repo, pr_number, pairs):
+        for fp, cid in pairs:
+            key = (repo, pr_number, fp)
+            if key in self._pr_findings:
+                self._pr_findings[key]["comment_id"] = cid
+
+    async def set_review_round(self, repo, pr_number, review_round):
+        self._review_rounds[(repo, pr_number)] = review_round
 
 
 def _make_finding():

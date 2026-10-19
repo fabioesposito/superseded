@@ -27,7 +27,7 @@ from superseded.diff import (
 )
 from superseded.incremental import IncrementalDiffError, fetch_incremental_diff
 from superseded.logging_utils import setup_logging
-from superseded.memory.feedback import check_pr_feedback
+from superseded.memory.feedback import check_pr_feedback, check_resolved_threads
 from superseded.memory.store import MemoryStore
 from superseded.models import PassName, ReviewResult
 from superseded.output.github_pr import current_repo, post_review_to_pr
@@ -42,6 +42,7 @@ from superseded.providers import (
     ProviderConfigError,
     QwenProvider,
 )
+from superseded.review.convergence import finding_from_prior, plan_convergence, prior_from_rows
 from superseded.review.engine import ReviewEngine
 from superseded.server.client import ServerReviewError, review_via_server
 
@@ -218,7 +219,7 @@ def _resolve_pr_review_diff(
     head_sha = fetch_pr_head_sha(pr)
     watermark = asyncio.run(store.get_watermark(repo, pr))
 
-    if watermark is None or full:
+    if not watermark or full:
         return fetch_diff(pr=pr), "full", head_sha
 
     owner, _, name = repo.partition("/")
@@ -621,6 +622,20 @@ def _run_review(
         if config.learned_review and store is not None and repo:
             learned_context = asyncio.run(_build_learned_context(store, engine, repo, config, root))
 
+        # Convergence: on a PR review with memory enabled, mark resolved threads,
+        # load prior-round findings, and plan which new findings to post.
+        convergence_active = store is not None and repo is not None and pr is not None
+        prior = []
+        review_round = 0
+        if convergence_active:
+            assert store is not None
+            assert repo is not None
+            owner, _, name = repo.partition("/")
+            for cid in check_resolved_threads(pr=pr, owner=owner, repo=name):
+                asyncio.run(store.update_pr_finding_status(cid, "resolved"))
+            prior = prior_from_rows(asyncio.run(store.get_pr_findings(repo, pr)))
+            review_round = asyncio.run(store.get_review_round(repo, pr)) + 1
+
         _status(f"Running review with {provider_name} (timeout {pass_timeout}s per pass)...")
         try:
             result = engine.review(
@@ -641,6 +656,15 @@ def _run_review(
             click.echo(f"Error: {err}", err=True)
             sys.exit(1)
 
+        if convergence_active:
+            plan = plan_convergence(result.findings, prior, review_round, config.max_review_rounds)
+            result.findings = plan.findings_to_post
+            result.carried_findings = [finding_from_prior(p) for p in plan.carried_findings]
+            result.round_number = review_round
+            result.at_round_cap = plan.at_round_cap
+            result.suppressed_count = plan.suppressed_count
+            result.convergence_note = plan.note
+
         if fmt == "json":
             click.echo(format_json(result))
         elif fmt == "markdown":
@@ -652,7 +676,9 @@ def _run_review(
             click.echo(f"\nWarning: {w}", err=True)
 
         if store is not None and repo:
-            asyncio.run(_post_review_store(store, result, repo, head_sha, pr, post, diff))
+            asyncio.run(
+                _post_review_store(store, result, repo, head_sha, pr, post, diff, review_round)
+            )
         elif post and pr is not None:
             _status("Posting to GitHub PR...")
             comment_ids = post_review_to_pr(pr=pr, result=result, diff=diff)
@@ -679,6 +705,7 @@ async def _post_review_store(
     pr: int | None,
     post: bool,
     diff: str,
+    review_round: int,
 ) -> None:
     """Persist findings, watermark, and comment links in one event loop."""
     async with store:
@@ -719,6 +746,31 @@ async def _post_review_store(
             ]
             if pairs:
                 await store.set_comment_ids_batch(pairs)
+            await store.record_pr_findings_batch(
+                repo,
+                pr,
+                [
+                    {
+                        "fingerprint": f.fingerprint,
+                        "finding_id": f.id,
+                        "pass_name": f.pass_name,
+                        "severity": f.severity,
+                        "file": f.file,
+                        "line": f.line,
+                        "title": f.title,
+                        "status": "open",
+                    }
+                    for f in result.findings
+                ],
+            )
+            pr_pairs = [
+                (f.fingerprint, cid)
+                for f, cid in zip(result.findings, comment_ids, strict=True)
+                if cid is not None
+            ]
+            if pr_pairs:
+                await store.set_pr_comment_ids(repo, pr, pr_pairs)
+            await store.set_review_round(repo, pr, review_round)
             _status(f"Done. Posted {len(comment_ids)} comment(s).")
 
 
@@ -1074,6 +1126,10 @@ async def _process_feedback(store: MemoryStore, comments: list[dict]) -> None:
         ok = await store.record_feedback_by_comment_id(int(cid), action)
         if ok:
             recorded += 1
+            if c.get("resolved"):
+                await store.update_pr_finding_status(int(cid), "resolved")
+            elif action == "dismiss":
+                await store.update_pr_finding_status(int(cid), "dismissed")
     if recorded:
         click.echo(f"Recorded feedback for {recorded} comment(s).")
     else:
@@ -1222,6 +1278,8 @@ def _run_feedback_manual(comment_id: str, action: str) -> None:
             err=True,
         )
         sys.exit(1)
+    if action == "dismiss":
+        asyncio.run(store.update_pr_finding_status(cid, "dismissed"))
     click.echo(f"Recorded {action} for comment {cid}.")
 
 

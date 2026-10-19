@@ -13,10 +13,15 @@ from superseded.audit.guidelines import assemble_learned_context, format_memory_
 from superseded.audit.stats import StatsAggregator
 from superseded.config import Config
 from superseded.context.gathering import gather_context
-from superseded.models import Finding, ReviewResult
+from superseded.models import ReviewResult
 from superseded.output.github_pr import build_review_payload
 from superseded.providers import Provider
-from superseded.review.convergence import PriorFinding, plan_convergence, prior_from_rows
+from superseded.review.convergence import (
+    PriorFinding,
+    finding_from_prior,
+    plan_convergence,
+    prior_from_rows,
+)
 from superseded.review.engine import ReviewEngine
 from superseded.server.checkout import checkout_repo
 
@@ -75,24 +80,6 @@ def build_check_run_title(result: ReviewResult) -> str:
     if carried:
         title += f", {carried} still open"
     return title
-
-
-def _finding_from_prior(prior: PriorFinding) -> Finding:
-    """Convert a carried :class:`PriorFinding` back into a :class:`Finding`.
-
-    Description/suggestion are fixed placeholders since the persisted row does
-    not retain the original text. The id is left unset so it is auto-derived
-    from pass/file/line/title rather than reusing a stale id from a prior round.
-    """
-    return Finding(
-        pass_name=prior.pass_name,
-        severity=prior.severity,
-        file=prior.file,
-        line=prior.line,
-        title=prior.title,
-        description="Carried from a previous review round.",
-        suggestion="Address the remaining issue.",
-    )
 
 
 class ReviewWorker:
@@ -590,7 +577,7 @@ async def _run_review_for_job(
         if convergence_active:
             plan = plan_convergence(result.findings, prior, review_round, config.max_review_rounds)
             result.findings = plan.findings_to_post
-            result.carried_findings = [_finding_from_prior(p) for p in plan.carried_findings]
+            result.carried_findings = [finding_from_prior(p) for p in plan.carried_findings]
             result.round_number = plan.round_number
             result.at_round_cap = plan.at_round_cap
             result.suppressed_count = plan.suppressed_count
