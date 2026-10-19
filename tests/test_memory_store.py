@@ -430,3 +430,170 @@ async def test_record_finding_retries_past_a_lock(tmp_path, monkeypatch):
         await store.close()
 
     assert state["n"] == 2  # it raised twice then succeeded
+
+
+# --- PR-scoped convergence (pr_findings + review_round) ---
+
+
+def _finding(
+    fingerprint: str,
+    *,
+    finding_id: str | None = None,
+    pass_name: str = "security",
+    severity: str = "critical",
+    file: str = "a.py",
+    line: int = 1,
+    title: str = "t",
+    comment_id: int | None = None,
+    status: str = "open",
+) -> dict:
+    return {
+        "fingerprint": fingerprint,
+        "finding_id": finding_id or f"id-{fingerprint}",
+        "pass_name": pass_name,
+        "severity": severity,
+        "file": file,
+        "line": line,
+        "title": title,
+        "comment_id": comment_id,
+        "status": status,
+    }
+
+
+async def test_record_pr_findings_batch_and_get(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.record_pr_findings_batch(
+        "octo/r",
+        7,
+        [
+            _finding("fp1", severity="critical"),
+            _finding("fp2", pass_name="style", severity="nit"),
+        ],
+    )
+    rows = await store.get_pr_findings("octo/r", 7)
+    assert len(rows) == 2
+    by_fp = {r["fingerprint"]: r for r in rows}
+    assert by_fp["fp1"]["severity"] == "critical"
+    assert by_fp["fp1"]["pass"] == "security"
+    assert by_fp["fp1"]["finding_id"] == "id-fp1"
+    assert by_fp["fp1"]["status"] == "open"
+    assert by_fp["fp1"]["line"] == 1
+    assert by_fp["fp2"]["pass"] == "style"
+
+
+async def test_get_pr_findings_scoped_by_repo_and_pr(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.record_pr_findings_batch("octo/r", 7, [_finding("fp1")])
+    await store.record_pr_findings_batch("octo/r", 8, [_finding("fp2")])
+    await store.record_pr_findings_batch("other/r", 7, [_finding("fp3")])
+    assert len(await store.get_pr_findings("octo/r", 7)) == 1
+    assert len(await store.get_pr_findings("octo/r", 8)) == 1
+    assert len(await store.get_pr_findings("other/r", 7)) == 1
+
+
+async def test_get_open_pr_findings_filters_by_status(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.record_pr_findings_batch(
+        "octo/r",
+        7,
+        [
+            _finding("fp1", status="open"),
+            _finding("fp2", status="posted"),
+            _finding("fp3", status="resolved"),
+        ],
+    )
+    open_rows = await store.get_open_pr_findings("octo/r", 7)
+    assert {r["fingerprint"] for r in open_rows} == {"fp1"}
+
+
+async def test_record_pr_findings_batch_upserts_on_fingerprint(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.record_pr_findings_batch("octo/r", 7, [_finding("fp1", severity="critical")])
+    await store.record_pr_findings_batch(
+        "octo/r", 7, [_finding("fp1", severity="important", title="new")]
+    )
+    rows = await store.get_pr_findings("octo/r", 7)
+    assert len(rows) == 1
+    assert rows[0]["severity"] == "important"
+    assert rows[0]["title"] == "new"
+
+
+async def test_record_pr_findings_batch_preserves_comment_id_on_null(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.record_pr_findings_batch(
+        "octo/r", 7, [_finding("fp1", comment_id=42, severity="critical")]
+    )
+    # Re-record with a null comment_id; the existing comment id must survive.
+    await store.record_pr_findings_batch(
+        "octo/r", 7, [_finding("fp1", comment_id=None, severity="warning")]
+    )
+    rows = await store.get_pr_findings("octo/r", 7)
+    assert len(rows) == 1
+    assert rows[0]["comment_id"] == 42
+    assert rows[0]["severity"] == "warning"
+
+
+async def test_set_pr_comment_ids_maps_by_fingerprint(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.record_pr_findings_batch("octo/r", 7, [_finding("fp1"), _finding("fp2")])
+    await store.set_pr_comment_ids("octo/r", 7, [("fp1", 101), ("fp2", 202)])
+    rows = await store.get_pr_findings("octo/r", 7)
+    by_fp = {r["fingerprint"]: r for r in rows}
+    assert by_fp["fp1"]["comment_id"] == 101
+    assert by_fp["fp2"]["comment_id"] == 202
+
+
+async def test_update_pr_finding_status_by_comment_id(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.record_pr_findings_batch("octo/r", 7, [_finding("fp1")])
+    await store.set_pr_comment_ids("octo/r", 7, [("fp1", 101)])
+    await store.update_pr_finding_status(101, "resolved")
+    assert await store.get_open_pr_findings("octo/r", 7) == []
+    rows = await store.get_pr_findings("octo/r", 7)
+    assert rows[0]["status"] == "resolved"
+
+
+async def test_review_round_defaults_to_zero(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    assert await store.get_review_round("octo/r", 7) == 0
+
+
+async def test_review_round_round_trip(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.set_review_round("octo/r", 7, 3)
+    assert await store.get_review_round("octo/r", 7) == 3
+    await store.set_review_round("octo/r", 7, 4)
+    assert await store.get_review_round("octo/r", 7) == 4
+
+
+async def test_set_review_round_upserts_without_watermark(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.set_review_round("octo/r", 7, 2)
+    assert await store.get_review_round("octo/r", 7) == 2
+
+
+async def test_set_review_round_preserves_head_sha(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.set_watermark("octo/r", 7, "abc123")
+    await store.set_review_round("octo/r", 7, 5)
+    assert await store.get_watermark("octo/r", 7) == "abc123"
+    assert await store.get_review_round("octo/r", 7) == 5
+
+
+async def test_pr_findings_review_round_are_independent(tmp_path):
+    store = MemoryStore(db_path=tmp_path / "pf.db")
+    await store.init()
+    await store.set_review_round("octo/r", 7, 1)
+    assert await store.get_review_round("octo/r", 8) == 0
+    assert await store.get_review_round("other/r", 7) == 0

@@ -232,6 +232,102 @@ class PostgresStore:
                 head_sha,
             )
 
+    async def get_review_round(self, repo: str, pr_number: int) -> int:
+        async with self._conn() as conn:
+            row = await conn.fetchrow(
+                "SELECT review_round FROM review_watermarks WHERE repo = $1 AND pr_number = $2",
+                repo,
+                pr_number,
+            )
+            return row["review_round"] if row is not None else 0
+
+    async def set_review_round(self, repo: str, pr_number: int, review_round: int) -> None:
+        async with self._conn() as conn:
+            await conn.execute(
+                "INSERT INTO review_watermarks (repo, pr_number, head_sha, review_round) "
+                "VALUES ($1, $2, '', $3) "
+                "ON CONFLICT (repo, pr_number) DO UPDATE SET review_round = EXCLUDED.review_round",
+                repo,
+                pr_number,
+                review_round,
+            )
+
+    async def record_pr_findings_batch(
+        self, repo: str, pr_number: int, findings: list[dict]
+    ) -> None:
+        if not findings:
+            return
+        async with self._conn() as conn:
+            await conn.executemany(
+                "INSERT INTO pr_findings "
+                "(repo, pr_number, fingerprint, finding_id, pass, severity, file, line, title, comment_id, status) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) "
+                "ON CONFLICT (repo, pr_number, fingerprint) DO UPDATE SET "
+                "finding_id = EXCLUDED.finding_id, "
+                "pass = EXCLUDED.pass, "
+                "severity = EXCLUDED.severity, "
+                "file = EXCLUDED.file, "
+                "line = EXCLUDED.line, "
+                "title = EXCLUDED.title, "
+                "comment_id = COALESCE(pr_findings.comment_id, EXCLUDED.comment_id), "
+                "status = EXCLUDED.status, "
+                "updated_at = NOW()",
+                [
+                    (
+                        repo,
+                        pr_number,
+                        f["fingerprint"],
+                        f["finding_id"],
+                        f["pass_name"],
+                        f["severity"],
+                        f["file"],
+                        f["line"],
+                        f["title"],
+                        f.get("comment_id"),
+                        f.get("status", "open"),
+                    )
+                    for f in findings
+                ],
+            )
+
+    async def get_pr_findings(self, repo: str, pr_number: int) -> list[dict]:
+        async with self._conn() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM pr_findings WHERE repo = $1 AND pr_number = $2",
+                repo,
+                pr_number,
+            )
+            return [dict(r) for r in rows]
+
+    async def get_open_pr_findings(self, repo: str, pr_number: int) -> list[dict]:
+        async with self._conn() as conn:
+            rows = await conn.fetch(
+                "SELECT * FROM pr_findings WHERE repo = $1 AND pr_number = $2 AND status = 'open'",
+                repo,
+                pr_number,
+            )
+            return [dict(r) for r in rows]
+
+    async def set_pr_comment_ids(
+        self, repo: str, pr_number: int, pairs: list[tuple[str, int]]
+    ) -> None:
+        if not pairs:
+            return
+        async with self._conn() as conn:
+            await conn.executemany(
+                "UPDATE pr_findings SET comment_id = $1, updated_at = NOW() "
+                "WHERE repo = $2 AND pr_number = $3 AND fingerprint = $4",
+                [(cid, repo, pr_number, fp) for fp, cid in pairs],
+            )
+
+    async def update_pr_finding_status(self, comment_id: int, status: str) -> None:
+        async with self._conn() as conn:
+            await conn.execute(
+                "UPDATE pr_findings SET status = $1, updated_at = NOW() WHERE comment_id = $2",
+                status,
+                comment_id,
+            )
+
     async def get_learned_rules(self, repo: str, limit: int = 5) -> list[dict]:
         async with self._conn() as conn, conn.transaction():
             rows = await conn.fetch(

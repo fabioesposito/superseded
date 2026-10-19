@@ -873,7 +873,7 @@ def test_migrate_command_creates_schema(tmp_path):
     runner = CliRunner()
     result = runner.invoke(cli, ["migrate"], env=env)
     assert result.exit_code == 0, result.output
-    assert "0003" in result.output
+    assert "0004" in result.output
 
     async def _has_findings() -> bool:
         async with aiosqlite.connect(db) as c:

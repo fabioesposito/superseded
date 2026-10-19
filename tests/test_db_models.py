@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from superseded.memory.models import Base
 
 
-def test_metadata_defines_all_eight_tables():
+def test_metadata_defines_all_nine_tables():
     expected = {
         "findings",
         "feedback",
@@ -15,6 +15,7 @@ def test_metadata_defines_all_eight_tables():
         "learned_rules",
         "reflection_state",
         "installation_config",
+        "pr_findings",
     }
     assert set(Base.metadata.tables) == expected
 

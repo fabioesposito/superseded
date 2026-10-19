@@ -32,6 +32,7 @@ async def store():
             "review_stats",
             "learned_rules",
             "reflection_state",
+            "pr_findings",
         ):
             await conn.execute(f"DELETE FROM {table}")
     yield s
@@ -148,3 +149,74 @@ async def test_postgres_open_adopts_pre_alembic_db():
 
     await store.close()
     assert count == 1
+
+
+def _pr_finding(
+    fingerprint: str,
+    *,
+    finding_id: str | None = None,
+    pass_name: str = "security",
+    severity: str = "critical",
+    file: str = "a.py",
+    line: int = 1,
+    title: str = "t",
+    comment_id: int | None = None,
+    status: str = "open",
+) -> dict:
+    return {
+        "fingerprint": fingerprint,
+        "finding_id": finding_id or f"id-{fingerprint}",
+        "pass_name": pass_name,
+        "severity": severity,
+        "file": file,
+        "line": line,
+        "title": title,
+        "comment_id": comment_id,
+        "status": status,
+    }
+
+
+async def test_pr_findings_round_trip(store):
+    await store.record_pr_findings_batch(
+        "octo/r", 7, [_pr_finding("fp1"), _pr_finding("fp2", pass_name="style", severity="nit")]
+    )
+    rows = await store.get_pr_findings("octo/r", 7)
+    assert len(rows) == 2
+    by_fp = {r["fingerprint"]: r for r in rows}
+    assert by_fp["fp1"]["severity"] == "critical"
+    assert by_fp["fp1"]["pass"] == "security"
+    assert by_fp["fp1"]["status"] == "open"
+
+
+async def test_pr_findings_upsert_preserves_comment_id(store):
+    await store.record_pr_findings_batch("octo/r", 7, [_pr_finding("fp1", comment_id=42)])
+    await store.record_pr_findings_batch(
+        "octo/r", 7, [_pr_finding("fp1", comment_id=None, severity="warning")]
+    )
+    rows = await store.get_pr_findings("octo/r", 7)
+    assert len(rows) == 1
+    assert rows[0]["comment_id"] == 42
+    assert rows[0]["severity"] == "warning"
+
+
+async def test_pr_findings_open_filter_and_status_update(store):
+    await store.record_pr_findings_batch(
+        "octo/r", 7, [_pr_finding("fp1"), _pr_finding("fp2", status="resolved")]
+    )
+    assert {r["fingerprint"] for r in await store.get_open_pr_findings("octo/r", 7)} == {"fp1"}
+    await store.set_pr_comment_ids("octo/r", 7, [("fp1", 101)])
+    await store.update_pr_finding_status(101, "resolved")
+    assert await store.get_open_pr_findings("octo/r", 7) == []
+
+
+async def test_review_round_round_trip(store):
+    assert await store.get_review_round("octo/r", 7) == 0
+    await store.set_review_round("octo/r", 7, 3)
+    assert await store.get_review_round("octo/r", 7) == 3
+
+
+async def test_set_review_round_preserves_head_sha(store):
+    await store.set_watermark("octo/r", 7, "abc123")
+    await store.set_review_round("octo/r", 7, 5)
+    assert await store.get_watermark("octo/r", 7) == "abc123"
+    assert await store.get_review_round("octo/r", 7) == 5

@@ -408,6 +408,127 @@ class MemoryStore:
 
         await self._write(_do)
 
+    async def get_review_round(self, repo: str, pr_number: int) -> int:
+        """Return the current review round for a PR, defaulting to 0."""
+        async with self._db() as db:
+            cursor = await db.execute(
+                "SELECT review_round FROM review_watermarks WHERE repo = ? AND pr_number = ?",
+                (repo, pr_number),
+            )
+            row = await cursor.fetchone()
+            return row[0] if row is not None else 0
+
+    async def set_review_round(self, repo: str, pr_number: int, review_round: int) -> None:
+        """Upsert the review round, preserving an existing watermark's head_sha."""
+
+        async def _do(db: aiosqlite.Connection) -> None:
+            await db.execute(
+                "INSERT INTO review_watermarks (repo, pr_number, head_sha, review_round) "
+                "VALUES (?, ?, '', ?) "
+                "ON CONFLICT(repo, pr_number) DO UPDATE SET review_round = excluded.review_round",
+                (repo, pr_number, review_round),
+            )
+            await db.commit()
+
+        await self._write(_do)
+
+    async def record_pr_findings_batch(
+        self, repo: str, pr_number: int, findings: list[dict]
+    ) -> None:
+        """Insert/upsert per-PR finding state in a single transaction.
+
+        Each dict must have keys: fingerprint, finding_id, pass_name, severity,
+        file, line, title; optional comment_id (default None) and status
+        (default "open"). Upserts on (repo, pr_number, fingerprint), preserving
+        an existing comment_id when the incoming value is null.
+        """
+        if not findings:
+            return
+
+        async def _do(db: aiosqlite.Connection) -> None:
+            await db.executemany(
+                "INSERT INTO pr_findings "
+                "(repo, pr_number, fingerprint, finding_id, pass, severity, file, line, title, comment_id, status) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(repo, pr_number, fingerprint) DO UPDATE SET "
+                "finding_id = excluded.finding_id, "
+                "pass = excluded.pass, "
+                "severity = excluded.severity, "
+                "file = excluded.file, "
+                "line = excluded.line, "
+                "title = excluded.title, "
+                "comment_id = COALESCE(pr_findings.comment_id, excluded.comment_id), "
+                "status = excluded.status, "
+                "updated_at = CURRENT_TIMESTAMP",
+                [
+                    (
+                        repo,
+                        pr_number,
+                        f["fingerprint"],
+                        f["finding_id"],
+                        f["pass_name"],
+                        f["severity"],
+                        f["file"],
+                        f["line"],
+                        f["title"],
+                        f.get("comment_id"),
+                        f.get("status", "open"),
+                    )
+                    for f in findings
+                ],
+            )
+            await db.commit()
+
+        await self._write(_do)
+
+    async def get_pr_findings(self, repo: str, pr_number: int) -> list[dict]:
+        async with self._db() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM pr_findings WHERE repo = ? AND pr_number = ?",
+                (repo, pr_number),
+            )
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def get_open_pr_findings(self, repo: str, pr_number: int) -> list[dict]:
+        async with self._db() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM pr_findings WHERE repo = ? AND pr_number = ? AND status = 'open'",
+                (repo, pr_number),
+            )
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def set_pr_comment_ids(
+        self, repo: str, pr_number: int, pairs: list[tuple[str, int]]
+    ) -> None:
+        """Map comment IDs onto pr_findings keyed by fingerprint."""
+        if not pairs:
+            return
+
+        async def _do(db: aiosqlite.Connection) -> None:
+            await db.executemany(
+                "UPDATE pr_findings SET comment_id = ?, updated_at = CURRENT_TIMESTAMP "
+                "WHERE repo = ? AND pr_number = ? AND fingerprint = ?",
+                [(cid, repo, pr_number, fp) for fp, cid in pairs],
+            )
+            await db.commit()
+
+        await self._write(_do)
+
+    async def update_pr_finding_status(self, comment_id: int, status: str) -> None:
+        async def _do(db: aiosqlite.Connection) -> None:
+            await db.execute(
+                "UPDATE pr_findings SET status = ?, updated_at = CURRENT_TIMESTAMP "
+                "WHERE comment_id = ?",
+                (status, comment_id),
+            )
+            await db.commit()
+
+        await self._write(_do)
+
     async def get_learned_rules(self, repo: str, limit: int = 5) -> list[dict]:
         """Return top rules for repo, sorted by confidence desc, created_at desc.
         Also updates last_applied_at for the returned rules. Filters out rules with confidence < 0.3."""
