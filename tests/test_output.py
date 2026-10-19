@@ -97,6 +97,61 @@ def test_empty_result():
     assert "No issues" in format_table(result).lower() or format_table(result).strip() != ""
 
 
+def make_carried_result(**overrides):
+    carried = Finding(
+        pass_name="security",
+        severity="critical",
+        file="src/auth.py",
+        line=42,
+        title="Still-open SQL injection",
+        description="carried",
+        suggestion="fix",
+    )
+    values = {
+        "findings": [],
+        "carried_findings": [carried],
+        "round_number": 2,
+        "at_round_cap": False,
+        "suppressed_count": 1,
+        "convergence_note": "1 duplicate finding suppressed.",
+    }
+    values.update(overrides)
+    return ReviewResult(**values)
+
+
+def test_json_output_includes_convergence_fields():
+    data = json.loads(format_json(make_carried_result()))
+    assert data["carried_findings"][0]["title"] == "Still-open SQL injection"
+    assert data["round_number"] == 2
+    assert data["at_round_cap"] is False
+    assert data["suppressed_count"] == 1
+    assert data["convergence_note"] == "1 duplicate finding suppressed."
+
+
+def test_markdown_output_includes_carried_findings():
+    out = format_markdown(make_carried_result())
+    assert "Still Open From Earlier Rounds" in out
+    assert "Still-open SQL injection" in out
+    assert "src/auth.py:42" in out
+    assert "1 duplicate finding suppressed." in out
+    assert "No issues found" not in out
+
+
+def test_table_output_includes_carried_findings():
+    out = format_table(make_carried_result())
+    assert "Still open from earlier rounds:" in out
+    assert "Still-open SQL injection" in out
+    assert "src/auth.py:42" in out
+    assert "1 duplicate finding suppressed." in out
+    assert "No issues found" not in out
+
+
+def test_outputs_report_round_cap():
+    result = make_carried_result(at_round_cap=True)
+    assert "Round cap reached" in format_table(result)
+    assert "Round cap reached" in format_markdown(result)
+
+
 @patch("subprocess.run")
 def test_post_review_to_pr(mock_run):
     mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
